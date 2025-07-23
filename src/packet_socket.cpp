@@ -49,7 +49,9 @@ InterfaceInfo::InterfaceInfo(const std::string& interface_name) {
 }
 
 PacketSocket::PacketSocket(const InterfaceInfo& if_info, int protocol) {
-    // FIXME (aw): do we need to use O_NONBLOCKING?
+    // Open the socket in non blocking mode. We rely on poll() for the
+    // blocking behaviour and non-blocking sockets guard against potential
+    // race conditions between poll() and read()/write().
     socket_fd = socket(AF_PACKET, SOCK_RAW | SOCK_NONBLOCK, htons(protocol));
 
     if (socket_fd == -1) {
