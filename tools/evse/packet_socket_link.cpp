@@ -1,4 +1,5 @@
 #include "packet_socket_link.hpp"
+#include <slac/slac.hpp>
 
 PacketSocketLink::PacketSocketLink(const std::string& if_name) : if_name(if_name) {
 }
