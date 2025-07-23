@@ -13,11 +13,11 @@
 #if defined(ESP_PLATFORM)
 #include "port/esp32s3/ethernet_defs.hpp"
 #elif defined(__has_include)
-#  if __has_include(<net/ethernet.h>)
-#    include <net/ethernet.h>
-#  else
-#    include "port/esp32s3/ethernet_defs.hpp"
-#  endif
+#if __has_include(<net/ethernet.h>)
+#include <net/ethernet.h>
+#else
+#include "port/esp32s3/ethernet_defs.hpp"
+#endif
 #else
 #include <net/ethernet.h>
 #endif
@@ -53,20 +53,6 @@ const int NMK_LEN = 16;
 
 const int AAG_LIST_LEN = 58;
 const int RUN_ID_LEN = 8;
-
-// FIXME (aw): where to put these iso15118/3 consts?
-const int C_EV_START_ATTEN_CHAR_INDS = 3;
-const int C_EV_MATCH_RETRY = 2;
-const int C_EV_MATCH_MNBC = 10;
-const int TP_EV_BATCH_MSG_INTERVAL_MS = 40; // 20ms - 50ms, interval between start_atten_char and mnbc_sound msgs
-const int TT_EV_ATTEN_RESULTS_MS = 1200;    // max. 1200ms
-const int TT_EVSE_MATCH_MNBC_MS = 600;
-const int TT_MATCH_SEQUENCE_MS = 400;
-const int TT_MATCH_RESPONSE_MS = 200;
-const int TT_EVSE_MATCH_SESSION_MS = 10000;
-const int TT_EVSE_SLAC_INIT_MS = 40000; // (20s - 50s)
-const int TT_MATCH_JOIN_MS = 12000;     // max. 12s
-const int T_STEP_EF_MS = 4000;          // min. 4s
 
 const uint16_t MMTYPE_CM_SET_KEY = 0x6008;
 const uint16_t MMTYPE_CM_SLAC_PARAM = 0x6064;

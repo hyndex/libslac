@@ -70,6 +70,7 @@ Library Concepts
     Representation of a HomePlug AV frame used to carry SLAC payloads.
 
 The header ``slac/slac.hpp`` also defines all SLAC message structures and constants.
+Timing constants used during ISO15118-3 matching are provided in ``slac/iso15118_consts.hpp``.
 
 Using the Library
 -----------------

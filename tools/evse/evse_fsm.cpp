@@ -5,6 +5,7 @@
 #include <chrono>
 
 #include "../logging.hpp"
+#include <slac/iso15118_consts.hpp>
 
 // FIXME (aw):
 //  - handle evse, ev, sender and source id, probably also the mac
@@ -14,8 +15,7 @@ void setup_atten_char_ind_message(slac::messages::HomeplugMessage& msg, const Ma
     auto atten_char_ind = matching_ctx.calculate_avg();
 
     msg.setup_payload(&atten_char_ind, sizeof(atten_char_ind),
-                      slac::defs::MMTYPE_CM_ATTEN_CHAR | slac::defs::MMTYPE_MODE_IND,
-                      slac::defs::MMV::AV_1_0);
+                      slac::defs::MMTYPE_CM_ATTEN_CHAR | slac::defs::MMTYPE_MODE_IND, slac::defs::MMV::AV_1_0);
     msg.setup_ethernet_header(matching_ctx.ev_mac);
 }
 
@@ -56,8 +56,7 @@ EvseFSM::EvseFSM(SlacIO& slac_io) : slac_io(slac_io) {
         memcpy(set_key_req.new_key, session_nmk, sizeof(set_key_req.new_key));
 
         msg_out.setup_payload(&set_key_req, sizeof(set_key_req),
-                               slac::defs::MMTYPE_CM_SET_KEY | slac::defs::MMTYPE_MODE_REQ,
-                               slac::defs::MMV::AV_1_0);
+                              slac::defs::MMTYPE_CM_SET_KEY | slac::defs::MMTYPE_MODE_REQ, slac::defs::MMV::AV_1_0);
 
         msg_out.setup_ethernet_header(plc_peer_mac);
 
@@ -280,8 +279,7 @@ void EvseFSM::sd_wait_for_matching_hsm(FSMContextType& ctx, const EventSlacMessa
 
     msg_out.setup_ethernet_header(param_confirm.forwarding_sta);
     msg_out.setup_payload(&param_confirm, sizeof(param_confirm),
-                          slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_CNF,
-                          slac::defs::MMV::AV_1_0);
+                          slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_CNF, slac::defs::MMV::AV_1_0);
 
     slac_io.send(msg_out);
 
@@ -406,8 +404,7 @@ void EvseFSM::sd_wait_for_slac_match_hsm(FSMContextType& ctx, const EventSlacMes
     memcpy(match_cnf.nmk, session_nmk, sizeof(match_cnf.nmk));
 
     msg_out.setup_ethernet_header(matching_ctx.ev_mac);
-    msg_out.setup_payload(&match_cnf, sizeof(match_cnf),
-                          slac::defs::MMTYPE_CM_SLAC_MATCH | slac::defs::MMTYPE_MODE_CNF,
+    msg_out.setup_payload(&match_cnf, sizeof(match_cnf), slac::defs::MMTYPE_CM_SLAC_MATCH | slac::defs::MMTYPE_MODE_CNF,
                           slac::defs::MMV::AV_1_0);
 
     slac_io.send(msg_out);
