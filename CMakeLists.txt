@@ -9,7 +9,6 @@ include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
 # options
-option(BUILD_SLAC_TOOLS "Build SLAC tools" OFF)
 set(SLAC_INSTALL_DEFAULT OFF)
 if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
   set(SLAC_INSTALL_DEFAULT ON)
@@ -19,7 +18,6 @@ option(${PROJECT_NAME}_BUILD_TESTING "Build unit tests, used if included as depe
 option(BUILD_TESTING "Build unit tests, used if standalone project" OFF)
 
 if(ESP_PLATFORM)
-  set(BUILD_SLAC_TOOLS OFF CACHE BOOL "Build SLAC tools" FORCE)
   set(BUILD_TESTING OFF CACHE BOOL "Build unit tests" FORCE)
 endif()
 
@@ -58,10 +56,6 @@ target_sources(slac PRIVATE ${SLAC_SOURCES} $<TARGET_OBJECTS:HashLibrary>)
 
 target_include_directories(slac PRIVATE port/esp32s3)
 target_compile_options(slac PRIVATE -Os -fdata-sections -ffunction-sections -fno-exceptions -fno-rtti)
-
-if (BUILD_SLAC_TOOLS)
-    add_subdirectory(tools)
-endif()
 
 
 if (SLAC_INSTALL)
