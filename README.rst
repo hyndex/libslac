@@ -41,10 +41,8 @@ This will build the ``slac`` static library. The library is exported as the CMak
 Building with PlatformIO
 -----------------------
 
-For embedded targets the library can be built using `PlatformIO <https://platformio.org/>`_. Two environments are provided:
+For embedded targets the library can be built using `PlatformIO <https://platformio.org/>`_. The following environment is provided:
 
-``env:host``
-    Builds the library and a small example for the native host using the ``platform = native`` platform.
 ``env:esp32s3``
     Example configuration for ESP32-S3 development boards. It shows the required compiler flags and source filters.
 
