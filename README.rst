@@ -52,6 +52,9 @@ Invoke PlatformIO using:
 
    pio run -e esp32s3
 
+This command builds the example firmware for ESP32-S3 boards and is
+useful to verify compilation after refactoring.
+
 Library Concepts
 ----------------
 
