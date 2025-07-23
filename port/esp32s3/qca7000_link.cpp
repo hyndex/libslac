@@ -7,7 +7,7 @@
 namespace slac {
 namespace port {
 
-Qca7000Link::Qca7000Link() {
+Qca7000Link::Qca7000Link(const qca7000_config& c) : cfg(c) {
     memset(mac_addr, 0, sizeof(mac_addr));
 }
 
@@ -15,12 +15,18 @@ bool Qca7000Link::open() {
     if (initialized)
         return true;
 
-    if (!qca7000setup(&SPI, /*CS*/ PLC_SPI_CS_PIN))
+    SPIClass* bus = cfg.spi ? cfg.spi : &SPI;
+    int cs = cfg.cs_pin ? cfg.cs_pin : PLC_SPI_CS_PIN;
+
+    if (!qca7000setup(bus, cs))
         return false;
 
-    // use a fixed MAC address for now
-    const uint8_t def_mac[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
-    memcpy(mac_addr, def_mac, ETH_ALEN);
+    if (cfg.mac_addr)
+        memcpy(mac_addr, cfg.mac_addr, ETH_ALEN);
+    else {
+        const uint8_t def_mac[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+        memcpy(mac_addr, def_mac, ETH_ALEN);
+    }
     initialized = true;
     return true;
 }
