@@ -1,5 +1,10 @@
 #pragma once
 
+#ifdef ESP_PLATFORM
+#include "port/esp32s3/port_config.hpp"
+#endif
+
+
 #include "ethernet_defs.hpp"
 #include <Arduino.h>
 #include <SPI.h>

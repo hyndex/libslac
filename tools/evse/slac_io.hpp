@@ -3,6 +3,11 @@
 #ifndef SLAC_IO_HPP
 #define SLAC_IO_HPP
 
+#ifdef ESP_PLATFORM
+#include "port/esp32s3/port_config.hpp"
+#endif
+
+
 #include <condition_variable>
 #include <functional>
 #include <mutex>

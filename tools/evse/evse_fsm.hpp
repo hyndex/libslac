@@ -3,6 +3,11 @@
 #ifndef EVSE_FSM_HPP
 #define EVSE_FSM_HPP
 
+#ifdef ESP_PLATFORM
+#include "port/esp32s3/port_config.hpp"
+#endif
+
+
 #include <chrono>
 #include <string>
 

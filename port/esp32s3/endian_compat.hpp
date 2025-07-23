@@ -1,6 +1,11 @@
 #ifndef SLAC_ENDIAN_COMPAT_HPP
 #define SLAC_ENDIAN_COMPAT_HPP
 
+#ifdef ESP_PLATFORM
+#include "port/esp32s3/port_config.hpp"
+#endif
+
+
 #include <stdint.h>
 
 inline uint16_t htons(uint16_t x) { return (x << 8) | (x >> 8); }

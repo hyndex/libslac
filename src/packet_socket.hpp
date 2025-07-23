@@ -3,6 +3,11 @@
 #ifndef SRC_PACKET_SOCKET_HPP
 #define SRC_PACKET_SOCKET_HPP
 
+#ifdef ESP_PLATFORM
+#include "port/esp32s3/port_config.hpp"
+#endif
+
+
 #include <cstdint>
 #include <string>
 

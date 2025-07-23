@@ -3,6 +3,11 @@
 #ifndef SLAC_SLAC_HPP
 #define SLAC_SLAC_HPP
 
+#ifdef ESP_PLATFORM
+#include "port/esp32s3/port_config.hpp"
+#endif
+
+
 #include <cstdint>
 #include <utility>
 

@@ -1,6 +1,11 @@
 #ifndef SLAC_QCA7000_LINK_HPP
 #define SLAC_QCA7000_LINK_HPP
 
+#ifdef ESP_PLATFORM
+#include "port/esp32s3/port_config.hpp"
+#endif
+
+
 #include <slac/transport.hpp>
 
 namespace slac {
