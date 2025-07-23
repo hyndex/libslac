@@ -38,11 +38,16 @@ bool Channel::read(slac::messages::HomeplugMessage& msg, int timeout) {
     size_t out_len = 0;
     bool ok = link->read(reinterpret_cast<uint8_t*>(msg.get_raw_message_ptr()), sizeof(messages::homeplug_message),
                          &out_len, timeout);
-    if (ok) {
-        msg.set_raw_msg_len(static_cast<int>(out_len));
-        return true;
+    if (!ok) {
+        return false;
     }
-    return false;
+
+    if (out_len < defs::MME_MIN_LENGTH || out_len > sizeof(messages::homeplug_message)) {
+        return false;
+    }
+
+    msg.set_raw_msg_len(static_cast<int>(out_len));
+    return true;
 }
 
 bool Channel::poll(slac::messages::HomeplugMessage& msg) {
@@ -53,11 +58,16 @@ bool Channel::poll(slac::messages::HomeplugMessage& msg) {
     size_t out_len = 0;
     bool ok = link->read(reinterpret_cast<uint8_t*>(msg.get_raw_message_ptr()), sizeof(messages::homeplug_message),
                          &out_len, 0);
-    if (ok) {
-        msg.set_raw_msg_len(static_cast<int>(out_len));
-        return true;
+    if (!ok) {
+        return false;
     }
-    return false;
+
+    if (out_len < defs::MME_MIN_LENGTH || out_len > sizeof(messages::homeplug_message)) {
+        return false;
+    }
+
+    msg.set_raw_msg_len(static_cast<int>(out_len));
+    return true;
 }
 
 bool Channel::write(slac::messages::HomeplugMessage& msg, int timeout) {
