@@ -83,8 +83,13 @@ static constexpr auto effective_payload_length(const defs::MMV mmv) {
 }
 
 void HomeplugMessage::setup_payload(void const* payload, int len, uint16_t mmtype, const defs::MMV mmv) {
-    // FIXME (aw): shouldn't this assert test for "<="? Furthermore it will just crash the client code ...
-    assert(("Homeplug Payload length too long", len < effective_payload_length(mmv)));
+    const auto max_len = effective_payload_length(mmv);
+    if (len > max_len) {
+        // mark message invalid and abort payload setup in release builds
+        raw_msg_len = -1;
+        assert(("Homeplug Payload length too long", len <= max_len));
+        return;
+    }
     raw_msg.homeplug_header.mmv = static_cast<std::underlying_type_t<defs::MMV>>(mmv);
     raw_msg.homeplug_header.mmtype = htole16(mmtype);
 
