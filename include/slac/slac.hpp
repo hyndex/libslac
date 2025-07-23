@@ -12,6 +12,12 @@
 
 #if defined(ESP_PLATFORM)
 #include "port/esp32s3/ethernet_defs.hpp"
+#elif defined(__has_include)
+#  if __has_include(<net/ethernet.h>)
+#    include <net/ethernet.h>
+#  else
+#    include "port/esp32s3/ethernet_defs.hpp"
+#  endif
 #else
 #include <net/ethernet.h>
 #endif
