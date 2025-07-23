@@ -6,6 +6,7 @@
 #endif
 
 #include <slac/transport.hpp>
+#include "ethernet_defs.hpp"
 
 namespace slac {
 namespace port {
