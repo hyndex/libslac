@@ -9,6 +9,7 @@
 #include <Arduino.h>
 #include <SPI.h>
 #endif
+#include <slac/channel.hpp>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -67,6 +68,17 @@ bool qca7000ReadSignature(uint16_t* sig = nullptr, uint16_t* ver = nullptr);
 size_t spiQCA7000checkForReceivedData(uint8_t* dst, size_t maxLen);
 bool spiQCA7000SendEthFrame(const uint8_t* frame, size_t len);
 void qca7000Process();
+#ifdef ESP_PLATFORM
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
+
+struct Qca7000TaskContext {
+    slac::Channel* channel;
+    QueueHandle_t queue;
+};
+
+void qca7000_task(void* arg);
+#endif
 
 extern uint8_t myethtransmitbuffer[V2GTP_BUFFER_SIZE];
 extern size_t myethtransmitlen;

@@ -7,14 +7,12 @@
 #include "port/esp32s3/port_config.hpp"
 #endif
 
-#include <string>
 #include <slac/transport.hpp>
+#include <string>
 
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2020 - 2021 Pionix GmbH and Contributors to EVerest
 #include <slac/slac.hpp>
-
-
 
 namespace slac {
 
@@ -31,6 +29,7 @@ public:
 
     bool open();
     bool read(slac::messages::HomeplugMessage& msg, int timeout);
+    bool poll(slac::messages::HomeplugMessage& msg);
     bool write(slac::messages::HomeplugMessage& msg, int timeout);
 
     const std::string& get_error() const {

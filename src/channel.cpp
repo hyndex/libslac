@@ -13,7 +13,8 @@
 
 namespace slac {
 
-Channel::Channel(transport::Link* l) : link(l){}
+Channel::Channel(transport::Link* l) : link(l) {
+}
 
 bool Channel::open() {
     did_timeout = false;
@@ -35,9 +36,25 @@ bool Channel::read(slac::messages::HomeplugMessage& msg, int timeout) {
         return false;
 
     size_t out_len = 0;
-    bool ok = link->read(reinterpret_cast<uint8_t*>(msg.get_raw_message_ptr()), sizeof(messages::homeplug_message), &out_len, timeout);
+    bool ok = link->read(reinterpret_cast<uint8_t*>(msg.get_raw_message_ptr()), sizeof(messages::homeplug_message),
+                         &out_len, timeout);
     if (ok) {
         (void)out_len; // TODO handle length
+        return true;
+    }
+    return false;
+}
+
+bool Channel::poll(slac::messages::HomeplugMessage& msg) {
+    did_timeout = false;
+    if (!link)
+        return false;
+
+    size_t out_len = 0;
+    bool ok = link->read(reinterpret_cast<uint8_t*>(msg.get_raw_message_ptr()), sizeof(messages::homeplug_message),
+                         &out_len, 0);
+    if (ok) {
+        (void)out_len;
         return true;
     }
     return false;

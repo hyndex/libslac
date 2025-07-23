@@ -32,6 +32,11 @@ void SlacIO::quit() {
 void SlacIO::loop() {
 
     while (running) {
+        if (slac_channel.poll(incoming_msg)) {
+            input_handler(incoming_msg);
+            continue;
+        }
+
         if (slac_channel.read(incoming_msg, 10)) {
             input_handler(incoming_msg);
         }
