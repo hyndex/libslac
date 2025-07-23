@@ -6,6 +6,7 @@
 
 #include "../logging.hpp"
 #include <slac/iso15118_consts.hpp>
+#include <cstring>
 
 // FIXME (aw):
 //  - handle evse, ev, sender and source id, probably also the mac
