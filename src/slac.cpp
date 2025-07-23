@@ -140,6 +140,10 @@ uint8_t* HomeplugMessage::get_src_mac() {
     return raw_msg.ethernet_header.ether_shost;
 }
 
+void HomeplugMessage::set_raw_msg_len(int len) {
+    raw_msg_len = len;
+}
+
 bool HomeplugMessage::is_valid() const {
     return raw_msg_len >= defs::MME_MIN_LENGTH;
 }
