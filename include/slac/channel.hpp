@@ -16,11 +16,9 @@
 
 namespace slac {
 
-// TODO (aw):
-//  - do we need to handle VLAN tags?
-//  - probably we need to handle different sessions ...
-//  - channel could own the interface handle and pass it to the packet
-//    socket
+// Note: VLAN tags are currently not supported.  All traffic is assumed to be
+// untagged.  Only a single session is handled at a time and the interface
+// handle is managed outside the Channel class.
 
 class Channel {
 public:
