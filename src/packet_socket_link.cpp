@@ -1,6 +1,8 @@
 #include <slac/packet_socket_link.hpp>
 
+#ifndef ESP_PLATFORM
 #include <linux/if_ether.h>
+#endif
 #include <memory>
 #include <cstring>
 #include <slac/slac.hpp>
