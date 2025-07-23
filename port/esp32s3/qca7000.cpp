@@ -1,7 +1,5 @@
-#ifdef ESP_PLATFORM
-#include "port_config.hpp"
-#endif
 #include "qca7000.hpp"
+#include "port_config.hpp"
 #include <esp_log.h>
 
 const char* PLC_TAG = "PLC_IF";
@@ -38,7 +36,7 @@ inline bool ringEmpty() {
     return head == tail;
 }
 inline void ringPush(const uint8_t* d, size_t l) {
-    noInterrupts();
+    slac_noInterrupts();
     if (l > V2GTP_BUFFER_SIZE)
         l = V2GTP_BUFFER_SIZE;
     memcpy(ring[head].data, d, l);
@@ -46,18 +44,18 @@ inline void ringPush(const uint8_t* d, size_t l) {
     head = (head + 1) & 3;
     if (head == tail)
         tail = (tail + 1) & 3;
-    interrupts();
+    slac_interrupts();
 }
 inline bool ringPop(const uint8_t** d, size_t* l) {
-    noInterrupts();
+    slac_noInterrupts();
     if (ringEmpty()) {
-        interrupts();
+        slac_interrupts();
         return false;
     }
     *d = ring[tail].data;
     *l = ring[tail].len;
     tail = (tail + 1) & 3;
-    interrupts();
+    slac_interrupts();
     return true;
 }
 } // namespace
@@ -88,9 +86,9 @@ static void spiWr16_fast(uint16_t reg, uint16_t val) {
 static bool hardReset() {
     pinMode(PLC_SPI_RST_PIN, OUTPUT);
     digitalWrite(PLC_SPI_RST_PIN, LOW);
-    delay(10);
+    slac_delay(10);
     digitalWrite(PLC_SPI_RST_PIN, HIGH);
-    delay(100);
+    slac_delay(100);
 
     auto slowRd16 = [&](uint16_t reg) -> uint16_t {
         g_spi->beginTransaction(setSlow);
@@ -102,15 +100,15 @@ static bool hardReset() {
         return v;
     };
 
-    uint32_t t0 = millis();
+    uint32_t t0 = slac_millis();
     uint16_t sig = 0, buf = 0;
     do {
         sig = slowRd16(SPI_REG_SIGNATURE);
         buf = slowRd16(SPI_REG_WRBUF_SPC_AVA);
         if (sig == SIG && buf == WRBUF_RST)
             break;
-        delay(5);
-    } while (millis() - t0 < 200);
+        slac_delay(5);
+    } while (slac_millis() - t0 < 200);
 
     if (sig != SIG || buf != WRBUF_RST) {
         ESP_LOGE(PLC_TAG, "Reset probe failed (SIG=0x%04X BUF=0x%04X)", sig, buf);
@@ -118,8 +116,8 @@ static bool hardReset() {
     }
     ESP_LOGI(PLC_TAG, "Reset probe OK (SIG=0x%04X)", sig);
 
-    t0 = millis();
-    while (!(slowRd16(SPI_REG_INTR_CAUSE) & SPI_INT_CPU_ON) && millis() - t0 < 80)
+    t0 = slac_millis();
+    while (!(slowRd16(SPI_REG_INTR_CAUSE) & SPI_INT_CPU_ON) && slac_millis() - t0 < 80)
         ;
 
     spiWr16_fast(SPI_REG_INTR_CAUSE, 0xFFFF);

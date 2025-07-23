@@ -1,7 +1,5 @@
-#ifdef ESP_PLATFORM
-#include "port_config.hpp"
-#endif
 #include "qca7000_link.hpp"
+#include "port_config.hpp"
 #include "qca7000.hpp"
 
 namespace slac {
@@ -42,7 +40,7 @@ bool Qca7000Link::read(uint8_t* b, size_t l, size_t* out, uint32_t timeout_ms) {
         *out = 0;
         return false;
     }
-    uint32_t start = millis();
+    uint32_t start = slac_millis();
     do {
         size_t got = spiQCA7000checkForReceivedData(b, l);
         if (got) {
@@ -51,8 +49,8 @@ bool Qca7000Link::read(uint8_t* b, size_t l, size_t* out, uint32_t timeout_ms) {
         }
         if (timeout_ms == 0)
             break;
-        delay(1);
-    } while (millis() - start < timeout_ms);
+        slac_delay(1);
+    } while (slac_millis() - start < timeout_ms);
     *out = 0;
     return false;
 }
