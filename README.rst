@@ -12,13 +12,15 @@ This repository contains a minimal implementation of the ISO15118-3 Signal Level
 Getting the Source
 ------------------
 
-Clone the repository and its submodules:
+Clone the repository:
 
 .. code-block:: bash
 
    git clone https://github.com/EVerest/libslac.git
    cd libslac
-   git submodule update --init
+
+All required third-party code is bundled in ``3rd_party`` so no
+additional ``git submodule`` commands are needed.
 
 Building with CMake
 -------------------
@@ -32,9 +34,9 @@ A typical build looks as follows:
    mkdir build
    cd build
    cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release
-   ninja
+   cmake --build .
 
-This will build the ``slac`` static library. The library is exported as the CMake target ``slac::slac``. It can be installed with ``ninja install`` when ``SLAC_INSTALL`` is enabled.
+This will build the ``slac`` static library. The library is exported as the CMake target ``slac::slac``. Set ``SLAC_INSTALL`` to ``ON`` and run ``cmake --install .`` to install it.
 
 Building with PlatformIO
 -----------------------
@@ -73,14 +75,17 @@ Using the Library
 2. Create a :class:`slac::Channel` instance with the link implementation.
 3. Use :class:`slac::messages::HomeplugMessage` to construct and parse SLAC messages.
 
-A minimal example can be found in ``pio_src/main.cpp``:
+An example for the ESP32-S3 port:
 
 .. code-block:: cpp
 
-   slac::transport::Link* link = nullptr; // provide your implementation
-   slac::Channel channel(link);
+   #include <port/esp32s3/qca7000_link.hpp>
+
+   const uint8_t my_mac[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+   qca7000_config cfg{&SPI, PLC_SPI_CS_PIN, my_mac};
+   slac::port::Qca7000Link link(cfg);
+   slac::Channel channel(&link);
    channel.open();
-   // send/receive messages using channel.read() and channel.write()
 
 QCA7000 Configuration
 ---------------------
@@ -113,6 +118,16 @@ Unit tests are based on GoogleTest. Enable ``BUILD_TESTING`` when configuring CM
    cmake .. -G Ninja -DBUILD_TESTING=ON
    ninja
    ctest
+
+Vendored Dependencies
+---------------------
+
+Small helper libraries are shipped with the source under ``3rd_party``:
+
+- ``hash_library`` provides SHA-256 routines.
+- ``libfsm`` contains lightweight state machine helpers.
+
+See ``THIRD_PARTY.rst`` for license information.
 
 License
 -------
