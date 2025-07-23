@@ -7,6 +7,7 @@
 
 #include <slac/transport.hpp>
 #include "ethernet_defs.hpp"
+#include "qca7000.hpp"
 
 namespace slac {
 namespace port {
