@@ -1,9 +1,8 @@
-#include "qca7000_link.hpp"
-#include "qca7000.hpp"
-
 #ifdef ESP_PLATFORM
 #include "port_config.hpp"
 #endif
+#include "qca7000_link.hpp"
+#include "qca7000.hpp"
 
 namespace slac {
 namespace port {

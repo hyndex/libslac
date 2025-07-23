@@ -3,6 +3,10 @@
 #ifndef SLAC_CHANNEL_HPP
 #define SLAC_CHANNEL_HPP
 
+#ifdef ESP_PLATFORM
+#include "port/esp32s3/port_config.hpp"
+#endif
+
 #include <string>
 #include <slac/transport.hpp>
 

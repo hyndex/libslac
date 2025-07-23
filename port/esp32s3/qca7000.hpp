@@ -1,5 +1,9 @@
 #pragma once
 
+#ifdef ESP_PLATFORM
+#include "port_config.hpp"
+#endif
+
 #include "ethernet_defs.hpp"
 #include <Arduino.h>
 #include <SPI.h>
