@@ -4,7 +4,7 @@
 
 #include <chrono>
 
-#include <fmt/core.h>
+#include "../logging.hpp"
 
 // FIXME (aw):
 //  - handle evse, ev, sender and source id, probably also the mac
@@ -69,7 +69,7 @@ EvseFSM::EvseFSM(SlacIO& slac_io) : slac_io(slac_io) {
 
     sd_reset.handler = [this](FSMContextType& ctx) {
         // FIXME (aw): what to do here? should fail hard with IOError
-        fmt::print("Failed to setup NMK key\n");
+        LOG_ERROR("Failed to setup NMK key\n");
     };
 
     sd_idle.transitions = [this](const EventBaseType& ev, TransitionType& trans) {
@@ -146,7 +146,7 @@ EvseFSM::EvseFSM(SlacIO& slac_io) : slac_io(slac_io) {
     };
 
     sd_sounding.handler = [this](FSMContextType& ctx) {
-        fmt::print("Timeout in sounding, send results\n");
+        LOG_INFO("Timeout in sounding, send results\n");
         ctx.submit_event(EventFinishSounding());
     };
 
@@ -174,7 +174,7 @@ EvseFSM::EvseFSM(SlacIO& slac_io) : slac_io(slac_io) {
     sd_do_atten_char.handler = [this](FSMContextType& ctx) {
         // got a time out, retry if possible
         if (sd_do_atten_char.ind_msg_count == slac::defs::C_EV_MATCH_RETRY) {
-            fmt::print("No response to CM_ATTEN_CHAR.IND after {} retries\n", slac::defs::C_EV_MATCH_RETRY);
+            LOG_ERROR("No response to CM_ATTEN_CHAR.IND after %d retries\n", slac::defs::C_EV_MATCH_RETRY);
             ctx.submit_event(EventMatchingFailed());
         }
 
@@ -256,7 +256,7 @@ void EvseFSM::sd_wait_for_matching_hsm(FSMContextType& ctx, const EventSlacMessa
     auto& msg_in = ev.data;
 
     if (msg_in.get_mmtype() != (slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_REQ)) {
-        fmt::print("Received non-expected message of type {:#06x}\n", msg_in.get_mmtype());
+        LOG_ERROR("Received non-expected message of type 0x%04x\n", msg_in.get_mmtype());
         return;
     }
 
@@ -293,7 +293,7 @@ void EvseFSM::sd_matching_hsm(FSMContextType& ctx, const EventSlacMessage& ev) {
 
     // FIXME (aw): we should also deal with the CM_SLAC_PARAM_REQ, right?
     if (msg_in.get_mmtype() != (slac::defs::MMTYPE_CM_START_ATTEN_CHAR | slac::defs::MMTYPE_MODE_IND)) {
-        fmt::print("Received non-expected message of type {:#06x}\n", msg_in.get_mmtype());
+        LOG_ERROR("Received non-expected message of type 0x%04x\n", msg_in.get_mmtype());
         return;
     }
 
@@ -329,7 +329,7 @@ void EvseFSM::sd_sounding_hsm(FSMContextType& ctx, const EventSlacMessage& ev) {
         }
 
         if (atten_profile.num_groups != slac::defs::AAG_LIST_LEN) {
-            fmt::print("Mismatch in number of AAG groups\n");
+            LOG_ERROR("Mismatch in number of AAG groups\n");
             return;
         }
 
@@ -344,12 +344,12 @@ void EvseFSM::sd_sounding_hsm(FSMContextType& ctx, const EventSlacMessage& ev) {
     } else if (mmtype == (slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_IND)) {
         // FIXME (aw): how should this be handled?
     } else {
-        fmt::print("Received non-expected message of type {:#06x}\n", msg_in.get_mmtype());
+        LOG_ERROR("Received non-expected message of type 0x%04x\n", msg_in.get_mmtype());
         return;
     }
 
     if (matching_ctx.captured_sounds == slac::defs::CM_SLAC_PARM_CNF_NUM_SOUNDS) {
-        fmt::print("Received all sounds\n");
+        LOG_INFO("Received all sounds\n");
         ctx.submit_event(EventFinishSounding());
     }
 }
@@ -443,12 +443,12 @@ void EvseFSM::set_nmk(const uint8_t* nmk) {
 
 bool MatchingSessionContext::conforms(const uint8_t ev_mac[], const uint8_t run_id[]) const {
     if (run_id && memcmp(run_id, this->run_id, sizeof(this->run_id))) {
-        fmt::print("Received START_ATTEN_CHAR.IND with mismatching run_id\n");
+        LOG_ERROR("Received START_ATTEN_CHAR.IND with mismatching run_id\n");
         return false;
     }
 
     if (ev_mac && memcmp(ev_mac, this->ev_mac, sizeof(this->ev_mac))) {
-        fmt::print("EV MAC mismatch for current matching session\n");
+        LOG_ERROR("EV MAC mismatch for current matching session\n");
         return false;
     }
 

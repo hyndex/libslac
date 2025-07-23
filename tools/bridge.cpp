@@ -7,11 +7,13 @@
 #include <linux/if_ether.h>
 #include <linux/if_packet.h>
 #include <poll.h>
+#include <cstring>
+#include <cerrno>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
 
-#include <fmt/core.h>
+#include "logging.hpp"
 
 #include <slac/slac.hpp>
 
@@ -43,7 +45,7 @@ void fetch_device_information(PLCDeviceInformation& evse, PLCDeviceInformation& 
     struct ifaddrs* if_addrs;
     int ret = getifaddrs(&if_addrs);
     if (ret == -1) {
-        fmt::print("Error while calling getifaddrs(): {}\n", strerror(errno));
+        LOG_ERROR("Error while calling getifaddrs(): %s\n", strerror(errno));
         exit(-1);
     }
 
@@ -68,27 +70,27 @@ void fetch_device_information(PLCDeviceInformation& evse, PLCDeviceInformation& 
 
     freeifaddrs(if_addrs);
 
-    const char common_msg[] = "Could not find device ({}) for {}\n";
+    const char common_msg[] = "Could not find device (%s) for %s\n";
     if (ev.if_index == -1) {
-        fmt::print(common_msg, ev.veth_device, "EV");
+        LOG_ERROR(common_msg, ev.veth_device.c_str(), "EV");
         exit(-1);
     }
     if (evse.if_index == -1) {
-        fmt::print(common_msg, evse.veth_device, "EVSE");
+        LOG_ERROR(common_msg, evse.veth_device.c_str(), "EVSE");
         exit(-1);
     }
 
-    fmt::print("Using interface index {} for EV\n", ev.if_index);
-    fmt::print("Using interface index {} for EVSE\n", evse.if_index);
+    LOG_INFO("Using interface index %d for EV\n", ev.if_index);
+    LOG_INFO("Using interface index %d for EVSE\n", evse.if_index);
 }
 
 void open_packet_socket(PLCDeviceInformation& di) {
     auto socket_fd = socket(AF_PACKET, SOCK_RAW | SOCK_NONBLOCK, htons(ETH_P_ALL));
 
     if (socket_fd == -1) {
-        fmt::print("Couldn't create socket on ({}): {}\n", di.veth_device, strerror(errno));
+        LOG_ERROR("Couldn't create socket on (%s): %s\n", di.veth_device.c_str(), strerror(errno));
         if (errno == EPERM) {
-            fmt::print("You probably want to run this tool with sudo\n");
+            LOG_ERROR("You probably want to run this tool with sudo\n");
         }
         exit(-1);
     }
@@ -105,7 +107,7 @@ void open_packet_socket(PLCDeviceInformation& di) {
     };
 
     if (-1 == bind(socket_fd, (struct sockaddr*)&sock_addr, sizeof(sock_addr))) {
-        fmt::print("Couldn't bind socket on({}): {}\n", di.veth_device, strerror(errno));
+        LOG_ERROR("Couldn't bind socket on(%s): %s\n", di.veth_device.c_str(), strerror(errno));
         close(socket_fd);
 
         exit(-1);
@@ -184,7 +186,7 @@ void process_packet(PLCDeviceInformation& in, PLCDeviceInformation& out) {
     if (forward_packet) {
         int bytes_written = write(out.fd, &incoming, bytes_read);
         if (bytes_read != bytes_written) {
-            fmt::print("Failed to forward packets from {}\n", in.name());
+            LOG_ERROR("Failed to forward packets from %s\n", in.name());
             exit(-1);
         }
     }
@@ -194,7 +196,7 @@ void process_packet(PLCDeviceInformation& in, PLCDeviceInformation& out) {
         int bytes_written = write(return_fd, &outgoing.get_raw_message(), outgoing.get_raw_msg_len());
         if (bytes_written != outgoing.get_raw_msg_len()) {
             const auto name = (return_dest == IN) ? in.name() : out.name();
-            fmt::print("Failed return processed message to {}\n", name);
+            LOG_ERROR("Failed return processed message to %s\n", name);
             exit(-1);
         }
     }
@@ -211,7 +213,8 @@ int main(int argc, char* argv[]) {
     open_packet_socket(evse_di);
     open_packet_socket(ev_di);
 
-    fmt::print("Connecting EVSE on interface {} to EV on interface {}\n", evse_di.veth_device, ev_di.veth_device);
+    LOG_INFO("Connecting EVSE on interface %s to EV on interface %s\n", evse_di.veth_device.c_str(),
+             ev_di.veth_device.c_str());
 
     struct pollfd poll_fds[] = {
         {evse_di.fd, POLLIN, 0},
@@ -221,7 +224,7 @@ int main(int argc, char* argv[]) {
     while (true) {
         int ret = poll(poll_fds, 2, 2000);
         if (ret == -1) {
-            fmt::print("poll() failed with: {}\n", strerror(errno));
+            LOG_ERROR("poll() failed with: %s\n", strerror(errno));
             exit(-1);
         }
 

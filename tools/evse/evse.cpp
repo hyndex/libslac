@@ -5,7 +5,7 @@
 #include <mutex>
 #include <thread>
 
-#include <fmt/core.h>
+#include "../logging.hpp"
 
 #include <fsm/specialization/sync/simple.hpp>
 
@@ -16,7 +16,7 @@ const uint8_t sample_nmk[] = {0x34, 0x52, 0x23, 0x54, 0x45, 0xae, 0xf2, 0xd4,
                               0x55, 0xfe, 0xff, 0x31, 0xa3, 0xb3, 0x03, 0xad};
 
 void logging_callback(const std::string& msg) {
-    fmt::print("FSM_CTRL: {}\n", msg);
+    LOG_INFO("FSM_CTRL: %s\n", msg.c_str());
 }
 
 class FSMDriver {
@@ -59,7 +59,8 @@ private:
         if (fsm_ctrl.submit_event(EventSlacMessage(msg))) {
             notify();
         } else {
-            fmt::print("No SLAC message handler for current state: {}\n", fsm_ctrl.current_state()->id.name);
+            LOG_ERROR("No SLAC message handler for current state: %s\n",
+                      fsm_ctrl.current_state()->id.name);
         }
     }
 
@@ -117,7 +118,7 @@ private:
 int main(int argc, char* argv[]) {
 
     if (argc != 2) {
-        fmt::print("Usage: evse if-name\n");
+        LOG_INFO("Usage: evse if-name\n");
         return EXIT_FAILURE;
     }
 
@@ -131,12 +132,12 @@ int main(int argc, char* argv[]) {
         driver.enter_bcd();
 
         if (driver.matched_future().get()) {
-            fmt::print("Made it to matching, exiting!\n");
+            LOG_INFO("Made it to matching, exiting!\n");
         } else {
-            fmt::print("Failed somewhere ...\n");
+            LOG_ERROR("Failed somewhere ...\n");
         }
     } catch (const std::runtime_error& err) {
-        fmt::print("I/O error: {}\n", err.what());
+        LOG_ERROR("I/O error: %s\n", err.what());
         return EXIT_FAILURE;
     };
 
