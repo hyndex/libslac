@@ -6,7 +6,6 @@
 
 const char* PLC_TAG = "PLC_IF";
 
-
 uint8_t myethtransmitbuffer[V2GTP_BUFFER_SIZE]{};
 size_t myethtransmitlen = 0;
 uint8_t myethreceivebuffer[V2GTP_BUFFER_SIZE]{};
@@ -275,3 +274,25 @@ bool qca7000setup(SPIClass* bus, int csPin) {
 bool qca7000ResetAndCheck() {
     return hardReset();
 }
+
+#ifdef ESP_PLATFORM
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
+#include <freertos/task.h>
+#include <slac/channel.hpp>
+
+void qca7000_task(void* arg) {
+    auto* ctx = static_cast<Qca7000TaskContext*>(arg);
+    slac::messages::HomeplugMessage msg;
+
+    while (true) {
+        qca7000Process();
+        if (ctx && ctx->channel && ctx->channel->poll(msg)) {
+            if (ctx->queue) {
+                xQueueSend(ctx->queue, &msg, 0);
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(1));
+    }
+}
+#endif
