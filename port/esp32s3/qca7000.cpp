@@ -1,23 +1,11 @@
+#ifdef ESP_PLATFORM
+#include "port_config.hpp"
+#endif
 #include "qca7000.hpp"
 #include <esp_log.h>
 
 const char* PLC_TAG = "PLC_IF";
 
-#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-static inline uint16_t htole16(uint16_t v) {
-    return v;
-}
-static inline uint16_t le16toh(uint16_t v) {
-    return v;
-}
-#else
-static inline uint16_t htole16(uint16_t v) {
-    return (v >> 8) | (v << 8);
-}
-static inline uint16_t le16toh(uint16_t v) {
-    return (v >> 8) | (v << 8);
-}
-#endif
 
 uint8_t myethtransmitbuffer[V2GTP_BUFFER_SIZE]{};
 size_t myethtransmitlen = 0;

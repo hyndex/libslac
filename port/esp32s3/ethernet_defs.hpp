@@ -1,6 +1,10 @@
 #ifndef SLAC_ETHERNET_DEFS_HPP
 #define SLAC_ETHERNET_DEFS_HPP
 
+#ifdef ESP_PLATFORM
+#include "port_config.hpp"
+#endif
+
 #include <stdint.h>
 
 #define ETH_ALEN 6

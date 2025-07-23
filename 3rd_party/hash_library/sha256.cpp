@@ -6,10 +6,10 @@
 // see http://create.stephan-brumme.com/disclaimer.html
 //
 
-#include "sha256.h"
 #ifdef ESP_PLATFORM
 #include "port/esp32s3/port_config.hpp"
 #endif
+#include "sha256.h"
 
 // big endian architectures need #define __BYTE_ORDER __BIG_ENDIAN
 #ifndef _MSC_VER
