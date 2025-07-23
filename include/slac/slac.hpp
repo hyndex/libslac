@@ -24,9 +24,9 @@
 
 namespace slac {
 
-// TODO (aw):
-//  - is run_id 8 or 16 bytes?
-//  - is nid 7 or 8 bytes?
+// Current implementation assumes that a run_id consists of 8 bytes.  The NID
+// value is assumed to use only 7 bytes with the most significant bits of the
+// eighth byte reserved.
 
 namespace defs {
 
