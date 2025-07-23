@@ -1,8 +1,7 @@
 #pragma once
 
-#ifndef ESP_PLATFORM
-#include <linux/if_packet.h>
-#else
+#include "ethernet_defs.hpp"
+
 struct sockaddr_ll {
     unsigned short sll_family;
     unsigned short sll_protocol;
@@ -15,5 +14,4 @@ struct sockaddr_ll {
 
 #ifndef AF_PACKET
 #define AF_PACKET 17
-#endif
 #endif

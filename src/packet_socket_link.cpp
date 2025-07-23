@@ -1,8 +1,7 @@
+#ifndef ESP_PLATFORM
 #include <slac/packet_socket_link.hpp>
 
-#ifndef ESP_PLATFORM
 #include <slac/platform/if_ether.hpp>
-#endif
 #include <cstring>
 #include <memory>
 #include <slac/slac.hpp>
@@ -50,3 +49,4 @@ const uint8_t* PacketSocketLink::mac() const {
 }
 
 } // namespace slac
+#endif // !ESP_PLATFORM
