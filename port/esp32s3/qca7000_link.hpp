@@ -8,10 +8,16 @@ namespace port {
 
 class Qca7000Link : public transport::Link {
 public:
+    Qca7000Link();
+
     bool open() override;
     bool write(const uint8_t* b, size_t l, uint32_t timeout_ms) override;
     bool read(uint8_t* b, size_t l, size_t* out, uint32_t timeout_ms) override;
     const uint8_t* mac() const override;
+
+private:
+    bool initialized{false};
+    uint8_t mac_addr[ETH_ALEN]{};
 };
 
 } // namespace port

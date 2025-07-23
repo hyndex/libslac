@@ -42,6 +42,7 @@ target_sources(slac
         src/channel.cpp
         src/slac.cpp
         $<IF:$<BOOL:${ESP_PLATFORM}>,port/esp32s3/qca7000_link.cpp,src/packet_socket.cpp>
+        $<$<BOOL:${ESP_PLATFORM}>:port/esp32s3/qca7000.cpp>
         $<TARGET_OBJECTS:HashLibrary>
 )
 
