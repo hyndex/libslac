@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2022 - 2022 Pionix GmbH and Contributors to EVerest
+#ifndef ESP_PLATFORM
 #include <slac/packet_socket.hpp>
 
 #include <cstring>
 
-#ifndef ESP_PLATFORM
 #include <arpa/inet.h>
 #include <poll.h>
 #include <slac/platform/if_packet.hpp>
@@ -12,7 +12,6 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
-#endif
 
 namespace utils {
 InterfaceInfo::InterfaceInfo(const std::string& interface_name) {
@@ -150,3 +149,4 @@ PacketSocket::IOResult PacketSocket::write(const void* buf, size_t size, int tim
 }
 
 } // namespace utils
+#endif // !ESP_PLATFORM

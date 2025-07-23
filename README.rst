@@ -110,7 +110,7 @@ creating :class:`slac::port::Qca7000Link`:
 Tools and Examples
 ------------------
 
-The ``tools`` directory contains small utilities demonstrating how to use ``libslac``. ``tools/bridge.cpp`` shows how to forward packets between two virtual interfaces. The ``tools/evse`` directory contains a simple state machine for the EVSE side of the SLAC handshake.
+The ``tools`` directory contains small utilities demonstrating how to use ``libslac``. ``tools/evse`` contains a simple state machine for the EVSE side of the SLAC handshake. ``tools/bridge.cpp`` can forward packets between two virtual interfaces on Linux and is disabled on microcontroller builds.
 
 Running the Tests
 -----------------

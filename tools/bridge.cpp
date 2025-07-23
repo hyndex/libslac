@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2022 - 2022 Pionix GmbH and Contributors to EVerest
+
+#ifndef ESP_PLATFORM
 #include <string>
 
 #include <arpa/inet.h>
@@ -239,3 +241,5 @@ int main(int argc, char* argv[]) {
 
     return 0;
 }
+
+#endif // !ESP_PLATFORM
