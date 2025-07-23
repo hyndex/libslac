@@ -6,6 +6,7 @@
 #include <condition_variable>
 #include <functional>
 #include <mutex>
+#include <memory>
 #include <string>
 #include <thread>
 
@@ -23,6 +24,7 @@ public:
 
 private:
     void loop();
+    std::unique_ptr<slac::transport::Link> link;
     slac::Channel slac_channel;
     slac::messages::HomeplugMessage incoming_msg;
     std::function<InputHandlerFnType> input_handler;

@@ -10,6 +10,7 @@ static slac::Channel* channel = nullptr;
 
 void setup() {
     channel = new slac::Channel(g_link);
+    channel->open();
 }
 
 void loop() {
@@ -19,6 +20,7 @@ void loop() {
 int main() {
     slac::transport::Link* link = nullptr; // placeholder
     slac::Channel ch(link);
+    ch.open();
     return 0;
 }
 #endif

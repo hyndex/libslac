@@ -79,6 +79,7 @@ A minimal example can be found in ``pio_src/main.cpp``:
 
    slac::transport::Link* link = nullptr; // provide your implementation
    slac::Channel channel(link);
+   channel.open();
    // send/receive messages using channel.read() and channel.write()
 
 Tools and Examples
