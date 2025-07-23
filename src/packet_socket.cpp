@@ -4,6 +4,7 @@
 
 #include <cstring>
 
+#ifndef ESP_PLATFORM
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 #include <linux/if_packet.h>
@@ -11,6 +12,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+#endif
 
 namespace utils {
 InterfaceInfo::InterfaceInfo(const std::string& interface_name) {

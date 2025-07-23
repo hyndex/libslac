@@ -6,7 +6,9 @@
 #include <cstdint>
 #include <string>
 
+#ifndef ESP_PLATFORM
 #include <linux/if_ether.h>
+#endif
 
 namespace utils {
 class InterfaceInfo {

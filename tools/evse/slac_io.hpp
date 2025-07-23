@@ -3,12 +3,15 @@
 #ifndef SLAC_IO_HPP
 #define SLAC_IO_HPP
 
-#include <condition_variable>
 #include <functional>
-#include <mutex>
 #include <memory>
 #include <string>
+#ifdef ESP_PLATFORM
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#else
 #include <thread>
+#endif
 
 #include <slac/channel.hpp>
 #include <slac/packet_socket_link.hpp>
@@ -19,7 +22,20 @@ public:
     explicit SlacIO(const std::string& if_name);
 
     void release_input();
-    void run(std::function<InputHandlerFnType> callback);
+    /**
+     * Start SLAC I/O processing.
+     *
+     * When @p spawn_background is true a background thread (or FreeRTOS task on
+     * ESP platforms) is created that continuously polls the PLC interface and
+     * dispatches incoming messages to the provided callback.  If set to false no
+     * thread is spawned and the user must call process() periodically.
+     */
+    void run(std::function<InputHandlerFnType> callback, bool spawn_background = true);
+
+    /// Poll the PLC interface once and invoke the registered callback on
+    /// incoming messages. This is intended for use when run() was called with
+    /// spawn_background set to false.
+    void process(int timeout_ms = 10);
     void send(slac::messages::HomeplugMessage& msg);
     void quit();
 
@@ -30,7 +46,11 @@ private:
     slac::Channel slac_channel;
     slac::messages::HomeplugMessage incoming_msg;
     std::function<InputHandlerFnType> input_handler;
+#ifdef ESP_PLATFORM
+    TaskHandle_t loop_task{nullptr};
+#else
     std::thread loop_thread;
+#endif
 
     bool running{false};
 };

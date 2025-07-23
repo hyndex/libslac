@@ -4,7 +4,11 @@
 #include "packet_socket_link.hpp"
 
 #include <stdexcept>
+#ifdef ESP_PLATFORM
+#include <freertos/task.h>
+#else
 #include <thread>
+#endif
 
 SlacIO::SlacIO(const std::string& if_name) : link(if_name), slac_channel(&link) {
     if (!slac_channel.open()) {
@@ -12,12 +16,24 @@ SlacIO::SlacIO(const std::string& if_name) : link(if_name), slac_channel(&link) 
     }
 }
 
-void SlacIO::run(std::function<InputHandlerFnType> callback) {
-    input_handler = callback;
+void SlacIO::release_input() {
+    input_handler = nullptr;
+}
 
+void SlacIO::run(std::function<InputHandlerFnType> callback, bool spawn_background) {
+    input_handler = std::move(callback);
     running = true;
 
+    if (!spawn_background) {
+        return;
+    }
+#ifdef ESP_PLATFORM
+    xTaskCreate([](void* arg) {
+        static_cast<SlacIO*>(arg)->loop();
+    }, "slac_io", 4096, this, 5, &loop_task);
+#else
     loop_thread = std::thread(&SlacIO::loop, this);
+#endif
 }
 
 void SlacIO::quit() {
@@ -27,20 +43,33 @@ void SlacIO::quit() {
 
     running = false;
 
+#ifdef ESP_PLATFORM
+    if (loop_task) {
+        while (eTaskGetState(loop_task) != eDeleted) {
+            vTaskDelay(1);
+        }
+        loop_task = nullptr;
+    }
+#else
     loop_thread.join();
+#endif
 }
 
 void SlacIO::loop() {
 
     while (running) {
-        if (slac_channel.poll(incoming_msg)) {
-            input_handler(incoming_msg);
-            continue;
-        }
+        process(10);
+    }
+}
 
-        if (slac_channel.read(incoming_msg, 10)) {
-            input_handler(incoming_msg);
-        }
+void SlacIO::process(int timeout_ms) {
+    if (slac_channel.poll(incoming_msg)) {
+        input_handler(incoming_msg);
+        return;
+    }
+
+    if (slac_channel.read(incoming_msg, timeout_ms)) {
+        input_handler(incoming_msg);
     }
 }
 
