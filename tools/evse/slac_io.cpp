@@ -6,10 +6,9 @@
 #include <stdexcept>
 #include <thread>
 
-SlacIO::SlacIO(const std::string& if_name)
-    : link(std::make_unique<PacketSocketLink>(if_name)), slac_channel(link.get()) {
+SlacIO::SlacIO(const std::string& if_name) : link(if_name), slac_channel(&link) {
     if (!slac_channel.open()) {
-        throw std::runtime_error(slac_channel.get_error());
+        throw std::runtime_error("Failed to open channel");
     }
 }
 

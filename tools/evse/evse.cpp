@@ -7,7 +7,7 @@
 
 #include <fmt/core.h>
 
-#include <fsm/specialization/sync/posix.hpp>
+#include <fsm/specialization/sync/simple.hpp>
 
 #include "evse_fsm.hpp"
 #include "slac_io.hpp"
