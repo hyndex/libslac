@@ -47,15 +47,24 @@ target_include_directories(slac PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 
-target_sources(slac
-    PRIVATE
-        src/channel.cpp
-        src/slac.cpp
-        $<IF:$<BOOL:${ESP_PLATFORM}>,port/esp32s3/qca7000_link.cpp,src/packet_socket.cpp>
-        $<$<NOT:$<BOOL:${ESP_PLATFORM}>>:src/packet_socket_link.cpp>
-        $<$<BOOL:${ESP_PLATFORM}>:port/esp32s3/qca7000.cpp>
-        $<TARGET_OBJECTS:HashLibrary>
+set(SLAC_SOURCES
+    src/channel.cpp
+    src/slac.cpp
 )
+
+if(ESP_PLATFORM)
+    list(APPEND SLAC_SOURCES
+        port/esp32s3/qca7000_link.cpp
+        port/esp32s3/qca7000.cpp
+    )
+else()
+    list(APPEND SLAC_SOURCES
+        src/packet_socket.cpp
+        src/packet_socket_link.cpp
+    )
+endif()
+
+target_sources(slac PRIVATE ${SLAC_SOURCES} $<TARGET_OBJECTS:HashLibrary>)
 
 if(ESP_PLATFORM)
     target_include_directories(slac PRIVATE port/esp32s3)

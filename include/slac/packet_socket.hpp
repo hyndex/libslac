@@ -7,7 +7,7 @@
 #include <string>
 
 #ifndef ESP_PLATFORM
-#include <linux/if_ether.h>
+#include <slac/platform/if_ether.hpp>
 #endif
 
 namespace utils {

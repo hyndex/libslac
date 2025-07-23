@@ -1,15 +1,16 @@
 #include <slac/packet_socket_link.hpp>
 
 #ifndef ESP_PLATFORM
-#include <linux/if_ether.h>
+#include <slac/platform/if_ether.hpp>
 #endif
-#include <memory>
 #include <cstring>
+#include <memory>
 #include <slac/slac.hpp>
 
 namespace slac {
 
-PacketSocketLink::PacketSocketLink(const std::string& if_name) : interface_name(if_name) {}
+PacketSocketLink::PacketSocketLink(const std::string& if_name) : interface_name(if_name) {
+}
 
 bool PacketSocketLink::open() {
     ::utils::InterfaceInfo if_info(interface_name);

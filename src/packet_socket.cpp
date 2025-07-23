@@ -6,9 +6,9 @@
 
 #ifndef ESP_PLATFORM
 #include <arpa/inet.h>
-#include <ifaddrs.h>
-#include <linux/if_packet.h>
 #include <poll.h>
+#include <slac/platform/if_packet.hpp>
+#include <slac/platform/ifaddrs.hpp>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
