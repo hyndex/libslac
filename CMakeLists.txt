@@ -5,13 +5,16 @@ project(slac VERSION 0.3.1
 		LANGUAGES CXX C
 )
 
-find_package(everest-cmake 0.1 REQUIRED
-    PATHS ../everest-cmake
-)
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
 
 # options
 option(BUILD_SLAC_TOOLS "Build SLAC tools" OFF)
-option(SLAC_INSTALL "Install the library (shared data might be installed anyway)" ${EVC_MAIN_PROJECT})
+set(SLAC_INSTALL_DEFAULT OFF)
+if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
+  set(SLAC_INSTALL_DEFAULT ON)
+endif()
+option(SLAC_INSTALL "Install the library (shared data might be installed anyway)" ${SLAC_INSTALL_DEFAULT})
 option(${PROJECT_NAME}_BUILD_TESTING "Build unit tests, used if included as dependency" OFF)
 option(BUILD_TESTING "Build unit tests, used if standalone project" OFF)
 
@@ -21,9 +24,6 @@ if((${CMAKE_PROJECT_NAME} STREQUAL ${PROJECT_NAME} OR ${PROJECT_NAME}_BUILD_TEST
     add_subdirectory(tests)
 endif()
 
-if(NOT DISABLE_EDM)
-    evc_setup_edm()
-endif()
 
 add_subdirectory(3rd_party)
 
@@ -55,20 +55,35 @@ if (BUILD_SLAC_TOOLS)
     add_subdirectory(tools)
 endif()
 
+
 if (SLAC_INSTALL)
-    install(
-        TARGETS slac
-        EXPORT slac-targets
-    )
+    install(TARGETS slac
+            EXPORT slac-targets
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
-    install(
-        DIRECTORY include/
-        TYPE INCLUDE
-    )
+    install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
-    evc_setup_package(
-        NAME slac
-        NAMESPACE slac
-        EXPORT slac-targets
-    )
+    install(EXPORT slac-targets
+            NAMESPACE slac::
+            DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/slac)
+
+    write_basic_package_version_file(
+        ${CMAKE_CURRENT_BINARY_DIR}/slac-config-version.cmake
+        VERSION ${PROJECT_VERSION}
+        COMPATIBILITY SameMajorVersion)
+
+    configure_package_config_file(
+        ${CMAKE_CURRENT_LIST_DIR}/cmake/slac-config.cmake.in
+        ${CMAKE_CURRENT_BINARY_DIR}/slac-config.cmake
+        INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/slac)
+
+    install(FILES
+            ${CMAKE_CURRENT_BINARY_DIR}/slac-config.cmake
+            ${CMAKE_CURRENT_BINARY_DIR}/slac-config-version.cmake
+            DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/slac)
 endif()
+
+export(TARGETS slac NAMESPACE slac:: FILE ${CMAKE_CURRENT_BINARY_DIR}/slac-targets.cmake)
+
