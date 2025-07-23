@@ -23,7 +23,7 @@ Clone the repository and its submodules:
 Building with CMake
 -------------------
 
-The project uses ``CMake``. A recent CMake (>= 3.11) installation is required. The ``everest-cmake`` helper repository is used for common build settings and dependency management.
+The project uses ``CMake`` (>= 3.11) and standard commands for dependency management.
 
 A typical build looks as follows:
 
