@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2022 - 2022 Pionix GmbH and Contributors to EVerest
 #include "slac_io.hpp"
+#include "packet_socket_link.hpp"
 
 #include <stdexcept>
 #include <thread>
 
-SlacIO::SlacIO(const std::string& if_name) {
-    if (!slac_channel.open(if_name)) {
+SlacIO::SlacIO(const std::string& if_name)
+    : link(std::make_unique<PacketSocketLink>(if_name)), slac_channel(link.get()) {
+    if (!slac_channel.open()) {
         throw std::runtime_error(slac_channel.get_error());
     }
 }
