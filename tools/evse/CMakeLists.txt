@@ -8,7 +8,6 @@ add_executable(evse
 
 target_link_libraries(evse PRIVATE
     Threads::Threads
-    fmt::fmt
     libfsm
     slac::slac
 )
