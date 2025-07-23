@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #define ETH_ALEN 6
+#define ETH_HLEN 14
 #define ETH_FRAME_LEN 1514
 
 struct ether_header {
