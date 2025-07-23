@@ -87,6 +87,24 @@ Tools and Examples
 
 The ``tools`` directory contains small utilities demonstrating how to use ``libslac``. ``tools/bridge.cpp`` shows how to forward packets between two virtual interfaces. The ``tools/evse`` directory contains a simple state machine for the EVSE side of the SLAC handshake.
 
+Configuring the QCA7000 Driver
+------------------------------
+
+The ESP32 port provides a lightweight driver for the QCA7000 PLC modem. SPI and
+reset pins can be configured via the ``PLC_SPI_CS_PIN`` and ``PLC_SPI_RST_PIN``
+macros. ``Qca7000Link`` accepts a :cpp:struct:`qca7000_config` allowing to pass
+the SPI bus, chip select and the desired MAC address:
+
+.. code-block:: cpp
+
+   slac::port::qca7000_config cfg;
+   cfg.spi = &SPI;            // SPI bus used by the modem
+   cfg.cs_pin = 5;            // chip select pin
+   cfg.mac[0] = 0x02;         // choose a unique MAC
+
+   slac::port::Qca7000Link link(cfg);
+   link.open();
+
 Running the Tests
 -----------------
 
