@@ -3,12 +3,12 @@
 #include <string>
 
 #include <arpa/inet.h>
-#include <ifaddrs.h>
-#include <linux/if_ether.h>
-#include <linux/if_packet.h>
-#include <poll.h>
-#include <cstring>
 #include <cerrno>
+#include <cstring>
+#include <poll.h>
+#include <slac/platform/if_ether.hpp>
+#include <slac/platform/if_packet.hpp>
+#include <slac/platform/ifaddrs.hpp>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -129,8 +129,7 @@ void handle_set_key_req(PLCDeviceInformation& node, const slac::messages::homepl
     set_key_cnf.cco_capability = slac::defs::CM_SET_KEY_REQ_CCO_CAP_NONE;
 
     response.setup_payload(&set_key_cnf, sizeof(set_key_cnf),
-                           slac::defs::MMTYPE_CM_SET_KEY | slac::defs::MMTYPE_MODE_CNF,
-                           slac::defs::MMV::AV_1_0);
+                           slac::defs::MMTYPE_CM_SET_KEY | slac::defs::MMTYPE_MODE_CNF, slac::defs::MMV::AV_1_0);
     response.setup_ethernet_header(request.ethernet_header.ether_shost, node.plc_mac);
 }
 
@@ -146,8 +145,7 @@ void handle_mnbc_sound_ind(PLCDeviceInformation& forward_node, const slac::messa
     }
 
     response.setup_payload(&atten_profile, sizeof(atten_profile),
-                           slac::defs::MMTYPE_CM_ATTEN_PROFILE | slac::defs::MMTYPE_MODE_IND,
-                           slac::defs::MMV::AV_1_0);
+                           slac::defs::MMTYPE_CM_ATTEN_PROFILE | slac::defs::MMTYPE_MODE_IND, slac::defs::MMV::AV_1_0);
     response.setup_ethernet_header(slac::defs::BROADCAST_MAC_ADDRESS, forward_node.plc_mac);
 }
 
