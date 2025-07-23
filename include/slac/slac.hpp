@@ -6,7 +6,11 @@
 #include <cstdint>
 #include <utility>
 
+#if defined(ESP_PLATFORM)
+#include "port/esp32s3/ethernet_defs.hpp"
+#else
 #include <net/ethernet.h>
+#endif
 
 namespace slac {
 

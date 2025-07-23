@@ -7,10 +7,17 @@
 //
 
 #include "sha256.h"
+#ifdef ESP_PLATFORM
+#include "port/esp32s3/port_config.hpp"
+#endif
 
 // big endian architectures need #define __BYTE_ORDER __BIG_ENDIAN
 #ifndef _MSC_VER
+#if defined(ESP_PLATFORM) && !defined(__GLIBC__)
+#include "port/esp32s3/endian_compat.hpp"
+#else
 #include <endian.h>
+#endif
 #endif
 
 // #define SHA2_224_SEED_VECTOR

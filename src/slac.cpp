@@ -1,13 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2022 - 2022 Pionix GmbH and Contributors to EVerest
 #include <slac/slac.hpp>
+#ifdef ESP_PLATFORM
+#include "port/esp32s3/port_config.hpp"
+#endif
 
 #include <algorithm>
 #include <cassert>
 #include <cstring>
 
 #include <arpa/inet.h>
+#if defined(ESP_PLATFORM) && !defined(__GLIBC__)
+#include "port/esp32s3/endian_compat.hpp"
+#else
 #include <endian.h>
+#endif
 
 #include <hash_library/sha256.h>
 
