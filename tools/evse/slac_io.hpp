@@ -10,6 +10,7 @@
 #include <thread>
 
 #include <slac/channel.hpp>
+#include <slac/packet_socket_link.hpp>
 
 class SlacIO {
 public:
@@ -23,6 +24,7 @@ public:
 
 private:
     void loop();
+    slac::PacketSocketLink link;
     slac::Channel slac_channel;
     slac::messages::HomeplugMessage incoming_msg;
     std::function<InputHandlerFnType> input_handler;

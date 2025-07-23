@@ -30,7 +30,10 @@ add_subdirectory(3rd_party)
 add_library(slac)
 add_library(slac::slac ALIAS slac)
 
-target_include_directories(slac PRIVATE $<TARGET_PROPERTY:HashLibrary,INTERFACE_INCLUDE_DIRECTORIES>)
+target_include_directories(slac PRIVATE
+    $<TARGET_PROPERTY:HashLibrary,INTERFACE_INCLUDE_DIRECTORIES>
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
 
 target_include_directories(slac PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -42,6 +45,7 @@ target_sources(slac
         src/channel.cpp
         src/slac.cpp
         $<IF:$<BOOL:${ESP_PLATFORM}>,port/esp32s3/qca7000_link.cpp,src/packet_socket.cpp>
+        $<$<NOT:$<BOOL:${ESP_PLATFORM}>>:src/packet_socket_link.cpp>
         $<$<BOOL:${ESP_PLATFORM}>:port/esp32s3/qca7000.cpp>
         $<TARGET_OBJECTS:HashLibrary>
 )

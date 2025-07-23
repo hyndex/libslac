@@ -1,4 +1,3 @@
-find_package(fsm)
 
 add_executable(evse
     evse.cpp
@@ -9,6 +8,6 @@ add_executable(evse
 target_link_libraries(evse PRIVATE
     Threads::Threads
     fmt::fmt
-    fsm::fsm
+    libfsm
     slac::slac
 )

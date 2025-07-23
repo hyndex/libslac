@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2022 - 2022 Pionix GmbH and Contributors to EVerest
-#include "packet_socket.hpp"
+#include <slac/packet_socket.hpp>
 
 #include <cstring>
 

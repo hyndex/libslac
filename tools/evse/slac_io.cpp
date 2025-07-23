@@ -5,9 +5,9 @@
 #include <stdexcept>
 #include <thread>
 
-SlacIO::SlacIO(const std::string& if_name) {
-    if (!slac_channel.open(if_name)) {
-        throw std::runtime_error(slac_channel.get_error());
+SlacIO::SlacIO(const std::string& if_name) : link(if_name), slac_channel(&link) {
+    if (!slac_channel.open()) {
+        throw std::runtime_error("Failed to open channel");
     }
 }
 
