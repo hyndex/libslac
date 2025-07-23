@@ -3,16 +3,14 @@
 #ifndef SLAC_CHANNEL_HPP
 #define SLAC_CHANNEL_HPP
 
-#include <memory>
 #include <string>
+#include <slac/transport.hpp>
 
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2020 - 2021 Pionix GmbH and Contributors to EVerest
 #include <slac/slac.hpp>
 
-namespace utils {
-class PacketSocket;
-}
+
 
 namespace slac {
 
@@ -24,11 +22,10 @@ namespace slac {
 
 class Channel {
 public:
-    Channel();
-    // Channel(const std::string& interface_name);
+    explicit Channel(transport::Link* link);
     ~Channel();
 
-    bool open(const std::string& interface_name);
+    bool open();
     bool read(slac::messages::HomeplugMessage& msg, int timeout);
     bool write(slac::messages::HomeplugMessage& msg, int timeout);
 
@@ -43,9 +40,8 @@ public:
     const uint8_t* get_mac_addr();
 
 private:
-    // for debugging only, should be removed
-    std::unique_ptr<::utils::PacketSocket> socket;
-    uint8_t orig_if_mac[ETH_ALEN];
+    transport::Link* link;
+    uint8_t orig_if_mac[ETH_ALEN]{};
 
     std::string error;
     bool did_timeout{false};

@@ -41,9 +41,14 @@ target_sources(slac
     PRIVATE
         src/channel.cpp
         src/slac.cpp
-        src/packet_socket.cpp
+        $<IF:$<BOOL:${ESP_PLATFORM}>,port/esp32s3/qca7000_link.cpp,src/packet_socket.cpp>
         $<TARGET_OBJECTS:HashLibrary>
 )
+
+if(ESP_PLATFORM)
+    target_include_directories(slac PRIVATE port/esp32s3)
+    target_compile_options(slac PRIVATE -Os -fdata-sections -ffunction-sections -fno-exceptions -fno-rtti)
+endif()
 
 if (BUILD_SLAC_TOOLS)
     add_subdirectory(tools)
