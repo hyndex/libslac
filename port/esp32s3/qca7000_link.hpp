@@ -13,7 +13,7 @@ namespace port {
 
 class Qca7000Link : public transport::Link {
 public:
-    Qca7000Link();
+    explicit Qca7000Link(const qca7000_config& cfg);
 
     bool open() override;
     bool write(const uint8_t* b, size_t l, uint32_t timeout_ms) override;
@@ -22,6 +22,7 @@ public:
 
 private:
     bool initialized{false};
+    qca7000_config cfg;
     uint8_t mac_addr[ETH_ALEN]{};
 };
 

@@ -82,6 +82,22 @@ A minimal example can be found in ``pio_src/main.cpp``:
    channel.open();
    // send/receive messages using channel.read() and channel.write()
 
+QCA7000 Configuration
+---------------------
+
+The SPI pins used to communicate with the QCA7000 modem are defined in
+``port/esp32s3/qca7000.hpp`` as ``PLC_SPI_CS_PIN`` and ``PLC_SPI_RST_PIN``.
+Override these macros when building to match your hardware wiring.
+
+The modem's MAC address can be specified via ``qca7000_config`` when
+creating :class:`slac::port::Qca7000Link`:
+
+.. code-block:: cpp
+
+   const uint8_t my_mac[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+   qca7000_config cfg{&SPI, PLC_SPI_CS_PIN, my_mac};
+   slac::port::Qca7000Link link(cfg);
+
 Tools and Examples
 ------------------
 
