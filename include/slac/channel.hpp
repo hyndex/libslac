@@ -16,9 +16,15 @@
 
 namespace slac {
 
-// Note: VLAN tags are currently not supported.  All traffic is assumed to be
-// untagged.  Only a single session is handled at a time and the interface
-// handle is managed outside the Channel class.
+/**
+ * \brief Convenience wrapper around a transport::Link.
+ *
+ * Channel does not manage the lifetime of the underlying Link; the caller must
+ * create and maintain the link instance.  The current implementation operates
+ * solely on untagged Ethernet frames and assumes that at most one SLAC session
+ * is active.  Applications requiring VLAN encapsulation or multiplexing of
+ * multiple sessions need to handle those aspects outside of this class.
+ */
 
 class Channel {
 public:
