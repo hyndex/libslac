@@ -16,7 +16,7 @@ Clone the repository:
 
 .. code-block:: bash
 
-   git clone https://github.com/EVerest/libslac.git
+   git clone https://github.com/hyndex/libslac.git
    cd libslac
 
 All required third-party code is bundled in ``3rd_party`` so no
