@@ -24,9 +24,6 @@
 
 namespace slac {
 
-// Current implementation assumes that a run_id consists of 8 bytes.  The NID
-// value is assumed to use only 7 bytes with the most significant bits of the
-// eighth byte reserved.
 
 namespace defs {
 
@@ -52,7 +49,7 @@ const uint8_t NMK_HASH[] = {0x08, 0x85, 0x6d, 0xaf, 0x7c, 0xf5, 0x81, 0x86};
 const int NMK_LEN = 16;
 
 const int AAG_LIST_LEN = 58;
-const int RUN_ID_LEN = 8;
+const int RUN_ID_LEN = 16;
 
 // FIXME (aw): where to put these iso15118/3 consts?
 const int C_EV_START_ATTEN_CHAR_INDS = 3;
@@ -266,8 +263,7 @@ typedef struct {
     uint8_t security_type;            // fixed to 0x00, indicating 'no security'
     uint8_t sender_id[SENDER_ID_LEN]; // sender id, if application_type = 0x00, it should be the pev's vin code
     uint8_t remaining_sound_count;    // count of remaining sound messages
-    uint8_t run_id[defs::RUN_ID_LEN]; // indentifier for a matching run
-    uint8_t _reserved[8]; // note: this is to pad the run_id, which is defined to be 16 bytes for this message
+    uint8_t run_id[defs::RUN_ID_LEN]; // identifier for a matching run
     uint8_t random[16];   // random value
 } __attribute__((packed)) cm_mnbc_sound_ind;
 
@@ -287,8 +283,7 @@ typedef struct {
     uint8_t pev_mac[ETH_ALEN];        // mac address of the EV host
     uint8_t evse_id[EVSE_ID_LEN];     // EVSE id
     uint8_t evse_mac[ETH_ALEN];       // mac address of the EVSE
-    uint8_t run_id[defs::RUN_ID_LEN]; // indentifier for a matching run
-    uint8_t _reserved[8]; // note: this is to pad the run_id, which is defined to be 16 bytes for this message
+    uint8_t run_id[defs::RUN_ID_LEN]; // identifier for a matching run
 } __attribute__((packed)) cm_slac_match_req;
 
 typedef struct {
@@ -299,8 +294,7 @@ typedef struct {
     uint8_t pev_mac[ETH_ALEN];        // mac address of the EV host
     uint8_t evse_id[EVSE_ID_LEN];     // EVSE id
     uint8_t evse_mac[ETH_ALEN];       // mac address of the EVSE
-    uint8_t run_id[defs::RUN_ID_LEN]; // indentifier for a matching run
-    uint8_t _rerserved[8];      // note: this is to pad the run_id, which is defined to be 16 bytes for this message
+    uint8_t run_id[defs::RUN_ID_LEN]; // identifier for a matching run
     uint8_t nid[defs::NID_LEN]; // network id derived from the nmk
     uint8_t _reserved2;         // note: this is to pad the nid, which is defined to be 8 bytes for this message
     uint8_t nmk[defs::NMK_LEN]; // private nmk of the EVSE
