@@ -39,7 +39,7 @@ bool Channel::read(slac::messages::HomeplugMessage& msg, int timeout) {
     bool ok = link->read(reinterpret_cast<uint8_t*>(msg.get_raw_message_ptr()), sizeof(messages::homeplug_message),
                          &out_len, timeout);
     if (ok) {
-        (void)out_len; // TODO handle length
+        msg.set_raw_msg_len(static_cast<int>(out_len));
         return true;
     }
     return false;
@@ -54,7 +54,7 @@ bool Channel::poll(slac::messages::HomeplugMessage& msg) {
     bool ok = link->read(reinterpret_cast<uint8_t*>(msg.get_raw_message_ptr()), sizeof(messages::homeplug_message),
                          &out_len, 0);
     if (ok) {
-        (void)out_len;
+        msg.set_raw_msg_len(static_cast<int>(out_len));
         return true;
     }
     return false;

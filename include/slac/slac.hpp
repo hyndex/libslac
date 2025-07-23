@@ -172,6 +172,8 @@ public:
         return raw_msg_len;
     }
 
+    void set_raw_msg_len(int len);
+
     void setup_payload(void const* payload, int len, uint16_t mmtype, const defs::MMV mmv);
     void setup_ethernet_header(const uint8_t dst_mac_addr[ETH_ALEN], const uint8_t src_mac_addr[ETH_ALEN] = nullptr);
 
