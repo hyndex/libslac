@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2020 - 2023 Pionix GmbH and Contributors to EVerest
 
-#include <gtest/gtest.h>
-#include <slac/slac.hpp>
-#include <slac/channel.hpp>
-#include <slac/transport.hpp>
-#include <vector>
 #include <algorithm>
 #include <cstring>
+#include <gtest/gtest.h>
+#include <slac/channel.hpp>
+#include <slac/slac.hpp>
+#include <slac/transport.hpp>
+#include <vector>
 
 namespace libslac {
 class LibSLACUnitTest : public ::testing::Test {
@@ -23,8 +23,12 @@ class FakeLink : public slac::transport::Link {
 public:
     std::vector<uint8_t> data;
 
-    bool open() override { return true; }
-    bool write(const uint8_t*, size_t, uint32_t) override { return true; }
+    bool open() override {
+        return true;
+    }
+    bool write(const uint8_t*, size_t, uint32_t) override {
+        return true;
+    }
     bool read(uint8_t* buf, size_t len, size_t* out_len, uint32_t) override {
         size_t n = std::min(len, data.size());
         if (n == 0) {
@@ -35,7 +39,9 @@ public:
         *out_len = n;
         return true;
     }
-    const uint8_t* mac() const override { return mac_addr; }
+    const uint8_t* mac() const override {
+        return mac_addr;
+    }
 
 private:
     uint8_t mac_addr[ETH_ALEN]{0};
@@ -76,6 +82,28 @@ TEST_F(LibSLACUnitTest, test_channel_poll_sets_length) {
     slac::messages::HomeplugMessage msg;
     ASSERT_TRUE(channel.poll(msg));
     ASSERT_EQ(msg.get_raw_msg_len(), static_cast<int>(link.data.size()));
+}
+
+TEST_F(LibSLACUnitTest, test_channel_read_too_short) {
+    FakeLink link;
+    link.data.resize(slac::defs::MME_MIN_LENGTH - 1, 0xcc);
+
+    slac::Channel channel(&link);
+    ASSERT_TRUE(channel.open());
+
+    slac::messages::HomeplugMessage msg;
+    ASSERT_FALSE(channel.read(msg, 0));
+}
+
+TEST_F(LibSLACUnitTest, test_channel_poll_too_short) {
+    FakeLink link;
+    link.data.resize(slac::defs::MME_MIN_LENGTH - 1, 0xdd);
+
+    slac::Channel channel(&link);
+    ASSERT_TRUE(channel.open());
+
+    slac::messages::HomeplugMessage msg;
+    ASSERT_FALSE(channel.poll(msg));
 }
 
 } // namespace libslac
