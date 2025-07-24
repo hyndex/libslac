@@ -36,17 +36,13 @@ transport::LinkError Channel::read(slac::messages::HomeplugMessage& msg, int tim
         return transport::LinkError::Transport;
 
     size_t out_len = 0;
-    auto res = link->read(reinterpret_cast<uint8_t*>(msg.get_raw_message_ptr()), sizeof(messages::homeplug_message),
-                          &out_len, timeout);
-    if (res == transport::LinkError::Timeout) {
-        did_timeout = true;
-        return res;
-    }
+    auto res = link->read(reinterpret_cast<uint8_t*>(msg.get_raw_message_ptr()),
+                          sizeof(messages::homeplug_message), &out_len, timeout);
+    did_timeout = res == transport::LinkError::Timeout;
     if (res != transport::LinkError::Ok) {
         return res;
     }
     if (out_len == 0 && timeout > 0) {
-        did_timeout = true;
         return transport::LinkError::Timeout;
     }
 
@@ -65,8 +61,9 @@ bool Channel::poll(slac::messages::HomeplugMessage& msg) {
 
     size_t out_len = 0;
     const int timeout = 0;
-    auto res = link->read(reinterpret_cast<uint8_t*>(msg.get_raw_message_ptr()), sizeof(messages::homeplug_message),
-                          &out_len, timeout);
+    auto res = link->read(reinterpret_cast<uint8_t*>(msg.get_raw_message_ptr()),
+                          sizeof(messages::homeplug_message), &out_len, timeout);
+    did_timeout = res == transport::LinkError::Timeout;
     if (res != transport::LinkError::Ok) {
         return false;
     }
