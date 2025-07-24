@@ -1,7 +1,7 @@
 #ifndef SLAC_PORT_CONFIG_HPP
 #define SLAC_PORT_CONFIG_HPP
 
-#include "../generic/port_config.hpp"
+#include "../port_config.hpp"
 
 #ifdef ESP_PLATFORM
 #include <stdint.h>

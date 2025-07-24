@@ -1,12 +1,9 @@
 libslac
 =======
 
-Simple ISO15118-3 SLAC library for microcontrollers.
+Simple ISO15118-3 SLAC library for ESP32 and Arduino boards.
 
-``libslac`` implements the Signal Level Attenuation Characterization (SLAC)
-protocol with a focus on the ESP32 family running the Arduino framework.  The
-library aims to be small and self-contained, providing just the data structures
-and helpers required to perform the SLAC handshake.
+`libslac` implements the Signal Level Attenuation Characterization (SLAC) protocol for ESP32 and other Arduino-compatible microcontrollers. The library is small and self-contained, providing just the data structures and helpers required for the SLAC handshake.
 
 Earlier revisions shipped Linux utilities and a PF\_PACKET based transport
 layer.  These components have been removed in favour of a lean

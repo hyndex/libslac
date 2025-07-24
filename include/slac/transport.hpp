@@ -1,7 +1,7 @@
 #ifndef SLAC_TRANSPORT_HPP
 #define SLAC_TRANSPORT_HPP
 
-#include "port/generic/port_config.hpp"
+#include "port/port_config.hpp"
 
 #include <cstdint>
 #include <cstddef>

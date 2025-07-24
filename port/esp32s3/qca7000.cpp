@@ -1,5 +1,5 @@
 #include "qca7000.hpp"
-#include "../generic/port_config.hpp"
+#include "../port_config.hpp"
 #include "port_config.hpp"
 #ifdef ESP_PLATFORM
 #include <esp_log.h>

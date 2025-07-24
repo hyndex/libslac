@@ -1,7 +1,7 @@
 #ifndef SLAC_ETHERNET_DEFS_HPP
 #define SLAC_ETHERNET_DEFS_HPP
 
-#include "../generic/port_config.hpp"
+#include "../port_config.hpp"
 #ifdef ESP_PLATFORM
 #include "port_config.hpp"
 #endif
