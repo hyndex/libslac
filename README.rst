@@ -95,6 +95,7 @@ An example for the ESP32-S3 port:
    #include <port/esp32s3/qca7000_link.hpp>
 
    const uint8_t my_mac[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+   SPI.begin(SCK_PIN, MISO_PIN, MOSI_PIN, PLC_SPI_CS_PIN);
    qca7000_config cfg{&SPI, PLC_SPI_CS_PIN, my_mac};
    slac::port::Qca7000Link link(cfg);
    slac::Channel channel(&link);
@@ -114,14 +115,43 @@ The SPI pins used to communicate with the QCA7000 modem are defined in
 ``port/esp32s3/qca7000.hpp`` as ``PLC_SPI_CS_PIN`` and ``PLC_SPI_RST_PIN``.
 Override these macros when building to match your hardware wiring.
 
+When your board uses non-default SPI pins, call ``SPI.begin(SCK_PIN, MISO_PIN, MOSI_PIN, CS_PIN)`` before creating the link. The CS pin passed to ``qca7000_config`` must match the value used in ``SPI.begin``.
+The INT line is optional. The driver currently polls the modem, so if the interrupt pin is not connected simply call ``qca7000Process()`` periodically.
 The modem's MAC address can be specified via ``qca7000_config`` when
 creating :class:`slac::port::Qca7000Link`:
 
 .. code-block:: cpp
 
    const uint8_t my_mac[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+   SPI.begin(SCK_PIN, MISO_PIN, MOSI_PIN, PLC_SPI_CS_PIN);
    qca7000_config cfg{&SPI, PLC_SPI_CS_PIN, my_mac};
    slac::port::Qca7000Link link(cfg);
+For UART mode create ``qca7000_uart_config`` with a ``HardwareSerial`` instance. Pins can be changed using ``Serial.begin(baud, config, RX_PIN, TX_PIN)`` or by providing a different ``HardwareSerial`` port.
+
+Example PlatformIO setup configuring all pins explicitly:
+
+.. code-block:: cpp
+
+   #define PLC_SCK_PIN   12
+   #define PLC_MISO_PIN  13
+   #define PLC_MOSI_PIN  11
+   #define PLC_CS_PIN    17
+   #define PLC_RST_PIN   5
+   // INT optional, polling used
+
+   void setup() {
+       SPI.begin(PLC_SCK_PIN, PLC_MISO_PIN, PLC_MOSI_PIN, PLC_CS_PIN);
+       static const uint8_t my_mac[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+       qca7000_config cfg{&SPI, PLC_CS_PIN, my_mac};
+       static slac::port::Qca7000Link link(cfg);
+       static slac::Channel channel(&link);
+       channel.open();
+   }
+
+   void loop() {
+       qca7000Process();
+   }
+
 
 Custom Port Configuration
 ------------------------
