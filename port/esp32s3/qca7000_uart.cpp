@@ -1,4 +1,5 @@
 #include "qca7000_uart.hpp"
+#include "qca7000.hpp"
 #include "port_config.hpp"
 #ifdef ESP_PLATFORM
 #include <esp_log.h>
@@ -9,23 +10,7 @@
 #endif
 #include <string.h>
 
-#ifdef LIBSLAC_TESTING
-static const char* PLC_TAG = "PLC_IF";
-#else
-const char* PLC_TAG = "PLC_IF";
-#endif
 
-#ifdef LIBSLAC_TESTING
-static uint8_t myethtransmitbuffer[V2GTP_BUFFER_SIZE]{};
-static size_t myethtransmitlen = 0;
-static uint8_t myethreceivebuffer[V2GTP_BUFFER_SIZE]{};
-static size_t myethreceivelen = 0;
-#else
-uint8_t myethtransmitbuffer[V2GTP_BUFFER_SIZE]{};
-size_t myethtransmitlen = 0;
-uint8_t myethreceivebuffer[V2GTP_BUFFER_SIZE]{};
-size_t myethreceivelen = 0;
-#endif
 
 
 static constexpr uint16_t SOF_WORD = 0xAAAA;
