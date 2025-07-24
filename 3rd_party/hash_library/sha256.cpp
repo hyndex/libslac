@@ -72,7 +72,7 @@ inline uint32_t swap(uint32_t x) {
 #if defined(__GNUC__) || defined(__clang__)
     return __builtin_bswap32(x);
 #endif
-#ifdef MSC_VER
+#ifdef _MSC_VER
     return _byteswap_ulong(x);
 #endif
 
