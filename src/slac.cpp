@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2022 - 2022 Pionix GmbH and Contributors to EVerest
+// Copyright 2024 Joulepoint Private Limited (Author Chinmoy Bhuyan)
 #include <slac/slac.hpp>
 #ifdef ESP_PLATFORM
 #include "port/generic/port_config.hpp"
