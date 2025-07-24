@@ -3,7 +3,7 @@ libslac
 
 Simple ISO15118-3 SLAC library.
 
-This repository contains a minimal implementation of the ISO15118-3 Signal Level Attenuation Characterization (SLAC) protocol. It can be used in desktop applications and embedded systems alike. The library is designed with a small dependency footprint and focuses on providing the core data structures and helper functions required to implement the SLAC handshake.
+This repository contains a minimal implementation of the ISO15118-3 Signal Level Attenuation Characterization (SLAC) protocol.  It targets ESP32 microcontrollers using the Arduino framework.  The library has a small dependency footprint and focuses on providing the core data structures and helper functions required to implement the SLAC handshake.
 
 .. contents:: Table of Contents
    :depth: 2
@@ -25,29 +25,11 @@ additional ``git submodule`` commands are needed.
 Prerequisites
 -------------
 
-Install the tools used for embedded builds and unit testing before
-configuring the project:
+Install PlatformIO to build the firmware:
 
 .. code-block:: bash
 
    pip install platformio
-   apt-get install libgtest-dev
-
-Building with CMake
--------------------
-
-The project uses ``CMake`` (>= 3.11) and standard commands for dependency management.
-
-A typical build looks as follows:
-
-.. code-block:: bash
-
-   mkdir build
-   cd build
-   cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release
-   cmake --build .
-
-This will build the ``slac`` static library. The library is exported as the CMake target ``slac::slac``. Set ``SLAC_INSTALL`` to ``ON`` and run ``cmake --install .`` to install it.
 
 Building with PlatformIO
 -----------------------
@@ -75,7 +57,7 @@ Library Concepts
 ``libslac`` exposes only a few classes in ``include/slac``:
 
 :class:`slac::transport::Link`
-    Abstract interface to send and receive raw ethernet frames. Applications must provide an implementation that matches their environment (e.g. raw sockets on Linux or a driver on microcontrollers).
+    Abstract interface to send and receive raw Ethernet frames. Applications must provide an implementation that matches their environment.
 :class:`slac::Channel`
     Helper around a :class:`transport::Link` adding timeout handling and convenience helpers for reading and writing SLAC messages.
 :class:`slac::messages::HomeplugMessage`
@@ -166,77 +148,11 @@ via ``qca7000_uart_config``:
    qca7000_uart_config cfg{&Serial2, 1250000};
    slac::port::Qca7000UartLink link(cfg);
 
-Custom Port Configuration
-------------------------
-
-The header ``port/generic/port_config.hpp`` provides weak default
-implementations of timing and interrupt helpers used throughout the
-library. Targets can supply their own ``port_config.hpp`` to override
-these functions.  For example the ESP32 port ships with
-``port/esp32s3/port_config.hpp`` which replaces the generic helpers with
-FreeRTOS based versions.  Place your custom header in a ``port/<target>``
-directory and ensure it is included before the generic one or define the
-macros manually when building.
-
 Tools and Examples
 ------------------
 
 The ``tools`` directory contains small utilities demonstrating how to use ``libslac``. ``tools/evse`` contains a simple state machine for the EVSE side of the SLAC handshake. See ``docs/BoardExample.md`` for a complete PlatformIO configuration using custom pins.
 See `docs/PlatformIOExample.md` for a detailed tutorial on creating a new PlatformIO project.
-
-Porting to Other Boards
------------------------
-
-``libslac`` only ships an ESP32-S3 port. When targeting another MCU you need to
-provide two pieces:
-
-1. A :class:`transport::Link` implementation for sending and receiving ethernet
-   frames.
-2. A ``port_config.hpp`` defining ``slac_millis`` and ``slac_delay`` as well as
-   optional interrupt helpers.
-
-``transport::Link`` exposes ``open()``, ``write()``, ``read()`` and ``mac()``.
-``open()`` should initialise the hardware and return ``true`` on success. The
-``write()`` and ``read()`` methods transfer raw frames with millisecond timeouts
-while ``mac()`` returns the local MAC address.
-
-``port_config.hpp`` is included by the library and provides platform specific
-timing helpers. A minimal bare-metal variant might look like:
-
-.. code-block:: cpp
-
-   #pragma once
-   #include <stdint.h>
-   extern "C" uint32_t board_millis();
-   static inline uint32_t slac_millis() { return board_millis(); }
-   static inline void slac_delay(uint32_t ms) { /* busy wait */ }
-
-For PlatformIO builds place your implementation under ``port/<board>`` and add
-the files to ``src_filter``. A sample STM32 configuration is shown below:
-
-.. code-block:: ini
-
-   [env:stm32]
-   platform = ststm32
-   board = nucleo-f429zi
-   framework = arduino
-   build_unflags = -std=gnu++11
-   build_flags = -std=gnu++17 -Iinclude -I3rd_party -Iport/stm32 -Os \
-       -fdata-sections -ffunction-sections -fno-exceptions -fno-rtti
-   src_filter = +<src/channel.cpp> +<src/slac.cpp> \
-       +<port/stm32/my_link.cpp> +<3rd_party/hash_library/sha256.cpp> \
-       +<path/to/main.cpp>
-
-Running the Tests
------------------
-
-Unit tests are based on GoogleTest. Enable ``BUILD_TESTING`` when configuring CMake and run ``ctest`` after building:
-
-.. code-block:: bash
-
-   cmake .. -G Ninja -DBUILD_TESTING=ON
-   ninja
-   ctest
 
 Vendored Dependencies
 ---------------------
