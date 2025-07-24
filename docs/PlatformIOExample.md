@@ -31,27 +31,21 @@ below are located inside this project folder.
 
 ## 3. Add libslac
 
-Clone or copy the `libslac` repository next to your project.  The
-example in this repository assumes the following layout:
+Include the library via `lib_deps` so PlatformIO automatically fetches
+it from GitHub:
 
-```
-my_slac_project/
-  platformio.ini
-  src/
-  test/
-libslac/
-  include/
-  src/
+```ini
+lib_deps = https://github.com/hyndex/libslac.git
 ```
 
-The project references the library sources directly via `src_filter` so
-no additional `library.json` is required.
+No extra `library.json` or source filtering is necessary as the
+repository already provides a `library.json` configuration.
 
 ## 4. Configure `platformio.ini`
 
 The `examples/platformio_basic` folder contains a complete
-configuration.  The important parts are the include paths and the list
-of source files to build.  A minimal configuration looks like:
+configuration.  When using ``lib_deps`` only a few build flags are
+required.  A minimal configuration looks like:
 
 ```ini
 [platformio]
@@ -62,19 +56,13 @@ platform = espressif32
 board = esp32-s3-devkitc-1
 framework = arduino
 build_unflags = -std=gnu++11
-build_flags = -std=gnu++17 -I../libslac/include -I../libslac/3rd_party \
-    -I../libslac/port/esp32s3 -DESP_PLATFORM -Os -fdata-sections \
-    -ffunction-sections -fno-exceptions -fno-rtti
-lib_ldf_mode = chain
-src_filter = +<../libslac/src/channel.cpp> +<../libslac/src/slac.cpp> \
-    +<../libslac/port/esp32s3/qca7000.cpp> \
-    +<../libslac/port/esp32s3/qca7000_link.cpp> \
-    +<../libslac/3rd_party/hash_library/sha256.cpp> +<src/main.cpp>
+build_flags = -std=gnu++17 -DESP_PLATFORM
+lib_deps = https://github.com/hyndex/libslac.git
 ```
 
-The include paths expose the headers of `libslac`, while `src_filter`
-adds the library sources to the build.  This approach keeps the example
-self contained without installing the library globally.
+PlatformIO downloads the library and sets up include paths
+automatically.  This keeps the example self contained without copying
+the sources into your project.
 
 A second environment named `native` can be added with `platform =
 native` to build and run the unit tests on the host PC.
@@ -145,8 +133,8 @@ the test binary.  A successful run prints `\*\*\* [native] Success`.
 
 This basic setup provides the foundation for SLAC communication.  From
 here you can integrate the state machine in `tools/evse` or add your own
-application logic to perform matching and handle network traffic.  When
-modifying the configuration remember to keep the include paths and
-`src_filter` entries in sync with your project layout.
+application logic to perform matching and handle network traffic.
+When modifying the configuration make sure to keep any custom build
+flags in sync with your project layout.
 
 

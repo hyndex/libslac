@@ -52,19 +52,22 @@ This will build the ``slac`` static library. The library is exported as the CMak
 Building with PlatformIO
 -----------------------
 
-For embedded targets the library can be built using `PlatformIO <https://platformio.org/>`_. The following environment is provided:
+For embedded targets the library can be built using `PlatformIO <https://platformio.org/>`_.
+Add ``libslac`` to ``lib_deps`` in your ``platformio.ini`` to fetch the
+library automatically:
 
-``env:esp32s3``
-    Example configuration for ESP32-S3 development boards. It shows the required compiler flags and source filters.
+.. code-block:: ini
 
-Invoke PlatformIO using:
+   lib_deps = https://github.com/hyndex/libslac.git
+
+The repository ships a ``library.json`` so no additional configuration is
+required.  Building the example firmware for ESP32‑S3 boards can be used
+to verify a working setup.  The configuration is provided under the
+``env:esp32s3`` environment and can be invoked with:
 
 .. code-block:: bash
 
    pio run -e esp32s3
-
-This command builds the example firmware for ESP32-S3 boards and is
-useful to verify compilation after refactoring.
 
 Library Concepts
 ----------------
