@@ -340,25 +340,35 @@ uint8_t qca7000getSlacResult() {
 
 void qca7000Process() {
     spiWr16_fast(SPI_REG_INTR_ENABLE, 0);
-    uint16_t cause = spiRd16_fast(SPI_REG_INTR_CAUSE);
-    while (cause) {
-        spiWr16_fast(SPI_REG_INTR_CAUSE, cause);
+    while (true) {
+        uint16_t cause = spiRd16_fast(SPI_REG_INTR_CAUSE);
+        if (!cause)
+            break;
+
+        uint16_t clear_mask = 0;
 
         if (cause & SPI_INT_CPU_ON) {
+            clear_mask |= SPI_INT_CPU_ON;
             hardReset();
             qca7000setup(g_spi, g_cs, g_rst);
+            spiWr16_fast(SPI_REG_INTR_CAUSE, clear_mask);
             spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
             return;
         }
         if (cause & (SPI_INT_WRBUF_ERR | SPI_INT_RDBUF_ERR)) {
+            clear_mask |= SPI_INT_WRBUF_ERR | SPI_INT_RDBUF_ERR;
             hardReset();
+            spiWr16_fast(SPI_REG_INTR_CAUSE, clear_mask);
             spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
             return;
         }
-        if (cause & SPI_INT_PKT_AVLBL)
+        if (cause & SPI_INT_PKT_AVLBL) {
             fetchRx();
+            clear_mask |= SPI_INT_PKT_AVLBL;
+        }
 
-        cause = spiRd16_fast(SPI_REG_INTR_CAUSE);
+        if (clear_mask)
+            spiWr16_fast(SPI_REG_INTR_CAUSE, clear_mask);
     }
     spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
 }
