@@ -25,13 +25,12 @@ additional ``git submodule`` commands are needed.
 Prerequisites
 -------------
 
-Install the tools used for embedded builds and unit testing before
-configuring the project:
+Install the tools used for embedded builds before configuring the
+project:
 
 .. code-block:: bash
 
    pip install platformio
-   apt-get install libgtest-dev
 
 Building with CMake
 -------------------
@@ -226,17 +225,6 @@ the files to ``src_filter``. A sample STM32 configuration is shown below:
    src_filter = +<src/channel.cpp> +<src/slac.cpp> \
        +<port/stm32/my_link.cpp> +<3rd_party/hash_library/sha256.cpp> \
        +<path/to/main.cpp>
-
-Running the Tests
------------------
-
-Unit tests are based on GoogleTest. Enable ``BUILD_TESTING`` when configuring CMake and run ``ctest`` after building:
-
-.. code-block:: bash
-
-   cmake .. -G Ninja -DBUILD_TESTING=ON
-   ninja
-   ctest
 
 Vendored Dependencies
 ---------------------

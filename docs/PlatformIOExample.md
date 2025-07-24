@@ -3,7 +3,7 @@
 This guide walks through creating a minimal PlatformIO project that uses
 `libslac` to communicate with a QCA7000 based power line modem.  It is
 structured as a step-by-step tutorial explaining why each step is
-required and includes a small unit test to verify the setup.
+required.
 
 ## 1. Install PlatformIO
 
@@ -13,7 +13,7 @@ Install the PlatformIO command line tools via `pip`:
 pip install platformio
 ```
 
-PlatformIO handles building the firmware and running the example tests.
+PlatformIO handles building the firmware for the selected target.
 
 ## 2. Create a new Project
 
@@ -64,9 +64,6 @@ PlatformIO downloads the library and sets up include paths
 automatically.  This keeps the example self contained without copying
 the sources into your project.
 
-A second environment named `native` can be added with `platform =
-native` to build and run the unit tests on the host PC.
-
 ## 5. Example `main.cpp`
 
 The example firmware simply initialises the QCA7000 link and polls the
@@ -116,20 +113,7 @@ If everything is set up correctly PlatformIO will produce an Arduino
 firmware binary.  Any compiler errors usually indicate missing include
 paths or source files in `platformio.ini`.
 
-## 7. Run the Tests
-
-The example ships with a small unit test that instantiates a
-`slac::Channel` using a dummy transport link.  Running the test confirms
-that the project configuration can build code using `libslac`:
-
-```bash
-pio test -e native
-```
-
-The `native` environment builds the project for the host PC and executes
-the test binary.  A successful run prints `\*\*\* [native] Success`.
-
-## 8. Next Steps
+## 7. Next Steps
 
 This basic setup provides the foundation for SLAC communication.  From
 here you can integrate the state machine in `tools/evse` or add your own
