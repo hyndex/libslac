@@ -25,29 +25,11 @@ additional ``git submodule`` commands are needed.
 Prerequisites
 -------------
 
-Install PlatformIO to build the firmware:
-Install the tools used for embedded builds before configuring the
-project:
+Install the PlatformIO tools before building the firmware:
 
 .. code-block:: bash
 
    pip install platformio
-
-Building with CMake
--------------------
-
-The project uses ``CMake`` (>= 3.11) and standard commands for dependency management.
-
-A typical build looks as follows:
-
-.. code-block:: bash
-
-   mkdir build
-   cd build
-   cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release
-   cmake --build .
-
-This will build the ``slac`` static library. The library is exported as the CMake target ``slac::slac``. Set ``SLAC_INSTALL`` to ``ON`` and run ``cmake --install .`` to install it.
 
 Building with PlatformIO
 -----------------------
