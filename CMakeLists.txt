@@ -51,12 +51,19 @@ set(SLAC_SOURCES
     src/channel.cpp
     src/slac.cpp
 )
+option(SLAC_USE_UART "Use UART interface for QCA7000" OFF)
 
 if (ESP_PLATFORM)
-    list(APPEND SLAC_SOURCES
-        port/esp32s3/qca7000_link.cpp
-        port/esp32s3/qca7000.cpp
-    )
+    if (SLAC_USE_UART)
+        list(APPEND SLAC_SOURCES
+            port/esp32s3/qca7000_uart.cpp
+        )
+    else()
+        list(APPEND SLAC_SOURCES
+            port/esp32s3/qca7000_link.cpp
+            port/esp32s3/qca7000.cpp
+        )
+    endif()
 else()
     list(APPEND SLAC_SOURCES
         src/packet_socket.cpp
@@ -65,6 +72,9 @@ else()
 endif()
 
 target_sources(slac PRIVATE ${SLAC_SOURCES} $<TARGET_OBJECTS:HashLibrary>)
+if (SLAC_USE_UART)
+    target_compile_definitions(slac PUBLIC SLAC_USE_UART)
+endif()
 
 if (ESP_PLATFORM)
     target_include_directories(slac PRIVATE port/esp32s3)

@@ -2,10 +2,12 @@ add_executable(slac_unit_test
     libslac_unit_test.cpp
     evse_fsm_test.cpp
     qca7000_test.cpp
+    qca7000_uart_test.cpp
     ../tools/evse/evse_fsm.cpp
     ../tools/evse/slac_io.cpp
     ../tools/evse/packet_socket_link.cpp
     stubs/SPI.cpp
+    stubs/HardwareSerial.cpp
 )
 
 find_package(GTest REQUIRED)
