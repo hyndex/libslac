@@ -72,7 +72,14 @@ public:
     FSM(FSM&& other) = delete;
     FSM& operator=(const FSM& other) = delete;
     FSM& operator=(FSM&& other) = delete;
-    ~FSM() = default;
+    ~FSM() {
+        state_allocator.release_staged_states<SimpleStateType, CompoundStateType>();
+        reset();
+    }
+
+    auto allocator_state() const {
+        return state_allocator.get_internal_state();
+    }
 
     template <typename StateType, typename... Args> void reset(Args&&... args) {
         reset();
@@ -210,6 +217,10 @@ public:
     ~FSM() {
         state_allocator.template release_staged_states<SimpleStateType, CompoundStateType>();
         reset();
+    }
+
+    auto allocator_state() const {
+        return state_allocator.get_internal_state();
     }
 
     template <typename StateType, typename... Args> void reset(Args&&... args) {
