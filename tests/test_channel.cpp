@@ -83,5 +83,6 @@ TEST(Channel, WriteAfterSetupFailure) {
                                    slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_REQ,
                                    slac::defs::MMV::AV_1_0));
     EXPECT_FALSE(msg.is_valid());
+    msg.setup_ethernet_header(dst);
     EXPECT_FALSE(channel.write(msg, 100));
 }

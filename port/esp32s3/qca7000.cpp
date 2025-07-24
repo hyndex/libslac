@@ -1,7 +1,16 @@
 #include "qca7000.hpp"
 #include "../port_common.hpp"
 #include "port_config.hpp"
+#ifdef ESP_LOGW
+#pragma push_macro("ESP_LOGW")
+#undef ESP_LOGW
+#define RESTORE_ESP_LOGW
+#endif
 #include "../logging_compat.hpp"
+#ifdef RESTORE_ESP_LOGW
+#pragma pop_macro("ESP_LOGW")
+#undef RESTORE_ESP_LOGW
+#endif
 #include <arpa/inet.h>
 #include <stdint.h>
 #ifndef ESP_PLATFORM
