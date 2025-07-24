@@ -181,7 +181,7 @@ macros manually when building.
 Tools and Examples
 ------------------
 
-The ``tools`` directory contains small utilities demonstrating how to use ``libslac``. ``tools/evse`` contains a simple state machine for the EVSE side of the SLAC handshake. See ``docs/BoardExample.md`` for a complete PlatformIO configuration using custom pins.
+The ``tools`` directory contains small utilities demonstrating how to use ``libslac``. See ``docs/BoardExample.md`` for a complete PlatformIO configuration using custom pins.
 See `docs/PlatformIOExample.md` for a detailed tutorial on creating a new PlatformIO project.
 
 Porting to Other Boards
@@ -244,7 +244,6 @@ Vendored Dependencies
 Small helper libraries are shipped with the source under ``3rd_party``:
 
 - ``hash_library`` provides SHA-256 routines.
-- ``libfsm`` contains lightweight state machine helpers.
 
 See ``THIRD_PARTY.rst`` for license information.
 
