@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2022 - 2022 Pionix GmbH and Contributors to EVerest
+// Copyright 2024 Joulepoint Private Limited (Author Chinmoy Bhuyan)
 #ifndef SLAC_SLAC_HPP
 #define SLAC_SLAC_HPP
 
