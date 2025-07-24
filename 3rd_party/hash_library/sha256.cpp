@@ -8,6 +8,7 @@
 
 #include "port/port_common.hpp"
 #include "sha256.h"
+#include <cstring>
 
 // big endian architectures need #define __BYTE_ORDER __BIG_ENDIAN
 #ifndef _MSC_VER
@@ -104,16 +105,17 @@ void SHA256::processBlock(const void* data) {
     uint32_t g = m_hash[6];
     uint32_t h = m_hash[7];
 
-    // data represented as 16x 32-bit words
-    const uint32_t* input = (uint32_t*)data;
-    // convert to big endian
+    // data represented as 16x 32-bit words without violating strict aliasing
     uint32_t words[64];
+    uint32_t inputWords[16];
+    std::memcpy(inputWords, data, sizeof(inputWords));
+    // convert to big endian
     int i;
     for (i = 0; i < 16; i++)
 #if defined(__BYTE_ORDER) && (__BYTE_ORDER != 0) && (__BYTE_ORDER == __BIG_ENDIAN)
-        words[i] = input[i];
+        words[i] = inputWords[i];
 #else
-        words[i] = swap(input[i]);
+        words[i] = swap(inputWords[i]);
 #endif
 
     uint32_t x, y; // temporaries
