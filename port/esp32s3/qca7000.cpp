@@ -572,6 +572,13 @@ bool qca7000setup(SPIClass* bus, int csPin, int rstPin) {
     return true;
 }
 
+void qca7000teardown() {
+    if (g_spi) {
+        g_spi->end();
+    }
+    g_spi = nullptr;
+}
+
 bool qca7000ResetAndCheck() {
     return hardReset();
 }

@@ -8,6 +8,9 @@
 #ifndef V2GTP_BUFFER_SIZE
 #define V2GTP_BUFFER_SIZE 1536
 #endif
+
+static_assert(ETH_FRAME_LEN <= V2GTP_BUFFER_SIZE,
+              "ETH_FRAME_LEN must not exceed V2GTP_BUFFER_SIZE");
 #include <slac/transport.hpp>
 
 #ifdef ARDUINO
@@ -19,6 +22,8 @@ struct qca7000_uart_config {
     uint32_t baud;
     const uint8_t* mac_addr{nullptr};
 };
+
+void uartQca7000Teardown();
 
 namespace slac {
 namespace port {
@@ -38,6 +43,11 @@ public:
     bool is_initialized() const {
         return initialized;
     }
+
+    /// Close the UART connection and reset internal state
+    void close();
+
+    ~Qca7000UartLink();
 
 private:
     bool initialized{false};

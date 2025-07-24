@@ -15,6 +15,7 @@ Qca7000Link::Qca7000Link(const qca7000_config& c,
 }
 
 Qca7000Link::~Qca7000Link() {
+    close();
     qca7000SetErrorCallback(nullptr, nullptr, nullptr);
 }
 
@@ -33,6 +34,11 @@ bool Qca7000Link::open() {
     SPIClass* bus = cfg.spi ? cfg.spi : &SPI;
     int cs = cfg.cs_pin ? cfg.cs_pin : PLC_SPI_CS_PIN;
     int rst = cfg.rst_pin ? cfg.rst_pin : PLC_SPI_RST_PIN;
+
+    if (ETH_FRAME_LEN > V2GTP_BUFFER_SIZE) {
+        initialization_error = true;
+        return false;
+    }
 
     if (!qca7000setup(bus, cs, rst)) {
         initialization_error = true;
@@ -54,6 +60,13 @@ bool Qca7000Link::write(const uint8_t* b, size_t l, uint32_t) {
     if (!initialized || initialization_error)
         return false;
     return spiQCA7000SendEthFrame(b, l);
+}
+
+void Qca7000Link::close() {
+    if (!initialized)
+        return;
+    qca7000teardown();
+    initialized = false;
 }
 
 transport::LinkError Qca7000Link::read(uint8_t* b, size_t l, size_t* out, uint32_t timeout_ms) {
