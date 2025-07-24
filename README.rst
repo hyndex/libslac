@@ -137,7 +137,7 @@ Polling Without IRQ
 -------------------
 
 The QCA7000 driver can be polled instead of relying on an interrupt
-line.  The ``examples/pio/polling_example.cpp`` example calls
+line.  The ``examples/platformio_complete/src/main.cpp`` example calls
 ``qca7000Process()`` from the ``loop()`` function and then polls the
 channel for new packets.  When using this approach the IRQ pin on the
 modem may remain unconnected.

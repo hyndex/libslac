@@ -43,7 +43,7 @@ repository already provides a `library.json` configuration.
 
 ## 4. Configure `platformio.ini`
 
-The `examples/platformio_basic` folder contains a complete
+The `examples/platformio_complete` folder contains a complete
 configuration.  When using ``lib_deps`` only a few build flags are
 required.  A minimal configuration looks like:
 
