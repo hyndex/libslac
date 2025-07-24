@@ -10,8 +10,3 @@ hash_library
 * **Origin**: https://github.com/stbrumme/hash-library
 * **License**: zlib
 
-libfsm
-------
-* **Version**: commit a09a9a600dc8767b78a6b503b7d80d706cee194e
-* **Origin**: https://github.com/EVerest/libfsm
-* **License**: Apache-2.0
