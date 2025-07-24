@@ -6,8 +6,20 @@
 #include <fsm/states.hpp>
 
 namespace slac {
+
 // Re-export libfsm into the slac namespace for convenience
 namespace fsm = ::fsm;
-}
+
+enum class SlacEvent {
+    GotParmCnf,
+    SoundIntervalElapsed,
+    GotAttenCharInd,
+    GotSetKeyReq,
+    GotMatchReq,
+    Timeout,
+    Error
+};
+
+} // namespace slac
 
 #endif // SLAC_FSM_HPP
