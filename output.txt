@@ -1,4 +1,4 @@
-// ===== 3rd_party\hash_library\sha256.cpp =====
+// ===== 3rd_party/hash_library/sha256.cpp =====
 // SPDX-License-Identifier: Zlib
 
 // //////////////////////////////////////////////////////////
@@ -9,21 +9,9 @@
 
 #include "port/port_common.hpp"
 #include "sha256.h"
+#include <cstring>
 
-// big endian architectures need #define __BYTE_ORDER __BIG_ENDIAN
-#ifndef _MSC_VER
-#if defined(ESP_PLATFORM) && !defined(__GLIBC__)
-#include "port/esp32s3/endian_compat.hpp"
-#elif defined(__has_include)
-#  if __has_include(<endian.h>)
-#    include <endian.h>
-#  else
-#    include "port/esp32s3/endian_compat.hpp"
-#  endif
-#else
-#include <endian.h>
-#endif
-#endif
+#include <slac/endian.hpp>
 
 // #define SHA2_224_SEED_VECTOR
 
@@ -72,7 +60,7 @@ inline uint32_t swap(uint32_t x) {
 #if defined(__GNUC__) || defined(__clang__)
     return __builtin_bswap32(x);
 #endif
-#ifdef MSC_VER
+#ifdef _MSC_VER
     return _byteswap_ulong(x);
 #endif
 
@@ -105,16 +93,17 @@ void SHA256::processBlock(const void* data) {
     uint32_t g = m_hash[6];
     uint32_t h = m_hash[7];
 
-    // data represented as 16x 32-bit words
-    const uint32_t* input = (uint32_t*)data;
-    // convert to big endian
+    // data represented as 16x 32-bit words without violating strict aliasing
     uint32_t words[64];
+    uint32_t inputWords[16];
+    std::memcpy(inputWords, data, sizeof(inputWords));
+    // convert to big endian
     int i;
     for (i = 0; i < 16; i++)
 #if defined(__BYTE_ORDER) && (__BYTE_ORDER != 0) && (__BYTE_ORDER == __BIG_ENDIAN)
-        words[i] = input[i];
+        words[i] = inputWords[i];
 #else
-        words[i] = swap(input[i]);
+        words[i] = swap(inputWords[i]);
 #endif
 
     uint32_t x, y; // temporaries
@@ -588,7 +577,7 @@ std::string SHA256::operator()(const std::string& text) {
 }
 
 
-// ===== 3rd_party\hash_library\sha256.h =====
+// ===== 3rd_party/hash_library/sha256.h =====
 // SPDX-License-Identifier: Zlib
 
 // //////////////////////////////////////////////////////////
@@ -671,9 +660,10 @@ private:
 };
 
 
-// ===== examples\platformio_complete\src\main.cpp =====
+// ===== examples/platformio_complete/src/main.cpp =====
 #include <Arduino.h>
 #include <slac/channel.hpp>
+#include <slac/slac.hpp>
 #include <port/esp32s3/qca7000_link.hpp>
 
 // Default MAC address for the modem. Adjust as required.
@@ -694,7 +684,31 @@ void setup() {
     static slac::port::Qca7000Link link(cfg);
     static slac::Channel channel(&link);
     g_channel = &channel;
-    channel.open();
+    if (!channel.open()) {
+        Serial.println("Failed to open SLAC channel, aborting");
+        g_channel = nullptr;
+        while (true)
+            delay(1000);
+    }
+
+    // send a minimal CM_SLAC_PARM.REQ as an example
+    slac::messages::HomeplugMessage msg;
+    slac::messages::cm_slac_parm_req req{};
+    req.application_type = 0;
+    req.security_type = 0;
+    memset(req.run_id, 0x00, sizeof(req.run_id));
+
+    if (!msg.setup_payload(&req, sizeof(req),
+                           slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_REQ,
+                           slac::defs::MMV::AV_1_0)) {
+        Serial.println("setup_payload failed: payload too large");
+    } else {
+        uint8_t dst_mac[ETH_ALEN] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+        msg.setup_ethernet_header(dst_mac);
+        if (!channel.write(msg, 1000)) {
+            Serial.println("Failed to transmit SLAC parameter request");
+        }
+    }
 }
 
 void loop() {
@@ -709,19 +723,23 @@ void loop() {
 }
 
 
-// ===== examples\platformio_complete\test\test_basic.cpp =====
+// ===== examples/platformio_complete/test/test_basic.cpp =====
 #include <cassert>
 #include <slac/channel.hpp>
 #include <slac/transport.hpp>
 
 class DummyLink : public slac::transport::Link {
 public:
-    bool open() override { return true; }
-    bool write(const uint8_t*, size_t, uint32_t) override { return true; }
-    bool read(uint8_t*, size_t, size_t* out_len, uint32_t) override {
+    bool open() override {
+        return true;
+    }
+    bool write(const uint8_t*, size_t, uint32_t) override {
+        return true;
+    }
+    slac::transport::LinkError read(uint8_t*, size_t, size_t* out_len, uint32_t) override {
         if (out_len)
             *out_len = 0;
-        return true;
+        return slac::transport::LinkError::Ok;
     }
     const uint8_t* mac() const override {
         static const uint8_t mac[6] = {0};
@@ -737,7 +755,7 @@ int main() {
 }
 
 
-// ===== include\slac\channel.hpp =====
+// ===== include/slac/channel.hpp =====
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2024 Joulepoint Private Limited (Author Chinmoy Bhuyan)
 #ifndef SLAC_CHANNEL_HPP
@@ -770,7 +788,7 @@ public:
     ~Channel();
 
     bool open();
-    bool read(slac::messages::HomeplugMessage& msg, int timeout);
+    transport::LinkError read(slac::messages::HomeplugMessage& msg, int timeout);
     bool poll(slac::messages::HomeplugMessage& msg);
     bool write(slac::messages::HomeplugMessage& msg, int timeout);
 
@@ -797,7 +815,79 @@ private:
 #endif // SLAC_CHANNEL_HPP
 
 
-// ===== include\slac\iso15118_consts.hpp =====
+// ===== include/slac/endian.hpp =====
+#ifndef SLAC_ENDIAN_HPP
+#define SLAC_ENDIAN_HPP
+
+#include <cstdint>
+
+#ifndef __LITTLE_ENDIAN
+#define __LITTLE_ENDIAN 1234
+#endif
+
+#ifndef __BIG_ENDIAN
+#define __BIG_ENDIAN 4321
+#endif
+
+#if defined(_WIN32)
+#define __BYTE_ORDER __LITTLE_ENDIAN
+#elif defined(__BYTE_ORDER__)
+#define __BYTE_ORDER __BYTE_ORDER__
+#elif defined(__BYTE_ORDER)
+/* already defined */
+#elif defined(__LITTLE_ENDIAN__) || defined(__ARMEL__) || defined(__MIPSEL__)
+#define __BYTE_ORDER __LITTLE_ENDIAN
+#else
+#define __BYTE_ORDER __BIG_ENDIAN
+#endif
+
+static inline constexpr uint16_t slac_bswap16(uint16_t v) {
+    return __builtin_bswap16(v);
+}
+static inline constexpr uint32_t slac_bswap32(uint32_t v) {
+    return __builtin_bswap32(v);
+}
+static inline constexpr uint64_t slac_bswap64(uint64_t v) {
+    return __builtin_bswap64(v);
+}
+
+#if !defined(ESP_PLATFORM) && !defined(htole16)
+static inline constexpr uint16_t htole16(uint16_t v) {
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+    return v;
+#else
+    return slac_bswap16(v);
+#endif
+}
+static inline constexpr uint16_t le16toh(uint16_t v) { return htole16(v); }
+#endif
+
+#if !defined(ESP_PLATFORM) && !defined(htole32)
+static inline constexpr uint32_t htole32(uint32_t v) {
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+    return v;
+#else
+    return slac_bswap32(v);
+#endif
+}
+static inline constexpr uint32_t le32toh(uint32_t v) { return htole32(v); }
+#endif
+
+#if !defined(ESP_PLATFORM) && !defined(htole64)
+static inline constexpr uint64_t htole64(uint64_t v) {
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+    return v;
+#else
+    return slac_bswap64(v);
+#endif
+}
+static inline constexpr uint64_t le64toh(uint64_t v) { return htole64(v); }
+#endif
+
+#endif // SLAC_ENDIAN_HPP
+
+
+// ===== include/slac/iso15118_consts.hpp =====
 #ifndef SLAC_ISO15118_CONSTS_HPP
 #define SLAC_ISO15118_CONSTS_HPP
 
@@ -823,7 +913,7 @@ const int T_STEP_EF_MS = 4000;          // min. 4s
 #endif // SLAC_ISO15118_CONSTS_HPP
 
 
-// ===== include\slac\slac.hpp =====
+// ===== include/slac/slac.hpp =====
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2024 Joulepoint Private Limited (Author Chinmoy Bhuyan)
 #ifndef SLAC_SLAC_HPP
@@ -831,13 +921,13 @@ const int T_STEP_EF_MS = 4000;          // min. 4s
 
 #include "port/port_common.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <utility>
 
 #include "port/esp32s3/ethernet_defs.hpp"
 
 namespace slac {
-
 
 namespace defs {
 
@@ -849,21 +939,21 @@ enum class MMV : uint8_t {
     AV_2_0 = 0x2,
 };
 
-const int MME_MIN_LENGTH = 60;
+constexpr std::size_t MME_MIN_LENGTH = 60;
 
-const int STATION_ID_LEN = 17;
-const int NID_LEN = 7;
-const int NID_MOST_SIGNIFANT_BYTE_SHIFT = 4;
+constexpr std::size_t STATION_ID_LEN = 17;
+constexpr std::size_t NID_LEN = 7;
+constexpr std::size_t NID_MOST_SIGNIFANT_BYTE_SHIFT = 4;
 const uint8_t NID_SECURITY_LEVEL_SIMPLE_CONNECT = 0b00;
-const int NID_SECURITY_LEVEL_OFFSET = 4;
+constexpr std::size_t NID_SECURITY_LEVEL_OFFSET = 4;
 
 const uint8_t DAKS_HASH[] = {0x08, 0x85, 0x6d, 0xaf, 0x7c, 0xf5, 0x81, 0x85};
 const uint8_t NMK_HASH[] = {0x08, 0x85, 0x6d, 0xaf, 0x7c, 0xf5, 0x81, 0x86};
 
-const int NMK_LEN = 16;
+constexpr std::size_t NMK_LEN = 16;
 
-const int AAG_LIST_LEN = 58;
-const int RUN_ID_LEN = 16;
+constexpr std::size_t AAG_LIST_LEN = 58;
+constexpr std::size_t RUN_ID_LEN = 16;
 
 const uint16_t MMTYPE_CM_SET_KEY = 0x6008;
 const uint16_t MMTYPE_CM_SLAC_PARAM = 0x6064;
@@ -971,7 +1061,16 @@ public:
 
     void set_raw_msg_len(int len);
 
-    void setup_payload(void const* payload, int len, uint16_t mmtype, const defs::MMV mmv);
+    /**
+     * \brief Setup the SLAC payload of this HomePlug message
+     *
+     * Copies \p len bytes from \p payload into the internal buffer and sets
+     * the appropriate HomePlug header fields.  The function returns false if
+     * the payload would exceed the maximum size allowed for the chosen MMV
+     * version.  On success the raw message length is adjusted and the message
+     * becomes valid.
+     */
+    bool setup_payload(void const* payload, int len, uint16_t mmtype, const defs::MMV mmv);
     void setup_ethernet_header(const uint8_t dst_mac_addr[ETH_ALEN], const uint8_t src_mac_addr[ETH_ALEN] = nullptr);
 
     uint16_t get_mmtype() const;
@@ -998,12 +1097,12 @@ private:
     bool keep_src_mac{false};
 };
 
-const int M_SOUND_TARGET_LEN = 6;
-const int SENDER_ID_LEN = defs::STATION_ID_LEN;
-const int SOURCE_ID_LEN = defs::STATION_ID_LEN;
-const int RESP_ID_LEN = defs::STATION_ID_LEN;
-const int PEV_ID_LEN = defs::STATION_ID_LEN;
-const int EVSE_ID_LEN = defs::STATION_ID_LEN;
+constexpr std::size_t M_SOUND_TARGET_LEN = 6;
+constexpr std::size_t SENDER_ID_LEN = defs::STATION_ID_LEN;
+constexpr std::size_t SOURCE_ID_LEN = defs::STATION_ID_LEN;
+constexpr std::size_t RESP_ID_LEN = defs::STATION_ID_LEN;
+constexpr std::size_t PEV_ID_LEN = defs::STATION_ID_LEN;
+constexpr std::size_t EVSE_ID_LEN = defs::STATION_ID_LEN;
 
 typedef struct {
     uint8_t application_type;         // fixed to 0x00, indicating 'pev-evse matching'
@@ -1064,7 +1163,7 @@ typedef struct {
     uint8_t sender_id[SENDER_ID_LEN]; // sender id, if application_type = 0x00, it should be the pev's vin code
     uint8_t remaining_sound_count;    // count of remaining sound messages
     uint8_t run_id[defs::RUN_ID_LEN]; // identifier for a matching run
-    uint8_t random[16];   // random value
+    uint8_t random[16];               // random value
 } __attribute__((packed)) cm_mnbc_sound_ind;
 
 // note: this message doesn't seem to part of hpgp, it is defined in ISO15118-3
@@ -1095,9 +1194,9 @@ typedef struct {
     uint8_t evse_id[EVSE_ID_LEN];     // EVSE id
     uint8_t evse_mac[ETH_ALEN];       // mac address of the EVSE
     uint8_t run_id[defs::RUN_ID_LEN]; // identifier for a matching run
-    uint8_t nid[defs::NID_LEN]; // network id derived from the nmk
-    uint8_t _reserved2;         // note: this is to pad the nid, which is defined to be 8 bytes for this message
-    uint8_t nmk[defs::NMK_LEN]; // private nmk of the EVSE
+    uint8_t nid[defs::NID_LEN];       // network id derived from the nmk
+    uint8_t _reserved2;               // note: this is to pad the nid, which is defined to be 8 bytes for this message
+    uint8_t nmk[defs::NMK_LEN];       // private nmk of the EVSE
 } __attribute__((packed)) cm_slac_match_cnf;
 
 typedef struct {
@@ -1241,21 +1340,28 @@ typedef struct {
 #endif // SLAC_SLAC_HPP
 
 
-// ===== include\slac\transport.hpp =====
+// ===== include/slac/transport.hpp =====
 #ifndef SLAC_TRANSPORT_HPP
 #define SLAC_TRANSPORT_HPP
 
 #include "port/port_common.hpp"
 
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 
 namespace slac::transport {
+
+enum class LinkError {
+    Ok,
+    Timeout,
+    Transport,
+};
+
 class Link {
 public:
     virtual bool open() = 0;
     virtual bool write(const uint8_t* buf, size_t len, uint32_t timeout_ms) = 0;
-    virtual bool read(uint8_t* buf, size_t len, size_t* out_len, uint32_t timeout_ms) = 0;
+    virtual LinkError read(uint8_t* buf, size_t len, size_t* out_len, uint32_t timeout_ms) = 0;
     virtual const uint8_t* mac() const = 0;
     virtual ~Link() = default;
 };
@@ -1264,7 +1370,7 @@ public:
 #endif // SLAC_TRANSPORT_HPP
 
 
-// ===== port\esp32s3\endian_compat.hpp =====
+// ===== port/esp32s3/endian_compat.hpp =====
 #ifndef SLAC_ENDIAN_COMPAT_HPP
 #define SLAC_ENDIAN_COMPAT_HPP
 
@@ -1280,7 +1386,7 @@ static inline uint16_t ntohs(uint16_t x) { return htons(x); }
 #endif // SLAC_ENDIAN_COMPAT_HPP
 
 
-// ===== port\esp32s3\ethernet_defs.hpp =====
+// ===== port/esp32s3/ethernet_defs.hpp =====
 #ifndef SLAC_ETHERNET_DEFS_HPP
 #define SLAC_ETHERNET_DEFS_HPP
 
@@ -1304,7 +1410,7 @@ struct ether_header {
 #endif // SLAC_ETHERNET_DEFS_HPP
 
 
-// ===== port\esp32s3\port_config.hpp =====
+// ===== port/esp32s3/port_config.hpp =====
 #ifndef SLAC_PORT_CONFIG_HPP
 #define SLAC_PORT_CONFIG_HPP
 
@@ -1348,7 +1454,7 @@ static inline void slac_interrupts() {
 #endif // SLAC_PORT_CONFIG_HPP
 
 
-// ===== port\esp32s3\qca7000.cpp =====
+// ===== port/esp32s3/qca7000.cpp =====
 #include "qca7000.hpp"
 #include "../port_common.hpp"
 #include "port_config.hpp"
@@ -1356,17 +1462,24 @@ static inline void slac_interrupts() {
 #include <esp_log.h>
 #include <esp_system.h>
 #else
-#include <stdint.h>
 #include <arpa/inet.h>
+#include <stdint.h>
+#ifndef ESP_LOGE
 #define ESP_LOGE(tag, fmt, ...)
+#endif
+#ifndef ESP_LOGI
 #define ESP_LOGI(tag, fmt, ...)
+#endif
+#ifndef ESP_LOGW
 #define ESP_LOGW(tag, fmt, ...)
+#endif
 static inline uint32_t esp_random() {
     return 0x12345678u;
 }
 #endif
 #include <slac/slac.hpp>
 #include <string.h>
+#include <atomic>
 
 const char* PLC_TAG = "PLC_IF";
 
@@ -1404,41 +1517,42 @@ struct RxEntry {
     uint8_t data[V2GTP_BUFFER_SIZE];
 };
 static RxEntry ring[4];
-static volatile uint8_t head = 0, tail = 0;
+static std::atomic<uint8_t> head{0}, tail{0};
+
 inline bool ringEmpty() {
-    return head == tail;
+    return head.load(std::memory_order_acquire) ==
+           tail.load(std::memory_order_acquire);
 }
+
 inline void ringPush(const uint8_t* d, size_t l) {
-    slac_noInterrupts();
     if (l > V2GTP_BUFFER_SIZE)
         l = V2GTP_BUFFER_SIZE;
-    uint8_t next = (head + 1) & 3;
-    if (next == tail) {
-        slac_interrupts();
+    auto h = head.load(std::memory_order_relaxed);
+    auto t = tail.load(std::memory_order_acquire);
+    uint8_t next = (h + 1) & 3;
+    if (next == t) {
         ESP_LOGW(PLC_TAG, "RX ring full - dropping frame");
         return;
     }
-    memcpy(ring[head].data, d, l);
-    ring[head].len = l;
-    head = next;
-    slac_interrupts();
+    memcpy(ring[h].data, d, l);
+    ring[h].len = l;
+    head.store(next, std::memory_order_release);
 }
+
 inline bool ringPop(const uint8_t** d, size_t* l) {
-    slac_noInterrupts();
-    if (ringEmpty()) {
-        slac_interrupts();
+    auto t = tail.load(std::memory_order_relaxed);
+    if (head.load(std::memory_order_acquire) == t)
         return false;
-    }
-    *d = ring[tail].data;
-    *l = ring[tail].len;
-    tail = (tail + 1) & 3;
-    slac_interrupts();
+    *d = ring[t].data;
+    *l = ring[t].len;
+    tail.store((t + 1) & 3, std::memory_order_release);
     return true;
 }
 } // namespace
 
 static inline uint16_t cmd16(bool rd, bool intr, uint16_t reg) {
-    return (rd ? 0x8000u : 0) | (intr ? 0x4000u : 0) | (reg & 0x3FFFu);
+    return (rd ? 0x8000u : 0) | (intr ? 0x4000u : 0) |
+           (reg & 0x3FFFu);
 }
 
 static uint16_t spiRd16_fast(uint16_t reg) {
@@ -1492,7 +1606,9 @@ static bool hardReset() {
         return false;
     }
     ESP_LOGI(PLC_TAG, "Reset probe OK (SIG=0x%04X)", sig);
+#ifndef ESP_LOGW
 #define ESP_LOGW(tag, fmt, ...)
+#endif
 
     t0 = slac_millis();
     while (!(slowRd16(SPI_REG_INTR_CAUSE) & SPI_INT_CPU_ON) && slac_millis() - t0 < 80)
@@ -1502,11 +1618,12 @@ static bool hardReset() {
     return true;
 }
 
-uint16_t qca7000ReadInternalReg(uint8_t r) {
-    return spiRd16_fast(r << 8);
+uint16_t qca7000ReadInternalReg(uint16_t r) {
+    return spiRd16_fast(r);
 }
 bool qca7000ReadSignature(uint16_t* s, uint16_t* v) {
-    uint16_t sig = qca7000ReadInternalReg(0x1A), ver = qca7000ReadInternalReg(0x1B);
+    uint16_t sig = qca7000ReadInternalReg(SPI_REG_SIGNATURE),
+             ver = qca7000ReadInternalReg(0x1B00);
     if (s)
         *s = sig;
     if (v)
@@ -1578,6 +1695,8 @@ static void fetchRx() {
     if (memcmp(p + 4, "\xAA\xAA\xAA\xAA", 4) != 0)
         return;
     uint16_t fl = le16toh(static_cast<uint16_t>((p[9] << 8) | p[8]));
+    if (fl > avail - RX_HDR - FTR_LEN)
+        return;
     if (p[RX_HDR + fl] != 0x55 || p[RX_HDR + fl + 1] != 0x55)
         return;
     ringPush(p + RX_HDR, fl);
@@ -1679,26 +1798,33 @@ uint8_t qca7000getSlacResult() {
 void qca7000Process() {
     spiWr16_fast(SPI_REG_INTR_ENABLE, 0);
     uint16_t cause = spiRd16_fast(SPI_REG_INTR_CAUSE);
-    spiWr16_fast(SPI_REG_INTR_CAUSE, cause);
+    while (cause) {
+        spiWr16_fast(SPI_REG_INTR_CAUSE, cause);
+
+        if (cause & SPI_INT_CPU_ON) {
+            hardReset();
+            qca7000setup(g_spi, g_cs, g_rst);
+            spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
+            return;
+        }
+        if (cause & (SPI_INT_WRBUF_ERR | SPI_INT_RDBUF_ERR)) {
+            hardReset();
+            spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
+            return;
+        }
+        if (cause & SPI_INT_PKT_AVLBL)
+            fetchRx();
+
+        cause = spiRd16_fast(SPI_REG_INTR_CAUSE);
+    }
     spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
-    if (!cause)
-        return;
-    if (cause & SPI_INT_CPU_ON) {
-        hardReset();
-        qca7000setup(g_spi, g_cs, g_rst);
-        return;
-    }
-    if (cause & (SPI_INT_WRBUF_ERR | SPI_INT_RDBUF_ERR)) {
-        hardReset();
-        return;
-    }
-    if (cause & SPI_INT_PKT_AVLBL)
-        fetchRx();
 }
 
 bool qca7000setup(SPIClass* bus, int csPin, int rstPin) {
     ESP_LOGI(PLC_TAG, "QCA7000 setup: bus=%p CS=%d RST=%d", bus, csPin, rstPin);
+#ifndef ESP_LOGW
 #define ESP_LOGW(tag, fmt, ...)
+#endif
     g_spi = bus;
     g_cs = csPin;
     g_rst = rstPin;
@@ -1714,7 +1840,9 @@ bool qca7000setup(SPIClass* bus, int csPin, int rstPin) {
 
     spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
     ESP_LOGI(PLC_TAG, "QCA7000 ready");
+#ifndef ESP_LOGW
 #define ESP_LOGW(tag, fmt, ...)
+#endif
     return true;
 }
 
@@ -1745,7 +1873,7 @@ void qca7000_task(void* arg) {
 #endif
 
 
-// ===== port\esp32s3\qca7000.hpp =====
+// ===== port/esp32s3/qca7000.hpp =====
 #pragma once
 
 #include "../port_common.hpp"
@@ -1814,7 +1942,7 @@ struct qca7000_config {
 
 bool qca7000setup(SPIClass* spi, int cs_pin, int rst_pin = PLC_SPI_RST_PIN);
 bool qca7000ResetAndCheck();
-uint16_t qca7000ReadInternalReg(uint8_t reg);
+uint16_t qca7000ReadInternalReg(uint16_t reg);
 bool qca7000ReadSignature(uint16_t* sig = nullptr, uint16_t* ver = nullptr);
 size_t spiQCA7000checkForReceivedData(uint8_t* dst, size_t maxLen);
 bool spiQCA7000SendEthFrame(const uint8_t* frame, size_t len);
@@ -1840,7 +1968,7 @@ extern size_t myethreceivelen;
 extern const char* PLC_TAG;
 
 
-// ===== port\esp32s3\qca7000_link.cpp =====
+// ===== port/esp32s3/qca7000_link.cpp =====
 #include "qca7000_link.hpp"
 #include "../port_common.hpp"
 #include "port_config.hpp"
@@ -1885,24 +2013,24 @@ bool Qca7000Link::write(const uint8_t* b, size_t l, uint32_t) {
     return spiQCA7000SendEthFrame(b, l);
 }
 
-bool Qca7000Link::read(uint8_t* b, size_t l, size_t* out, uint32_t timeout_ms) {
+transport::LinkError Qca7000Link::read(uint8_t* b, size_t l, size_t* out, uint32_t timeout_ms) {
     if (!initialized || initialization_error) {
         *out = 0;
-        return false;
+        return transport::LinkError::Transport;
     }
     uint32_t start = slac_millis();
     do {
         size_t got = spiQCA7000checkForReceivedData(b, l);
         if (got) {
             *out = got;
-            return true;
+            return transport::LinkError::Ok;
         }
         if (timeout_ms == 0)
             break;
         slac_delay(1);
     } while (slac_millis() - start < timeout_ms);
     *out = 0;
-    return false;
+    return transport::LinkError::Timeout;
 }
 
 const uint8_t* Qca7000Link::mac() const {
@@ -1913,7 +2041,7 @@ const uint8_t* Qca7000Link::mac() const {
 } // namespace slac
 
 
-// ===== port\esp32s3\qca7000_link.hpp =====
+// ===== port/esp32s3/qca7000_link.hpp =====
 #ifndef SLAC_QCA7000_LINK_HPP
 #define SLAC_QCA7000_LINK_HPP
 
@@ -1935,7 +2063,7 @@ public:
 
     bool open() override;
     bool write(const uint8_t* b, size_t l, uint32_t timeout_ms) override;
-    bool read(uint8_t* b, size_t l, size_t* out, uint32_t timeout_ms) override;
+    transport::LinkError read(uint8_t* b, size_t l, size_t* out, uint32_t timeout_ms) override;
     const uint8_t* mac() const override;
 
     /**
@@ -1965,36 +2093,25 @@ private:
 #endif // SLAC_QCA7000_LINK_HPP
 
 
-// ===== port\esp32s3\qca7000_uart.cpp =====
+// ===== port/esp32s3/qca7000_uart.cpp =====
 #include "qca7000_uart.hpp"
 #include "port_config.hpp"
+#include "qca7000.hpp"
 #ifdef ESP_PLATFORM
 #include <esp_log.h>
 #else
+#ifndef ESP_LOGI
 #define ESP_LOGI(tag, fmt, ...)
+#endif
+#ifndef ESP_LOGW
 #define ESP_LOGW(tag, fmt, ...)
+#endif
+#ifndef ESP_LOGE
 #define ESP_LOGE(tag, fmt, ...)
 #endif
+#endif
+#include <atomic>
 #include <string.h>
-
-#ifdef LIBSLAC_TESTING
-static const char* PLC_TAG = "PLC_IF";
-#else
-const char* PLC_TAG = "PLC_IF";
-#endif
-
-#ifdef LIBSLAC_TESTING
-static uint8_t myethtransmitbuffer[V2GTP_BUFFER_SIZE]{};
-static size_t myethtransmitlen = 0;
-static uint8_t myethreceivebuffer[V2GTP_BUFFER_SIZE]{};
-static size_t myethreceivelen = 0;
-#else
-uint8_t myethtransmitbuffer[V2GTP_BUFFER_SIZE]{};
-size_t myethtransmitlen = 0;
-uint8_t myethreceivebuffer[V2GTP_BUFFER_SIZE]{};
-size_t myethreceivelen = 0;
-#endif
-
 
 static constexpr uint16_t SOF_WORD = 0xAAAA;
 static constexpr uint16_t EOF_WORD = 0x5555;
@@ -2014,37 +2131,46 @@ struct RxEntry {
     uint8_t data[V2GTP_BUFFER_SIZE];
 };
 static RxEntry ring[4];
-static volatile uint8_t head = 0, tail = 0;
-inline bool ringEmpty() { return head == tail; }
+static std::atomic<uint8_t> head{0}, tail{0};
+inline bool ringEmpty() {
+    return head.load(std::memory_order_acquire) == tail.load(std::memory_order_acquire);
+}
+static uint32_t last_rx_time = 0;
+static uint32_t frame_timeout_ms = 0;
 inline void ringPush(const uint8_t* d, size_t l) {
-    slac_noInterrupts();
     if (l > V2GTP_BUFFER_SIZE)
         l = V2GTP_BUFFER_SIZE;
-    uint8_t next = (head + 1) & 3;
-    if (next == tail) {
-        slac_interrupts();
+    auto h = head.load(std::memory_order_relaxed);
+    auto t = tail.load(std::memory_order_acquire);
+    uint8_t next = (h + 1) & 3;
+    if (next == t) {
         ESP_LOGW(PLC_TAG, "RX ring full - dropping frame");
         return;
     }
-    memcpy(ring[head].data, d, l);
-    ring[head].len = l;
-    head = next;
-    slac_interrupts();
+    memcpy(ring[h].data, d, l);
+    ring[h].len = l;
+    head.store(next, std::memory_order_release);
 }
 inline bool ringPop(const uint8_t** d, size_t* l) {
-    slac_noInterrupts();
-    if (ringEmpty()) {
-        slac_interrupts();
+    auto t = tail.load(std::memory_order_relaxed);
+    if (head.load(std::memory_order_acquire) == t)
         return false;
-    }
-    *d = ring[tail].data;
-    *l = ring[tail].len;
-    tail = (tail + 1) & 3;
-    slac_interrupts();
+    *d = ring[t].data;
+    *l = ring[t].len;
+    tail.store((t + 1) & 3, std::memory_order_release);
     return true;
 }
 
-static enum State { WAIT_SOF, LEN1, LEN2, RSVD1, RSVD2, PAYLOAD, EOF1, EOF2 } state = WAIT_SOF;
+static enum State {
+    WAIT_SOF,
+    LEN1,
+    LEN2,
+    RSVD1,
+    RSVD2,
+    PAYLOAD,
+    EOF1,
+    EOF2
+} state = WAIT_SOF;
 static size_t sof_count = 0;
 static uint16_t rx_len = 0;
 static uint16_t rx_pos = 0;
@@ -2101,11 +2227,18 @@ inline void processByte(uint8_t b) {
 }
 
 inline void pollRx() {
+    uint32_t now = slac_millis();
+    if (state != WAIT_SOF && frame_timeout_ms && now - last_rx_time > frame_timeout_ms) {
+        state = WAIT_SOF;
+        sof_count = 0;
+        rx_pos = 0;
+    }
     while (g_serial && g_serial->available()) {
         int v = g_serial->read();
         if (v < 0)
             break;
         processByte(static_cast<uint8_t>(v));
+        last_rx_time = slac_millis();
     }
 }
 } // namespace
@@ -2184,9 +2317,18 @@ bool Qca7000UartLink::open() {
 
     g_serial = cfg.serial ? cfg.serial : &Serial;
 #ifdef ARDUINO
-    if (g_serial)
-        g_serial->begin(cfg.baud ? cfg.baud : 115200);
+    if (g_serial) {
+        uint32_t baud = cfg.baud ? cfg.baud : 115200;
+        g_serial->begin(baud);
+        frame_timeout_ms =
+            static_cast<uint32_t>(((V2GTP_BUFFER_SIZE + TX_HDR + FTR_LEN) * 10ULL * 1000ULL + baud - 1) / baud);
+    }
+#else
+    uint32_t baud = cfg.baud ? cfg.baud : 115200;
+    frame_timeout_ms =
+        static_cast<uint32_t>(((V2GTP_BUFFER_SIZE + TX_HDR + FTR_LEN) * 10ULL * 1000ULL + baud - 1) / baud);
 #endif
+    last_rx_time = slac_millis();
     if (cfg.mac_addr)
         memcpy(mac_addr, cfg.mac_addr, ETH_ALEN);
     else {
@@ -2203,24 +2345,24 @@ bool Qca7000UartLink::write(const uint8_t* b, size_t l, uint32_t) {
     return uartQCA7000SendEthFrame(b, l);
 }
 
-bool Qca7000UartLink::read(uint8_t* b, size_t l, size_t* out, uint32_t timeout_ms) {
+transport::LinkError Qca7000UartLink::read(uint8_t* b, size_t l, size_t* out, uint32_t timeout_ms) {
     if (!initialized || initialization_error) {
         *out = 0;
-        return false;
+        return transport::LinkError::Transport;
     }
     uint32_t start = slac_millis();
     do {
         size_t got = uartQCA7000checkForReceivedData(b, l);
         if (got) {
             *out = got;
-            return true;
+            return transport::LinkError::Ok;
         }
         if (timeout_ms == 0)
             break;
         slac_delay(1);
     } while (slac_millis() - start < timeout_ms);
     *out = 0;
-    return false;
+    return transport::LinkError::Timeout;
 }
 
 const uint8_t* Qca7000UartLink::mac() const {
@@ -2231,8 +2373,7 @@ const uint8_t* Qca7000UartLink::mac() const {
 } // namespace slac
 
 
-
-// ===== port\esp32s3\qca7000_uart.hpp =====
+// ===== port/esp32s3/qca7000_uart.hpp =====
 #pragma once
 
 #ifdef ESP_PLATFORM
@@ -2264,11 +2405,15 @@ public:
 
     bool open() override;
     bool write(const uint8_t* b, size_t l, uint32_t timeout_ms) override;
-    bool read(uint8_t* b, size_t l, size_t* out, uint32_t timeout_ms) override;
+    transport::LinkError read(uint8_t* b, size_t l, size_t* out, uint32_t timeout_ms) override;
     const uint8_t* mac() const override;
 
-    bool init_failed() const { return initialization_error; }
-    bool is_initialized() const { return initialized; }
+    bool init_failed() const {
+        return initialization_error;
+    }
+    bool is_initialized() const {
+        return initialized;
+    }
 
 private:
     bool initialized{false};
@@ -2281,7 +2426,7 @@ private:
 } // namespace slac
 
 
-// ===== port\port_common.hpp =====
+// ===== port/port_common.hpp =====
 #ifndef SLAC_GENERIC_PORT_CONFIG_HPP
 #define SLAC_GENERIC_PORT_CONFIG_HPP
 
@@ -2318,7 +2463,7 @@ static inline void slac_interrupts() { interrupts(); }
 #endif // SLAC_GENERIC_PORT_CONFIG_HPP
 
 
-// ===== src\channel.cpp =====
+// ===== src/channel.cpp =====
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2024 Joulepoint Private Limited (Author Chinmoy Bhuyan)
 #include <slac/channel.hpp>
@@ -2351,24 +2496,32 @@ bool Channel::open() {
 
 Channel::~Channel() = default;
 
-bool Channel::read(slac::messages::HomeplugMessage& msg, int timeout) {
+transport::LinkError Channel::read(slac::messages::HomeplugMessage& msg, int timeout) {
     did_timeout = false;
     if (!link)
-        return false;
+        return transport::LinkError::Transport;
 
     size_t out_len = 0;
-    bool ok = link->read(reinterpret_cast<uint8_t*>(msg.get_raw_message_ptr()), sizeof(messages::homeplug_message),
-                         &out_len, timeout);
-    if (!ok) {
-        return false;
+    auto res = link->read(reinterpret_cast<uint8_t*>(msg.get_raw_message_ptr()), sizeof(messages::homeplug_message),
+                          &out_len, timeout);
+    if (res == transport::LinkError::Timeout) {
+        did_timeout = true;
+        return res;
+    }
+    if (res != transport::LinkError::Ok) {
+        return res;
+    }
+    if (out_len == 0 && timeout > 0) {
+        did_timeout = true;
+        return transport::LinkError::Timeout;
     }
 
     if (out_len < defs::MME_MIN_LENGTH || out_len > sizeof(messages::homeplug_message)) {
-        return false;
+        return transport::LinkError::Transport;
     }
 
     msg.set_raw_msg_len(static_cast<int>(out_len));
-    return true;
+    return transport::LinkError::Ok;
 }
 
 bool Channel::poll(slac::messages::HomeplugMessage& msg) {
@@ -2377,9 +2530,10 @@ bool Channel::poll(slac::messages::HomeplugMessage& msg) {
         return false;
 
     size_t out_len = 0;
-    bool ok = link->read(reinterpret_cast<uint8_t*>(msg.get_raw_message_ptr()), sizeof(messages::homeplug_message),
-                         &out_len, 0);
-    if (!ok) {
+    const int timeout = 0;
+    auto res = link->read(reinterpret_cast<uint8_t*>(msg.get_raw_message_ptr()), sizeof(messages::homeplug_message),
+                          &out_len, timeout);
+    if (res != transport::LinkError::Ok) {
         return false;
     }
 
@@ -2392,18 +2546,30 @@ bool Channel::poll(slac::messages::HomeplugMessage& msg) {
 }
 
 bool Channel::write(slac::messages::HomeplugMessage& msg, int timeout) {
-    assert(("Homeplug message is not valid\n", msg.is_valid()));
     did_timeout = false;
 
-    if (!link)
+    if (!link) {
+        error = "No transport link";
         return false;
+    }
+
+    if (!msg.is_valid()) {
+        error = "Invalid HomeplugMessage";
+        return false;
+    }
 
     auto raw_msg_ether_shost = msg.get_src_mac();
     if (!msg.keep_source_mac()) {
         memcpy(raw_msg_ether_shost, orig_if_mac, sizeof(orig_if_mac));
     }
 
-    return link->write(reinterpret_cast<const uint8_t*>(msg.get_raw_message_ptr()), msg.get_raw_msg_len(), timeout);
+    if (!link->write(reinterpret_cast<const uint8_t*>(msg.get_raw_message_ptr()),
+                     msg.get_raw_msg_len(), timeout)) {
+        error = "Write failed";
+        return false;
+    }
+
+    return true;
 }
 
 const uint8_t* Channel::get_mac_addr() {
@@ -2413,7 +2579,7 @@ const uint8_t* Channel::get_mac_addr() {
 } // namespace slac
 
 
-// ===== src\slac.cpp =====
+// ===== src/slac.cpp =====
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2024 Joulepoint Private Limited (Author Chinmoy Bhuyan)
 #include <slac/slac.hpp>
@@ -2426,11 +2592,7 @@ const uint8_t* Channel::get_mac_addr() {
 #include <cstring>
 
 #include <arpa/inet.h>
-#if defined(ESP_PLATFORM) && !defined(__GLIBC__)
-#include "port/esp32s3/endian_compat.hpp"
-#else
-#include <endian.h>
-#endif
+#include <slac/endian.hpp>
 
 #include <hash_library/sha256.h>
 
@@ -2498,13 +2660,12 @@ static constexpr auto effective_payload_length(const defs::MMV mmv) {
     }
 }
 
-void HomeplugMessage::setup_payload(void const* payload, int len, uint16_t mmtype, const defs::MMV mmv) {
+bool HomeplugMessage::setup_payload(void const* payload, int len, uint16_t mmtype, const defs::MMV mmv) {
     const auto max_len = effective_payload_length(mmv);
     if (len > max_len) {
-        // mark message invalid and abort payload setup in release builds
-        raw_msg_len = -1;
+        // keep previous state and signal the failure
         assert(("Homeplug Payload length too long", len <= max_len));
-        return;
+        return false;
     }
     raw_msg.homeplug_header.mmv = static_cast<std::underlying_type_t<defs::MMV>>(mmv);
     raw_msg.homeplug_header.mmtype = htole16(mmtype);
@@ -2534,6 +2695,8 @@ void HomeplugMessage::setup_payload(void const* payload, int len, uint16_t mmtyp
         memset(dst_end, 0x00, padding_len);
         raw_msg_len = defs::MME_MIN_LENGTH;
     }
+
+    return true;
 }
 
 void HomeplugMessage::setup_ethernet_header(const uint8_t dst_mac_addr[ETH_ALEN],
