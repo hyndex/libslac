@@ -224,13 +224,15 @@ bool Qca7000UartLink::open() {
     if (g_serial) {
         uint32_t baud = cfg.baud ? cfg.baud : 115200;
         g_serial->begin(baud);
-        frame_timeout_ms =
-            static_cast<uint32_t>(((V2GTP_BUFFER_SIZE + TX_HDR + FTR_LEN) * 10ULL * 1000ULL + baud - 1) / baud);
+        uint64_t bits = static_cast<uint64_t>(V2GTP_BUFFER_SIZE + TX_HDR + FTR_LEN) * 10ULL;
+        uint32_t base_timeout = static_cast<uint32_t>((bits * 1000ULL + baud - 1) / baud);
+        frame_timeout_ms = base_timeout * 4; // add margin for RTS/CTS flow control
     }
 #else
     uint32_t baud = cfg.baud ? cfg.baud : 115200;
-    frame_timeout_ms =
-        static_cast<uint32_t>(((V2GTP_BUFFER_SIZE + TX_HDR + FTR_LEN) * 10ULL * 1000ULL + baud - 1) / baud);
+    uint64_t bits = static_cast<uint64_t>(V2GTP_BUFFER_SIZE + TX_HDR + FTR_LEN) * 10ULL;
+    uint32_t base_timeout = static_cast<uint32_t>((bits * 1000ULL + baud - 1) / baud);
+    frame_timeout_ms = base_timeout * 4; // add margin for RTS/CTS flow control
 #endif
     last_rx_time = slac_millis();
     if (cfg.mac_addr)
