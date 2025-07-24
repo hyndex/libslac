@@ -8,6 +8,7 @@
 #include <arpa/inet.h>
 #define ESP_LOGE(tag, fmt, ...)
 #define ESP_LOGI(tag, fmt, ...)
+#define ESP_LOGW(tag, fmt, ...)
 static inline uint32_t esp_random() {
     return 0x12345678u;
 }
