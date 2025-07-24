@@ -3,7 +3,7 @@ libslac
 
 Simple ISO15118-3 SLAC library.
 
-This repository contains a minimal implementation of the ISO15118-3 Signal Level Attenuation Characterization (SLAC) protocol. It can be used in desktop applications and embedded systems alike. The library is designed with a small dependency footprint and focuses on providing the core data structures and helper functions required to implement the SLAC handshake.
+This repository contains a minimal implementation of the ISO15118-3 Signal Level Attenuation Characterization (SLAC) protocol.  It targets ESP32 microcontrollers using the Arduino framework.  The library has a small dependency footprint and focuses on providing the core data structures and helper functions required to implement the SLAC handshake.
 
 .. contents:: Table of Contents
    :depth: 2
@@ -25,6 +25,7 @@ additional ``git submodule`` commands are needed.
 Prerequisites
 -------------
 
+Install PlatformIO to build the firmware:
 Install the tools used for embedded builds before configuring the
 project:
 
@@ -74,7 +75,7 @@ Library Concepts
 ``libslac`` exposes only a few classes in ``include/slac``:
 
 :class:`slac::transport::Link`
-    Abstract interface to send and receive raw ethernet frames. Applications must provide an implementation that matches their environment (e.g. raw sockets on Linux or a driver on microcontrollers).
+    Abstract interface to send and receive raw Ethernet frames. Applications must provide an implementation that matches their environment.
 :class:`slac::Channel`
     Helper around a :class:`transport::Link` adding timeout handling and convenience helpers for reading and writing SLAC messages.
 :class:`slac::messages::HomeplugMessage`
@@ -164,18 +165,6 @@ via ``qca7000_uart_config``:
 
    qca7000_uart_config cfg{&Serial2, 1250000};
    slac::port::Qca7000UartLink link(cfg);
-
-Custom Port Configuration
-------------------------
-
-The header ``port/generic/port_config.hpp`` provides weak default
-implementations of timing and interrupt helpers used throughout the
-library. Targets can supply their own ``port_config.hpp`` to override
-these functions.  For example the ESP32 port ships with
-``port/esp32s3/port_config.hpp`` which replaces the generic helpers with
-FreeRTOS based versions.  Place your custom header in a ``port/<target>``
-directory and ensure it is included before the generic one or define the
-macros manually when building.
 
 Tools and Examples
 ------------------
