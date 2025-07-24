@@ -1,6 +1,9 @@
 #include "qca7000.hpp"
 #include "port_config.hpp"
 #include <esp_log.h>
+#include <esp_system.h>
+#include <slac/slac.hpp>
+#include <string.h>
 
 const char* PLC_TAG = "PLC_IF";
 
@@ -221,12 +224,69 @@ size_t spiQCA7000checkForReceivedData(uint8_t* d, size_t m) {
 }
 
 static uint8_t g_slac = 0;
+static uint8_t g_run_id[slac::defs::RUN_ID_LEN]{};
+static const uint8_t g_src_mac[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+
 bool qca7000startSlac() {
-    g_slac = 0;
-    return txFrame(nullptr, 0);
-} // stub
+    g_slac = 1; // waiting for CNF
+
+    for (size_t i = 0; i < sizeof(g_run_id); ++i)
+        g_run_id[i] = static_cast<uint8_t>(esp_random() & 0xFF);
+
+    struct __attribute__((packed)) {
+        ether_header eth;
+        struct {
+            uint8_t mmv;
+            uint16_t mmtype;
+        } hp;
+        slac::messages::cm_slac_parm_req req;
+    } msg{};
+
+    memset(&msg, 0, sizeof(msg));
+    memset(msg.eth.ether_dhost, 0xFF, ETH_ALEN);
+    memcpy(msg.eth.ether_shost, g_src_mac, ETH_ALEN);
+    msg.eth.ether_type = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
+    msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
+    msg.hp.mmtype = htole16(slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_REQ);
+    msg.req.application_type = slac::defs::COMMON_APPLICATION_TYPE;
+    msg.req.security_type = slac::defs::COMMON_SECURITY_TYPE;
+    memcpy(msg.req.run_id, g_run_id, sizeof(g_run_id));
+
+    bool ok = txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+    if (!ok)
+        g_slac = 0;
+    return ok;
+}
+
 uint8_t qca7000getSlacResult() {
     fetchRx();
+    const uint8_t* d;
+    size_t l;
+    while (ringPop(&d, &l)) {
+        if (l < sizeof(ether_header) + 3)
+            continue;
+        const ether_header* eth = reinterpret_cast<const ether_header*>(d);
+        if (eth->ether_type != htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY))
+            continue;
+        const uint8_t* p = d + sizeof(ether_header);
+        uint8_t mmv = p[0];
+        uint16_t mmtype = le16toh(*reinterpret_cast<const uint16_t*>(p + 1));
+        if (mmv != static_cast<uint8_t>(slac::defs::MMV::AV_1_0))
+            continue;
+        if (mmtype == (slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_CNF)) {
+            const auto* cnf = reinterpret_cast<const slac::messages::cm_slac_parm_cnf*>(p + 3);
+            if (!memcmp(cnf->run_id, g_run_id, sizeof(g_run_id)))
+                g_slac = 2; // waiting for match
+            else
+                g_slac = 0xFF;
+        } else if (mmtype == (slac::defs::MMTYPE_CM_SLAC_MATCH | slac::defs::MMTYPE_MODE_REQ)) {
+            const auto* req = reinterpret_cast<const slac::messages::cm_slac_match_req*>(p + 3);
+            if (!memcmp(req->run_id, g_run_id, sizeof(g_run_id)))
+                g_slac = 3; // success
+            else
+                g_slac = 0xFF;
+        }
+    }
     return g_slac;
 }
 
