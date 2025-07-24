@@ -139,6 +139,7 @@ static bool hardReset() {
         return false;
     }
     ESP_LOGI(PLC_TAG, "Reset probe OK (SIG=0x%04X)", sig);
+#define ESP_LOGW(tag, fmt, ...)
 
     t0 = slac_millis();
     while (!(slowRd16(SPI_REG_INTR_CAUSE) & SPI_INT_CPU_ON) && slac_millis() - t0 < 80)
@@ -344,6 +345,7 @@ void qca7000Process() {
 
 bool qca7000setup(SPIClass* bus, int csPin) {
     ESP_LOGI(PLC_TAG, "QCA7000 setup: bus=%p CS=%d", bus, csPin);
+#define ESP_LOGW(tag, fmt, ...)
     g_spi = bus;
     g_cs = csPin;
     if (g_spi)
@@ -358,6 +360,7 @@ bool qca7000setup(SPIClass* bus, int csPin) {
 
     spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
     ESP_LOGI(PLC_TAG, "QCA7000 ready");
+#define ESP_LOGW(tag, fmt, ...)
     return true;
 }
 
