@@ -42,11 +42,15 @@ inline void ringPush(const uint8_t* d, size_t l) {
     slac_noInterrupts();
     if (l > V2GTP_BUFFER_SIZE)
         l = V2GTP_BUFFER_SIZE;
+    uint8_t next = (head + 1) & 3;
+    if (next == tail) {
+        slac_interrupts();
+        ESP_LOGW(PLC_TAG, "RX ring full - dropping frame");
+        return;
+    }
     memcpy(ring[head].data, d, l);
     ring[head].len = l;
-    head = (head + 1) & 3;
-    if (head == tail)
-        tail = (tail + 1) & 3;
+    head = next;
     slac_interrupts();
 }
 inline bool ringPop(const uint8_t** d, size_t* l) {
