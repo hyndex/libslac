@@ -52,6 +52,31 @@ static_assert(ETH_FRAME_LEN <= V2GTP_BUFFER_SIZE,
 #ifndef SPI_REG_INTR_ENABLE
 #define SPI_REG_INTR_ENABLE 0x0D00
 #endif
+#ifndef SPI_REG_SPI_CONFIG
+#define SPI_REG_SPI_CONFIG 0x0400
+#endif
+#ifndef SPI_REG_WR_WATERMARK
+#define SPI_REG_WR_WATERMARK 0x1200
+#endif
+#ifndef SPI_REG_RD_WATERMARK
+#define SPI_REG_RD_WATERMARK 0x1300
+#endif
+#ifndef QCASPI_SLAVE_RESET_BIT
+#define QCASPI_SLAVE_RESET_BIT (1 << 6)
+#endif
+
+#ifndef QCA7000_SPI_SPEED_HZ
+#define QCA7000_SPI_SPEED_HZ 8000000
+#endif
+#ifndef QCA7000_BURST_LEN
+#define QCA7000_BURST_LEN 512
+#endif
+#ifndef QCA7000_TX_WM
+#define QCA7000_TX_WM 0
+#endif
+#ifndef QCA7000_RX_WM
+#define QCA7000_RX_WM 0
+#endif
 
 #ifndef PLC_SPI_RST_PIN
 #define PLC_SPI_RST_PIN 5
@@ -77,6 +102,8 @@ bool spiQCA7000SendEthFrame(const uint8_t* frame, size_t len);
 bool qca7000startSlac();
 uint8_t qca7000getSlacResult();
 void qca7000Process();
+bool qca7000SoftReset();
+void qca7000ConfigureWatermarks(uint16_t tx_wm, uint16_t rx_wm);
 
 typedef void (*qca7000_error_cb_t)(void*);
 void qca7000SetErrorCallback(qca7000_error_cb_t cb, void* arg, bool* flag);

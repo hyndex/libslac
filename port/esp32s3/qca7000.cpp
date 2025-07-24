@@ -33,7 +33,7 @@ size_t myethreceivelen = 0;
 
 static constexpr uint16_t SIG = 0xAA55;
 static constexpr uint16_t WRBUF_RST = 0x0C5B;
-static constexpr uint32_t FAST_HZ = 8000000;
+static constexpr uint32_t FAST_HZ = QCA7000_SPI_SPEED_HZ;
 static constexpr uint32_t SLOW_HZ = 1000000;
 static constexpr uint16_t SOF_WORD = 0xAAAA;
 static constexpr uint16_t EOF_WORD = 0x5555;
@@ -163,6 +163,7 @@ static bool hardReset() {
         return v;
     };
 
+    slowRd16(SPI_REG_SIGNATURE); // dummy read
     uint32_t t0 = slac_millis();
     uint16_t sig = 0, buf = 0;
     do {
@@ -223,11 +224,28 @@ static bool txFrame(const uint8_t* eth, size_t ethLen) {
     g_spi->transfer16(SOF_WORD);
     g_spi->transfer16(slac::htole16(static_cast<uint16_t>(frameLen)));
     g_spi->transfer16(0);
-    if (ethLen)
-        g_spi->writeBytes(eth, ethLen);
+
+    if (ethLen) {
+        size_t off = 0;
+        while (off < ethLen) {
+            size_t chunk = ethLen - off;
+            if (chunk > QCA7000_BURST_LEN)
+                chunk = QCA7000_BURST_LEN;
+            g_spi->writeBytes(eth + off, chunk);
+            off += chunk;
+        }
+    }
     if (frameLen > ethLen) {
         uint8_t pad[60]{};
-        g_spi->writeBytes(pad, frameLen - ethLen);
+        size_t padLen = frameLen - ethLen;
+        size_t off = 0;
+        while (off < padLen) {
+            size_t chunk = padLen - off;
+            if (chunk > QCA7000_BURST_LEN)
+                chunk = QCA7000_BURST_LEN;
+            g_spi->writeBytes(pad, chunk);
+            off += chunk;
+        }
     }
     g_spi->transfer16(EOF_WORD);
     digitalWrite(g_cs, HIGH);
@@ -250,8 +268,16 @@ static void fetchRx() {
     g_spi->beginTransaction(setFast);
     digitalWrite(g_cs, LOW);
     g_spi->transfer16(cmd16(true, false, 0));
-    for (uint16_t i = 0; i < avail + 2; ++i)
-        buf[i] = g_spi->transfer(0);
+    uint16_t total = avail + 2;
+    uint16_t off = 0;
+    while (off < total) {
+        uint16_t chunk = total - off;
+        if (chunk > QCA7000_BURST_LEN)
+            chunk = QCA7000_BURST_LEN;
+        for (uint16_t i = 0; i < chunk; ++i)
+            buf[off + i] = g_spi->transfer(0);
+        off += chunk;
+    }
     digitalWrite(g_cs, HIGH);
     g_spi->endTransaction();
 
@@ -674,6 +700,7 @@ bool qca7000setup(SPIClass* bus, int csPin, int rstPin) {
         return false;
     }
 
+    qca7000ConfigureWatermarks(QCA7000_TX_WM, QCA7000_RX_WM);
     spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
     ESP_LOGI(PLC_TAG, "QCA7000 ready");
     return true;
@@ -688,6 +715,18 @@ void qca7000teardown() {
 
 bool qca7000ResetAndCheck() {
     return hardReset();
+}
+
+bool qca7000SoftReset() {
+    uint16_t cfg = spiRd16_fast(SPI_REG_SPI_CONFIG);
+    spiWr16_fast(SPI_REG_SPI_CONFIG, cfg | QCASPI_SLAVE_RESET_BIT);
+    slac_delay(10);
+    return hardReset();
+}
+
+void qca7000ConfigureWatermarks(uint16_t tx_wm, uint16_t rx_wm) {
+    spiWr16_fast(SPI_REG_WR_WATERMARK, tx_wm);
+    spiWr16_fast(SPI_REG_RD_WATERMARK, rx_wm);
 }
 
 #ifdef ESP_PLATFORM
