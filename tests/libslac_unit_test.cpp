@@ -47,9 +47,6 @@ private:
     uint8_t mac_addr[ETH_ALEN]{0};
 };
 
-TEST_F(LibSLACUnitTest, test_invalid_datetime) {
-    ASSERT_TRUE(1 == 1);
-}
 
 TEST_F(LibSLACUnitTest, test_generate_nid_from_nmk_check_security_bits) {
     uint8_t nid[slac::defs::NID_LEN] = {0};
@@ -58,6 +55,16 @@ TEST_F(LibSLACUnitTest, test_generate_nid_from_nmk_check_security_bits) {
 
     slac::utils::generate_nid_from_nmk(nid, sample_nmk);
     ASSERT_TRUE((nid[6] >> 4) == 0x00);
+}
+
+TEST_F(LibSLACUnitTest, test_generate_nmk_hs_known_password) {
+    const char password[] = "test";
+    uint8_t nmk_hs[slac::defs::NMK_LEN] = {0};
+    const uint8_t expected[] = {0x3f, 0x94, 0x65, 0x6f, 0xa8, 0x20, 0x42, 0x42,
+                                0xa0, 0x90, 0x26, 0xc7, 0x93, 0x9f, 0x1f, 0xc5};
+
+    slac::utils::generate_nmk_hs(nmk_hs, password, strlen(password));
+    ASSERT_EQ(memcmp(nmk_hs, expected, slac::defs::NMK_LEN), 0);
 }
 
 TEST_F(LibSLACUnitTest, test_channel_read_sets_length) {
