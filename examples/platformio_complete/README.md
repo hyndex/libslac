@@ -19,9 +19,7 @@ editing `build_flags` in `platformio.ini`.
 
 ## Testing
 
-A small unit test is provided under `test/` and can be run on the host
-using:
-
-```bash
-pio test -e native
-```
+This example only defines a single PlatformIO environment for the
+ESP32-S3 board.  The unit test under `test/` can be compiled and run
+on the host using a native environment if desired, but that
+configuration is not included by default.
