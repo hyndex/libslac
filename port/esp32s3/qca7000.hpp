@@ -73,6 +73,9 @@ bool spiQCA7000SendEthFrame(const uint8_t* frame, size_t len);
 bool qca7000startSlac();
 uint8_t qca7000getSlacResult();
 void qca7000Process();
+
+typedef void (*qca7000_error_cb_t)(void*);
+void qca7000SetErrorCallback(qca7000_error_cb_t cb, void* arg, bool* flag);
 #ifdef ESP_PLATFORM
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
