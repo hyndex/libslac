@@ -15,6 +15,7 @@
 #endif
 #endif
 #include <string.h>
+#include <mutex>
 
 
 
@@ -38,34 +39,63 @@ struct RxEntry {
 };
 static RxEntry ring[4];
 static volatile uint8_t head = 0, tail = 0;
+#ifdef ESP_PLATFORM
+static portMUX_TYPE ring_mux = portMUX_INITIALIZER_UNLOCKED;
+#else
+static std::mutex ring_mutex;
+#endif
 inline bool ringEmpty() { return head == tail; }
 static uint32_t last_rx_time = 0;
 static uint32_t frame_timeout_ms = 0;
 inline void ringPush(const uint8_t* d, size_t l) {
-    slac_noInterrupts();
+#ifdef ESP_PLATFORM
+    portENTER_CRITICAL(&ring_mux);
+#else
+    ring_mutex.lock();
+#endif
     if (l > V2GTP_BUFFER_SIZE)
         l = V2GTP_BUFFER_SIZE;
     uint8_t next = (head + 1) & 3;
     if (next == tail) {
-        slac_interrupts();
+#ifdef ESP_PLATFORM
+        portEXIT_CRITICAL(&ring_mux);
+#else
+        ring_mutex.unlock();
+#endif
         ESP_LOGW(PLC_TAG, "RX ring full - dropping frame");
         return;
     }
     memcpy(ring[head].data, d, l);
     ring[head].len = l;
     head = next;
-    slac_interrupts();
+#ifdef ESP_PLATFORM
+    portEXIT_CRITICAL(&ring_mux);
+#else
+    ring_mutex.unlock();
+#endif
 }
 inline bool ringPop(const uint8_t** d, size_t* l) {
-    slac_noInterrupts();
+#ifdef ESP_PLATFORM
+    portENTER_CRITICAL(&ring_mux);
+#else
+    ring_mutex.lock();
+#endif
     if (ringEmpty()) {
-        slac_interrupts();
+#ifdef ESP_PLATFORM
+        portEXIT_CRITICAL(&ring_mux);
+#else
+        ring_mutex.unlock();
+#endif
         return false;
     }
     *d = ring[tail].data;
     *l = ring[tail].len;
     tail = (tail + 1) & 3;
-    slac_interrupts();
+#ifdef ESP_PLATFORM
+    portEXIT_CRITICAL(&ring_mux);
+#else
+    ring_mutex.unlock();
+#endif
     return true;
 }
 
