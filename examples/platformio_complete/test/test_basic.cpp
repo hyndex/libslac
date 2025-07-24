@@ -4,12 +4,16 @@
 
 class DummyLink : public slac::transport::Link {
 public:
-    bool open() override { return true; }
-    bool write(const uint8_t*, size_t, uint32_t) override { return true; }
-    bool read(uint8_t*, size_t, size_t* out_len, uint32_t) override {
+    bool open() override {
+        return true;
+    }
+    bool write(const uint8_t*, size_t, uint32_t) override {
+        return true;
+    }
+    slac::transport::LinkError read(uint8_t*, size_t, size_t* out_len, uint32_t) override {
         if (out_len)
             *out_len = 0;
-        return true;
+        return slac::transport::LinkError::Ok;
     }
     const uint8_t* mac() const override {
         static const uint8_t mac[6] = {0};

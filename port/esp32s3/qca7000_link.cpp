@@ -42,24 +42,24 @@ bool Qca7000Link::write(const uint8_t* b, size_t l, uint32_t) {
     return spiQCA7000SendEthFrame(b, l);
 }
 
-bool Qca7000Link::read(uint8_t* b, size_t l, size_t* out, uint32_t timeout_ms) {
+transport::LinkError Qca7000Link::read(uint8_t* b, size_t l, size_t* out, uint32_t timeout_ms) {
     if (!initialized || initialization_error) {
         *out = 0;
-        return false;
+        return transport::LinkError::Transport;
     }
     uint32_t start = slac_millis();
     do {
         size_t got = spiQCA7000checkForReceivedData(b, l);
         if (got) {
             *out = got;
-            return true;
+            return transport::LinkError::Ok;
         }
         if (timeout_ms == 0)
             break;
         slac_delay(1);
     } while (slac_millis() - start < timeout_ms);
     *out = 0;
-    return false;
+    return transport::LinkError::Timeout;
 }
 
 const uint8_t* Qca7000Link::mac() const {

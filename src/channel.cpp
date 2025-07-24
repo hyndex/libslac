@@ -30,30 +30,32 @@ bool Channel::open() {
 
 Channel::~Channel() = default;
 
-bool Channel::read(slac::messages::HomeplugMessage& msg, int timeout) {
+transport::LinkError Channel::read(slac::messages::HomeplugMessage& msg, int timeout) {
     did_timeout = false;
     if (!link)
-        return false;
+        return transport::LinkError::Transport;
 
     size_t out_len = 0;
-    bool ok = link->read(reinterpret_cast<uint8_t*>(msg.get_raw_message_ptr()),
-                         sizeof(messages::homeplug_message),
-                         &out_len, timeout);
-    if (!ok) {
-        did_timeout = timeout > 0;
-        return false;
+    auto res = link->read(reinterpret_cast<uint8_t*>(msg.get_raw_message_ptr()), sizeof(messages::homeplug_message),
+                          &out_len, timeout);
+    if (res == transport::LinkError::Timeout) {
+        did_timeout = true;
+        return res;
+    }
+    if (res != transport::LinkError::Ok) {
+        return res;
     }
     if (out_len == 0 && timeout > 0) {
         did_timeout = true;
-        return false;
+        return transport::LinkError::Timeout;
     }
 
     if (out_len < defs::MME_MIN_LENGTH || out_len > sizeof(messages::homeplug_message)) {
-        return false;
+        return transport::LinkError::Transport;
     }
 
     msg.set_raw_msg_len(static_cast<int>(out_len));
-    return true;
+    return transport::LinkError::Ok;
 }
 
 bool Channel::poll(slac::messages::HomeplugMessage& msg) {
@@ -63,15 +65,9 @@ bool Channel::poll(slac::messages::HomeplugMessage& msg) {
 
     size_t out_len = 0;
     const int timeout = 0;
-    bool ok = link->read(reinterpret_cast<uint8_t*>(msg.get_raw_message_ptr()),
-                         sizeof(messages::homeplug_message),
-                         &out_len, timeout);
-    if (!ok) {
-        did_timeout = timeout > 0;
-        return false;
-    }
-    if (out_len == 0 && timeout > 0) {
-        did_timeout = true;
+    auto res = link->read(reinterpret_cast<uint8_t*>(msg.get_raw_message_ptr()), sizeof(messages::homeplug_message),
+                          &out_len, timeout);
+    if (res != transport::LinkError::Ok) {
         return false;
     }
 
