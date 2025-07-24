@@ -33,13 +33,14 @@ size_t myethreceivelen = 0;
 
 static constexpr uint16_t SIG = 0xAA55;
 static constexpr uint16_t WRBUF_RST = 0x0C5B;
-static constexpr uint32_t FAST_HZ = 8000000;
+static constexpr uint32_t FAST_HZ = QCA7000_SPI_FAST_HZ;
 static constexpr uint32_t SLOW_HZ = 1000000;
 static constexpr uint16_t SOF_WORD = 0xAAAA;
 static constexpr uint16_t EOF_WORD = 0x5555;
 static constexpr uint16_t TX_HDR = 8;
 static constexpr uint16_t RX_HDR = 12;
 static constexpr uint16_t FTR_LEN = 2;
+static constexpr size_t BURST_LEN = QCA7000_SPI_BURST_LEN;
 static constexpr uint16_t INTR_MASK = SPI_INT_CPU_ON | SPI_INT_PKT_AVLBL | SPI_INT_RDBUF_ERR | SPI_INT_WRBUF_ERR;
 
 using FSMBuffer = slac::fsm::buffer::SwapBuffer<64, 0, 1>;
@@ -50,6 +51,8 @@ struct SlacContext {
     uint32_t timer{0};
     uint8_t sound_sent{0};
     uint8_t result{0};
+    slac::messages::cm_slac_match_req match_req{};
+    uint8_t match_src_mac[ETH_ALEN]{};
 };
 
 static FSMBuffer g_fsm_buf{};
@@ -163,6 +166,8 @@ static bool hardReset() {
         return v;
     };
 
+    (void)slowRd16(SPI_REG_SIGNATURE); // dummy read as recommended
+
     uint32_t t0 = slac_millis();
     uint16_t sig = 0, buf = 0;
     do {
@@ -183,6 +188,52 @@ static bool hardReset() {
     while (!(slowRd16(SPI_REG_INTR_CAUSE) & SPI_INT_CPU_ON) && slac_millis() - t0 < 80)
         ;
 
+    spiWr16_fast(SPI_REG_INTR_CAUSE, 0xFFFF);
+    return true;
+}
+
+static bool softReset() {
+    auto slowRd16 = [&](uint16_t reg) -> uint16_t {
+        g_spi->beginTransaction(setSlow);
+        digitalWrite(g_cs, LOW);
+        g_spi->transfer16(cmd16(true, true, reg));
+        uint16_t v = g_spi->transfer16(0);
+        digitalWrite(g_cs, HIGH);
+        g_spi->endTransaction();
+        return v;
+    };
+    auto slowWr16 = [&](uint16_t reg, uint16_t val) {
+        g_spi->beginTransaction(setSlow);
+        digitalWrite(g_cs, LOW);
+        g_spi->transfer16(cmd16(false, true, reg));
+        g_spi->transfer16(val);
+        digitalWrite(g_cs, HIGH);
+        g_spi->endTransaction();
+    };
+
+    uint16_t cfg = slowRd16(SPI_REG_SPI_CONFIG);
+    slowWr16(SPI_REG_SPI_CONFIG, cfg | QCASPI_SLAVE_RESET_BIT);
+    slac_delay(10);
+
+    (void)slowRd16(SPI_REG_SIGNATURE); // dummy read
+
+    uint32_t t0 = slac_millis();
+    uint16_t sig = 0, buf = 0;
+    do {
+        sig = slowRd16(SPI_REG_SIGNATURE);
+        buf = slowRd16(SPI_REG_WRBUF_SPC_AVA);
+        if (sig == SIG && buf == WRBUF_RST)
+            break;
+        slac_delay(5);
+    } while (slac_millis() - t0 < 200);
+
+    if (sig != SIG || buf != WRBUF_RST)
+        return false;
+
+    t0 = slac_millis();
+    while (!(slowRd16(SPI_REG_INTR_CAUSE) & SPI_INT_CPU_ON) &&
+           slac_millis() - t0 < 80)
+        ;
     spiWr16_fast(SPI_REG_INTR_CAUSE, 0xFFFF);
     return true;
 }
@@ -223,11 +274,27 @@ static bool txFrame(const uint8_t* eth, size_t ethLen) {
     g_spi->transfer16(SOF_WORD);
     g_spi->transfer16(slac::htole16(static_cast<uint16_t>(frameLen)));
     g_spi->transfer16(0);
-    if (ethLen)
-        g_spi->writeBytes(eth, ethLen);
+    if (ethLen) {
+        size_t off = 0;
+        while (off < ethLen) {
+            size_t chunk = ethLen - off;
+            if (chunk > BURST_LEN)
+                chunk = BURST_LEN;
+            g_spi->writeBytes(eth + off, chunk);
+            off += chunk;
+        }
+    }
     if (frameLen > ethLen) {
         uint8_t pad[60]{};
-        g_spi->writeBytes(pad, frameLen - ethLen);
+        size_t padLen = frameLen - ethLen;
+        size_t off = 0;
+        while (off < padLen) {
+            size_t chunk = padLen - off;
+            if (chunk > BURST_LEN)
+                chunk = BURST_LEN;
+            g_spi->writeBytes(pad, chunk);
+            off += chunk;
+        }
     }
     g_spi->transfer16(EOF_WORD);
     digitalWrite(g_cs, HIGH);
@@ -423,6 +490,38 @@ static bool send_set_key_cnf(const SlacContext& ctx,
     return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
 }
 
+static bool send_match_cnf(const SlacContext& ctx) {
+    struct __attribute__((packed)) {
+        ether_header eth;
+        struct {
+            uint8_t mmv;
+            uint16_t mmtype;
+        } hp;
+        slac::messages::cm_slac_match_cnf cnf;
+    } msg{};
+
+    memset(&msg, 0, sizeof(msg));
+    memcpy(msg.eth.ether_dhost, ctx.match_src_mac, ETH_ALEN);
+    memcpy(msg.eth.ether_shost, g_src_mac, ETH_ALEN);
+    msg.eth.ether_type = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
+    msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
+    msg.hp.mmtype = slac::htole16(slac::defs::MMTYPE_CM_SLAC_MATCH |
+                            slac::defs::MMTYPE_MODE_CNF);
+    msg.cnf.application_type = ctx.match_req.application_type;
+    msg.cnf.security_type = ctx.match_req.security_type;
+    msg.cnf.mvf_length = slac::htole16(slac::defs::CM_SLAC_MATCH_CNF_MVF_LENGTH);
+    memcpy(msg.cnf.pev_id, ctx.match_req.pev_id, sizeof(msg.cnf.pev_id));
+    memcpy(msg.cnf.pev_mac, ctx.match_req.pev_mac, sizeof(msg.cnf.pev_mac));
+    memcpy(msg.cnf.evse_id, ctx.match_req.evse_id, sizeof(msg.cnf.evse_id));
+    memcpy(msg.cnf.evse_mac, ctx.match_req.evse_mac, sizeof(msg.cnf.evse_mac));
+    memcpy(msg.cnf.run_id, ctx.match_req.run_id, sizeof(msg.cnf.run_id));
+    memset(msg.cnf.nid, 0, sizeof(msg.cnf.nid));
+    msg.cnf._reserved2 = 0;
+    memset(msg.cnf.nmk, 0, sizeof(msg.cnf.nmk));
+
+    return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+}
+
 // FSM state implementations
 struct SoundingState;
 struct WaitSetKeyState;
@@ -503,6 +602,7 @@ struct WaitMatchState : public FSM::SimpleStateType {
     void enter() override { ctx.result = 4; ctx.timer = slac_millis(); }
     fsm::states::HandleEventResult handle_event(FSM::StateAllocatorType& alloc, slac::SlacEvent ev) override {
         if (ev == slac::SlacEvent::GotMatchReq) {
+            send_match_cnf(ctx);
             ctx.result = 5;
             return alloc.create_simple<IdleState>(ctx);
         }
@@ -519,6 +619,8 @@ bool qca7000startSlac() {
     g_slac_ctx.result = 1;
     g_slac_ctx.timer = slac_millis();
     g_slac_ctx.sound_sent = 0;
+    memset(&g_slac_ctx.match_req, 0, sizeof(g_slac_ctx.match_req));
+    memset(g_slac_ctx.match_src_mac, 0, sizeof(g_slac_ctx.match_src_mac));
 
     for (size_t i = 0; i < sizeof(g_slac_ctx.run_id); ++i)
         g_slac_ctx.run_id[i] = static_cast<uint8_t>(esp_random() & 0xFF);
@@ -589,10 +691,13 @@ uint8_t qca7000getSlacResult() {
             g_fsm.handle_event(slac::SlacEvent::GotSetKeyReq);
         } else if (mmtype == (slac::defs::MMTYPE_CM_SLAC_MATCH | slac::defs::MMTYPE_MODE_REQ)) {
             const auto* req = reinterpret_cast<const slac::messages::cm_slac_match_req*>(p + 3);
-            if (!memcmp(req->run_id, g_slac_ctx.run_id, sizeof(g_slac_ctx.run_id)))
+            if (!memcmp(req->run_id, g_slac_ctx.run_id, sizeof(g_slac_ctx.run_id))) {
+                memcpy(&g_slac_ctx.match_req, req, sizeof(g_slac_ctx.match_req));
+                memcpy(g_slac_ctx.match_src_mac, eth->ether_shost, ETH_ALEN);
                 g_fsm.handle_event(slac::SlacEvent::GotMatchReq);
-            else
+            } else {
                 g_fsm.handle_event(slac::SlacEvent::Error);
+            }
         }
     }
 
@@ -688,6 +793,10 @@ void qca7000teardown() {
 
 bool qca7000ResetAndCheck() {
     return hardReset();
+}
+
+bool qca7000SoftReset() {
+    return softReset();
 }
 
 #ifdef ESP_PLATFORM
