@@ -521,16 +521,11 @@ void qca7000Process() {
             clear_mask |= SPI_INT_CPU_ON;
             hardReset();
             qca7000setup(g_spi, g_cs, g_rst);
-            spiWr16_fast(SPI_REG_INTR_CAUSE, clear_mask);
-            spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
-            return;
+            spiWr16_fast(SPI_REG_INTR_ENABLE, 0); // keep interrupts disabled
         }
         if (cause & (SPI_INT_WRBUF_ERR | SPI_INT_RDBUF_ERR)) {
             clear_mask |= SPI_INT_WRBUF_ERR | SPI_INT_RDBUF_ERR;
             hardReset();
-            spiWr16_fast(SPI_REG_INTR_CAUSE, clear_mask);
-            spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
-            return;
         }
         if (cause & SPI_INT_PKT_AVLBL) {
             fetchRx();
