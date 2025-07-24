@@ -22,6 +22,17 @@ Clone the repository:
 All required third-party code is bundled in ``3rd_party`` so no
 additional ``git submodule`` commands are needed.
 
+Prerequisites
+-------------
+
+Install the tools used for embedded builds and unit testing before
+configuring the project:
+
+.. code-block:: bash
+
+   pip install platformio
+   apt-get install libgtest-dev
+
 Building with CMake
 -------------------
 
@@ -113,7 +124,7 @@ The ``tools`` directory contains small utilities demonstrating how to use ``libs
 Running the Tests
 -----------------
 
-Unit tests are based on GoogleTest. Enable ``BUILD_TESTING`` when configuring CMake:
+Unit tests are based on GoogleTest. Enable ``BUILD_TESTING`` when configuring CMake and run ``ctest`` after building:
 
 .. code-block:: bash
 
