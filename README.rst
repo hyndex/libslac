@@ -128,6 +128,49 @@ Tools and Examples
 
 The ``tools`` directory contains small utilities demonstrating how to use ``libslac``. ``tools/evse`` contains a simple state machine for the EVSE side of the SLAC handshake. ``tools/bridge.cpp`` can forward packets between two virtual interfaces on Linux and is disabled on microcontroller builds.
 
+Porting to Other Boards
+-----------------------
+
+``libslac`` only ships an ESP32-S3 port. When targeting another MCU you need to
+provide two pieces:
+
+1. A :class:`transport::Link` implementation for sending and receiving ethernet
+   frames.
+2. A ``port_config.hpp`` defining ``slac_millis`` and ``slac_delay`` as well as
+   optional interrupt helpers.
+
+``transport::Link`` exposes ``open()``, ``write()``, ``read()`` and ``mac()``.
+``open()`` should initialise the hardware and return ``true`` on success. The
+``write()`` and ``read()`` methods transfer raw frames with millisecond timeouts
+while ``mac()`` returns the local MAC address.
+
+``port_config.hpp`` is included by the library and provides platform specific
+timing helpers. A minimal bare-metal variant might look like:
+
+.. code-block:: cpp
+
+   #pragma once
+   #include <stdint.h>
+   extern "C" uint32_t board_millis();
+   static inline uint32_t slac_millis() { return board_millis(); }
+   static inline void slac_delay(uint32_t ms) { /* busy wait */ }
+
+For PlatformIO builds place your implementation under ``port/<board>`` and add
+the files to ``src_filter``. A sample STM32 configuration is shown below:
+
+.. code-block:: ini
+
+   [env:stm32]
+   platform = ststm32
+   board = nucleo-f429zi
+   framework = arduino
+   build_unflags = -std=gnu++11
+   build_flags = -std=gnu++17 -Iinclude -I3rd_party -Iport/stm32 -Os \
+       -fdata-sections -ffunction-sections -fno-exceptions -fno-rtti
+   src_filter = +<src/channel.cpp> +<src/slac.cpp> \
+       +<port/stm32/my_link.cpp> +<3rd_party/hash_library/sha256.cpp> \
+       +<path/to/main.cpp>
+
 Running the Tests
 -----------------
 
