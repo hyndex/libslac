@@ -3,7 +3,7 @@
 
 #include <memory>
 #include <slac/transport.hpp>
-#include <slac/packet_socket.hpp>
+#include "packet_socket.hpp"
 
 class PacketSocketLink : public slac::transport::Link {
 public:

@@ -2,8 +2,11 @@
 #define SLAC_PACKET_SOCKET_LINK_HPP
 
 #include <slac/transport.hpp>
-#include <slac/packet_socket.hpp>
 #include <memory>
+
+namespace utils {
+class PacketSocket;
+}
 
 namespace slac {
 

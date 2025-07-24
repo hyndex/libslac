@@ -66,11 +66,6 @@ if (ESP_PLATFORM)
             port/esp32s3/qca7000.cpp
         )
     endif()
-else()
-    list(APPEND SLAC_SOURCES
-        src/packet_socket.cpp
-        src/packet_socket_link.cpp
-    )
 endif()
 
 target_sources(slac PRIVATE ${SLAC_SOURCES} $<TARGET_OBJECTS:HashLibrary>)
