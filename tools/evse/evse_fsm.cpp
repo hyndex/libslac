@@ -62,7 +62,9 @@ EvseFSM::EvseFSM(SlacIO& slac_io) : slac_io(slac_io) {
 
         msg_out.setup_ethernet_header(plc_peer_mac);
 
-        this->slac_io.send(msg_out);
+        if (!this->slac_io.send(msg_out)) {
+            LOG_ERROR("Failed to transmit CM_SET_KEY.REQ\n");
+        }
 
         // wait for CM_SET_KEY.CNF from the PLC. 1s should be plenty of time
         // for the modem to respond.
@@ -170,7 +172,9 @@ EvseFSM::EvseFSM(SlacIO& slac_io) : slac_io(slac_io) {
 
     sd_do_atten_char.entry = [this](FSMInitContextType& ctx) {
         setup_atten_char_ind_message(msg_out, matching_ctx);
-        this->slac_io.send(msg_out);
+        if (!this->slac_io.send(msg_out)) {
+            LOG_ERROR("Failed to transmit CM_ATTEN_CHAR.IND\n");
+        }
         sd_do_atten_char.ind_msg_count = 0; // no retries yet
         ctx.set_next_timeout(slac::defs::TT_MATCH_RESPONSE_MS, true);
     };
@@ -183,7 +187,9 @@ EvseFSM::EvseFSM(SlacIO& slac_io) : slac_io(slac_io) {
         }
 
         // resend CM_ATTEN_CHAR.IND
-        this->slac_io.send(msg_out);
+        if (!this->slac_io.send(msg_out)) {
+            LOG_ERROR("Failed to transmit CM_ATTEN_CHAR.IND\n");
+        }
         sd_do_atten_char.ind_msg_count++;
     };
 
@@ -284,7 +290,9 @@ void EvseFSM::sd_wait_for_matching_hsm(FSMContextType& ctx, const EventSlacMessa
     msg_out.setup_payload(&param_confirm, sizeof(param_confirm),
                           slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_CNF, slac::defs::MMV::AV_1_0);
 
-    slac_io.send(msg_out);
+    if (!slac_io.send(msg_out)) {
+        LOG_ERROR("Failed to transmit CM_SLAC_PARAM.CNF\n");
+    }
 
     ctx.submit_event(EventStartMatching());
 }
@@ -393,7 +401,9 @@ void EvseFSM::sd_wait_for_slac_match_hsm(FSMContextType& ctx, const EventSlacMes
         msg_out.setup_ethernet_header(msg_in.get_src_mac());
         msg_out.setup_payload(&cnf, sizeof(cnf), slac::defs::MMTYPE_CM_VALIDATE | slac::defs::MMTYPE_MODE_CNF,
                               slac::defs::MMV::AV_1_0);
-        slac_io.send(msg_out);
+        if (!slac_io.send(msg_out)) {
+            LOG_ERROR("Failed to transmit CM_VALIDATE.CNF\n");
+        }
         return;
     }
 
@@ -428,7 +438,9 @@ void EvseFSM::sd_wait_for_slac_match_hsm(FSMContextType& ctx, const EventSlacMes
     msg_out.setup_payload(&match_cnf, sizeof(match_cnf), slac::defs::MMTYPE_CM_SLAC_MATCH | slac::defs::MMTYPE_MODE_CNF,
                           slac::defs::MMV::AV_1_0);
 
-    slac_io.send(msg_out);
+    if (!slac_io.send(msg_out)) {
+        LOG_ERROR("Failed to transmit CM_SLAC_MATCH.CNF\n");
+    }
 
     ctx.set_next_timeout(slac::defs::TT_MATCH_JOIN_MS);
 }
@@ -446,7 +458,9 @@ void EvseFSM::sd_reset_hsm(FSMContextType& ctx, const EventSlacMessage& ev) {
         msg_out.setup_ethernet_header(msg_in.get_src_mac());
         msg_out.setup_payload(&cnf, sizeof(cnf), slac::defs::MMTYPE_CM_VALIDATE | slac::defs::MMTYPE_MODE_CNF,
                               slac::defs::MMV::AV_1_0);
-        slac_io.send(msg_out);
+        if (!slac_io.send(msg_out)) {
+            LOG_ERROR("Failed to transmit CM_VALIDATE.CNF\n");
+        }
         return;
     }
 

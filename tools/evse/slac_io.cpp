@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2022 - 2022 Pionix GmbH and Contributors to EVerest
 #include "slac_io.hpp"
+#include "../logging.hpp"
 #ifdef ESP_PLATFORM
 #include <port/esp32s3/qca7000_link.hpp>
 #else
@@ -81,7 +82,10 @@ void SlacIO::process(int timeout_ms) {
     }
 }
 
-void SlacIO::send(slac::messages::HomeplugMessage& msg) {
-    // FIXME (aw): handle errors
-    slac_channel.write(msg, 1);
+bool SlacIO::send(slac::messages::HomeplugMessage& msg) {
+    bool ok = slac_channel.write(msg, 1);
+    if (!ok) {
+        LOG_ERROR("Failed to send SLAC message\n");
+    }
+    return ok;
 }
