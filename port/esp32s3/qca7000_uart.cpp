@@ -1,6 +1,6 @@
 #include "qca7000_uart.hpp"
-#include "qca7000.hpp"
 #include "port_config.hpp"
+#include "qca7000.hpp"
 #ifdef ESP_PLATFORM
 #include <esp_log.h>
 #else
@@ -14,11 +14,8 @@
 #define ESP_LOGE(tag, fmt, ...)
 #endif
 #endif
-#include <string.h>
 #include <atomic>
-
-
-
+#include <string.h>
 
 static constexpr uint16_t SOF_WORD = 0xAAAA;
 static constexpr uint16_t EOF_WORD = 0x5555;
@@ -40,8 +37,7 @@ struct RxEntry {
 static RxEntry ring[4];
 static std::atomic<uint8_t> head{0}, tail{0};
 inline bool ringEmpty() {
-    return head.load(std::memory_order_acquire) ==
-           tail.load(std::memory_order_acquire);
+    return head.load(std::memory_order_acquire) == tail.load(std::memory_order_acquire);
 }
 static uint32_t last_rx_time = 0;
 static uint32_t frame_timeout_ms = 0;
@@ -69,7 +65,16 @@ inline bool ringPop(const uint8_t** d, size_t* l) {
     return true;
 }
 
-static enum State { WAIT_SOF, LEN1, LEN2, RSVD1, RSVD2, PAYLOAD, EOF1, EOF2 } state = WAIT_SOF;
+static enum State {
+    WAIT_SOF,
+    LEN1,
+    LEN2,
+    RSVD1,
+    RSVD2,
+    PAYLOAD,
+    EOF1,
+    EOF2
+} state = WAIT_SOF;
 static size_t sof_count = 0;
 static uint16_t rx_len = 0;
 static uint16_t rx_pos = 0;
@@ -127,8 +132,7 @@ inline void processByte(uint8_t b) {
 
 inline void pollRx() {
     uint32_t now = slac_millis();
-    if (state != WAIT_SOF && frame_timeout_ms &&
-        now - last_rx_time > frame_timeout_ms) {
+    if (state != WAIT_SOF && frame_timeout_ms && now - last_rx_time > frame_timeout_ms) {
         state = WAIT_SOF;
         sof_count = 0;
         rx_pos = 0;
@@ -245,24 +249,24 @@ bool Qca7000UartLink::write(const uint8_t* b, size_t l, uint32_t) {
     return uartQCA7000SendEthFrame(b, l);
 }
 
-bool Qca7000UartLink::read(uint8_t* b, size_t l, size_t* out, uint32_t timeout_ms) {
+transport::LinkError Qca7000UartLink::read(uint8_t* b, size_t l, size_t* out, uint32_t timeout_ms) {
     if (!initialized || initialization_error) {
         *out = 0;
-        return false;
+        return transport::LinkError::Transport;
     }
     uint32_t start = slac_millis();
     do {
         size_t got = uartQCA7000checkForReceivedData(b, l);
         if (got) {
             *out = got;
-            return true;
+            return transport::LinkError::Ok;
         }
         if (timeout_ms == 0)
             break;
         slac_delay(1);
     } while (slac_millis() - start < timeout_ms);
     *out = 0;
-    return false;
+    return transport::LinkError::Timeout;
 }
 
 const uint8_t* Qca7000UartLink::mac() const {
@@ -271,4 +275,3 @@ const uint8_t* Qca7000UartLink::mac() const {
 
 } // namespace port
 } // namespace slac
-

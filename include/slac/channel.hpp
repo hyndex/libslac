@@ -30,7 +30,7 @@ public:
     ~Channel();
 
     bool open();
-    bool read(slac::messages::HomeplugMessage& msg, int timeout);
+    transport::LinkError read(slac::messages::HomeplugMessage& msg, int timeout);
     bool poll(slac::messages::HomeplugMessage& msg);
     bool write(slac::messages::HomeplugMessage& msg, int timeout);
 
