@@ -2,11 +2,7 @@
 // Copyright 2022 - 2022 Pionix GmbH and Contributors to EVerest
 #include "slac_io.hpp"
 #include "../logging.hpp"
-#ifdef ESP_PLATFORM
 #include <port/esp32s3/qca7000_link.hpp>
-#else
-#include <slac/packet_socket_link.hpp>
-#endif
 
 #include <stdexcept>
 #ifdef ESP_PLATFORM
@@ -15,11 +11,7 @@
 #include <thread>
 #endif
 
-#ifdef ESP_PLATFORM
 SlacIO::SlacIO(const slac::port::qca7000_config& cfg) : link(cfg), slac_channel(&link) {
-#else
-SlacIO::SlacIO(const std::string& if_name) : link(if_name), slac_channel(&link) {
-#endif
     if (!slac_channel.open()) {
         throw std::runtime_error("Failed to open channel");
     }

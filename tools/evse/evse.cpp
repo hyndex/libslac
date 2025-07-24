@@ -21,7 +21,7 @@ void logging_callback(const std::string& msg) {
 
 class FSMDriver {
 public:
-    explicit FSMDriver(const std::string& if_name) : slac_io_handle(if_name), evse_fsm(slac_io_handle) {
+    explicit FSMDriver(const slac::port::qca7000_config& cfg) : slac_io_handle(cfg), evse_fsm(slac_io_handle) {
         fsm_ctrl.reset(evse_fsm.sd_reset);
         running = true;
         loop_thread = std::thread(&FSMDriver::loop, this);
@@ -117,16 +117,11 @@ private:
 
 int main(int argc, char* argv[]) {
 
-    if (argc != 2) {
-        LOG_INFO("Usage: evse if-name\n");
-        return EXIT_FAILURE;
-    }
-
-    const std::string if_name{argv[1]};
+    slac::port::qca7000_config cfg{&SPI, PLC_SPI_CS_PIN, PLC_SPI_RST_PIN, nullptr};
 
     // FIXME (aw): cleanup construction/destruction
     try {
-        FSMDriver driver{if_name};
+        FSMDriver driver{cfg};
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
         driver.enter_bcd();

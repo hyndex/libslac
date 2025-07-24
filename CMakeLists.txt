@@ -67,10 +67,7 @@ if (ESP_PLATFORM)
         )
     endif()
 else()
-    list(APPEND SLAC_SOURCES
-        src/packet_socket.cpp
-        src/packet_socket_link.cpp
-    )
+    # Previous Linux packet socket implementation removed
 endif()
 
 target_sources(slac PRIVATE ${SLAC_SOURCES} $<TARGET_OBJECTS:HashLibrary>)
