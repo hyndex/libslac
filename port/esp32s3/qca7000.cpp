@@ -8,7 +8,6 @@
 #include <arpa/inet.h>
 #include <stdint.h>
 #ifndef ESP_LOGE
-#include <mutex>
 #define ESP_LOGE(tag, fmt, ...)
 #endif
 #ifndef ESP_LOGI
@@ -23,6 +22,7 @@ static inline uint32_t esp_random() {
 #endif
 #include <slac/slac.hpp>
 #include <string.h>
+#include <atomic>
 
 const char* PLC_TAG = "PLC_IF";
 
@@ -60,64 +60,35 @@ struct RxEntry {
     uint8_t data[V2GTP_BUFFER_SIZE];
 };
 static RxEntry ring[4];
-static volatile uint8_t head = 0, tail = 0;
-#ifdef ESP_PLATFORM
-static portMUX_TYPE ring_mux = portMUX_INITIALIZER_UNLOCKED;
-#else
-static std::mutex ring_mutex;
-#endif
+static std::atomic<uint8_t> head{0}, tail{0};
+
 inline bool ringEmpty() {
-    return head == tail;
+    return head.load(std::memory_order_acquire) ==
+           tail.load(std::memory_order_acquire);
 }
+
 inline void ringPush(const uint8_t* d, size_t l) {
-#ifdef ESP_PLATFORM
-    portENTER_CRITICAL(&ring_mux);
-#else
-    ring_mutex.lock();
-#endif
     if (l > V2GTP_BUFFER_SIZE)
         l = V2GTP_BUFFER_SIZE;
-    uint8_t next = (head + 1) & 3;
-    if (next == tail) {
-#ifdef ESP_PLATFORM
-        portEXIT_CRITICAL(&ring_mux);
-#else
-        ring_mutex.unlock();
-#endif
+    auto h = head.load(std::memory_order_relaxed);
+    auto t = tail.load(std::memory_order_acquire);
+    uint8_t next = (h + 1) & 3;
+    if (next == t) {
         ESP_LOGW(PLC_TAG, "RX ring full - dropping frame");
         return;
     }
-    memcpy(ring[head].data, d, l);
-    ring[head].len = l;
-    head = next;
-#ifdef ESP_PLATFORM
-    portEXIT_CRITICAL(&ring_mux);
-#else
-    ring_mutex.unlock();
-#endif
+    memcpy(ring[h].data, d, l);
+    ring[h].len = l;
+    head.store(next, std::memory_order_release);
 }
+
 inline bool ringPop(const uint8_t** d, size_t* l) {
-#ifdef ESP_PLATFORM
-    portENTER_CRITICAL(&ring_mux);
-#else
-    ring_mutex.lock();
-#endif
-    if (ringEmpty()) {
-#ifdef ESP_PLATFORM
-        portEXIT_CRITICAL(&ring_mux);
-#else
-        ring_mutex.unlock();
-#endif
+    auto t = tail.load(std::memory_order_relaxed);
+    if (head.load(std::memory_order_acquire) == t)
         return false;
-    }
-    *d = ring[tail].data;
-    *l = ring[tail].len;
-    tail = (tail + 1) & 3;
-#ifdef ESP_PLATFORM
-    portEXIT_CRITICAL(&ring_mux);
-#else
-    ring_mutex.unlock();
-#endif
+    *d = ring[t].data;
+    *l = ring[t].len;
+    tail.store((t + 1) & 3, std::memory_order_release);
     return true;
 }
 } // namespace
@@ -267,6 +238,8 @@ static void fetchRx() {
     if (memcmp(p + 4, "\xAA\xAA\xAA\xAA", 4) != 0)
         return;
     uint16_t fl = le16toh(static_cast<uint16_t>((p[9] << 8) | p[8]));
+    if (fl > avail - RX_HDR - FTR_LEN)
+        return;
     if (p[RX_HDR + fl] != 0x55 || p[RX_HDR + fl + 1] != 0x55)
         return;
     ringPush(p + RX_HDR, fl);
@@ -366,28 +339,28 @@ uint8_t qca7000getSlacResult() {
 }
 
 void qca7000Process() {
-    uint16_t cause;
-    do {
-        spiWr16_fast(SPI_REG_INTR_ENABLE, 0);
-        cause = spiRd16_fast(SPI_REG_INTR_CAUSE);
+    spiWr16_fast(SPI_REG_INTR_ENABLE, 0);
+    uint16_t cause = spiRd16_fast(SPI_REG_INTR_CAUSE);
+    while (cause) {
         spiWr16_fast(SPI_REG_INTR_CAUSE, cause);
-        spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
 
         if (cause & SPI_INT_CPU_ON) {
             hardReset();
             qca7000setup(g_spi, g_cs, g_rst);
+            spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
             return;
         }
         if (cause & (SPI_INT_WRBUF_ERR | SPI_INT_RDBUF_ERR)) {
             hardReset();
+            spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
             return;
         }
         if (cause & SPI_INT_PKT_AVLBL)
             fetchRx();
 
         cause = spiRd16_fast(SPI_REG_INTR_CAUSE);
-    } while (cause != 0);
-    spiWr16_fast(SPI_REG_INTR_CAUSE, cause);
+    }
+    spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
 }
 
 bool qca7000setup(SPIClass* bus, int csPin, int rstPin) {
