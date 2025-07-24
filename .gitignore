@@ -1,2 +1,4 @@
 *build
 *build-cross
+*output.txt
+combine.py
