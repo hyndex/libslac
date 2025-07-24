@@ -60,10 +60,11 @@
 struct qca7000_config {
     SPIClass* spi;
     int cs_pin;
+    int rst_pin{PLC_SPI_RST_PIN};
     const uint8_t* mac_addr{nullptr};
 };
 
-bool qca7000setup(SPIClass* spi, int cs_pin);
+bool qca7000setup(SPIClass* spi, int cs_pin, int rst_pin = PLC_SPI_RST_PIN);
 bool qca7000ResetAndCheck();
 uint16_t qca7000ReadInternalReg(uint8_t reg);
 bool qca7000ReadSignature(uint16_t* sig = nullptr, uint16_t* ver = nullptr);

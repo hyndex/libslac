@@ -18,8 +18,9 @@ bool Qca7000Link::open() {
 
     SPIClass* bus = cfg.spi ? cfg.spi : &SPI;
     int cs = cfg.cs_pin ? cfg.cs_pin : PLC_SPI_CS_PIN;
+    int rst = cfg.rst_pin ? cfg.rst_pin : PLC_SPI_RST_PIN;
 
-    if (!qca7000setup(bus, cs)) {
+    if (!qca7000setup(bus, cs, rst)) {
         initialization_error = true;
         return false;
     }
