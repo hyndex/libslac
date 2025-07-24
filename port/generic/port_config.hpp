@@ -9,25 +9,25 @@
 
 #ifndef slac_millis
 #if defined(ARDUINO) && !defined(ESP_PLATFORM)
-#define slac_millis millis
+static inline uint32_t slac_millis() { return millis(); }
 #endif
 #endif
 
 #ifndef slac_delay
 #if defined(ARDUINO) && !defined(ESP_PLATFORM)
-#define slac_delay(ms) delay(ms)
+static inline void slac_delay(uint32_t ms) { delay(ms); }
 #endif
 #endif
 
 #ifndef slac_noInterrupts
 #if defined(ARDUINO) && !defined(ESP_PLATFORM)
-#define slac_noInterrupts noInterrupts
+static inline void slac_noInterrupts() { noInterrupts(); }
 #endif
 #endif
 
 #ifndef slac_interrupts
 #if defined(ARDUINO) && !defined(ESP_PLATFORM)
-#define slac_interrupts interrupts
+static inline void slac_interrupts() { interrupts(); }
 #endif
 #endif
 
