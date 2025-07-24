@@ -6,7 +6,7 @@
 // see http://create.stephan-brumme.com/disclaimer.html
 //
 
-#include "port/generic/port_config.hpp"
+#include "port/port_common.hpp"
 #include "sha256.h"
 
 // big endian architectures need #define __BYTE_ORDER __BIG_ENDIAN

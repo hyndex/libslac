@@ -174,8 +174,7 @@ via ``qca7000_uart_config``:
 Tools and Examples
 ------------------
 
-The ``tools`` directory contains small utilities demonstrating how to use ``libslac``. See ``docs/BoardExample.md`` for a complete PlatformIO configuration using custom pins.
-See `docs/PlatformIOExample.md` for a detailed tutorial on creating a new PlatformIO project.
+Refer to the example projects under ``examples`` for usage. See ``docs/BoardExample.md`` for a complete PlatformIO configuration and ``docs/PlatformIOExample.md`` for a detailed tutorial.
 
 Porting to Other Boards
 -----------------------

@@ -3,7 +3,7 @@
 #ifndef SLAC_SLAC_HPP
 #define SLAC_SLAC_HPP
 
-#include "port/generic/port_config.hpp"
+#include "port/port_common.hpp"
 
 #include <cstdint>
 #include <utility>
