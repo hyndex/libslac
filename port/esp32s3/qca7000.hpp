@@ -52,6 +52,19 @@ static_assert(ETH_FRAME_LEN <= V2GTP_BUFFER_SIZE,
 #ifndef SPI_REG_INTR_ENABLE
 #define SPI_REG_INTR_ENABLE 0x0D00
 #endif
+#ifndef SPI_REG_SPI_CONFIG
+#define SPI_REG_SPI_CONFIG 0x0400
+#endif
+#ifndef QCASPI_SLAVE_RESET_BIT
+#define QCASPI_SLAVE_RESET_BIT (1 << 6)
+#endif
+
+#ifndef QCA7000_SPI_FAST_HZ
+#define QCA7000_SPI_FAST_HZ 8000000
+#endif
+#ifndef QCA7000_SPI_BURST_LEN
+#define QCA7000_SPI_BURST_LEN 512
+#endif
 
 #ifndef PLC_SPI_RST_PIN
 #define PLC_SPI_RST_PIN 5
@@ -70,6 +83,7 @@ struct qca7000_config {
 bool qca7000setup(SPIClass* spi, int cs_pin, int rst_pin = PLC_SPI_RST_PIN);
 void qca7000teardown();
 bool qca7000ResetAndCheck();
+bool qca7000SoftReset();
 uint16_t qca7000ReadInternalReg(uint16_t reg);
 bool qca7000ReadSignature(uint16_t* sig = nullptr, uint16_t* ver = nullptr);
 size_t spiQCA7000checkForReceivedData(uint8_t* dst, size_t maxLen);
