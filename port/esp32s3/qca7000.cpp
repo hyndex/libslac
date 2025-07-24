@@ -95,7 +95,7 @@ inline bool ringPop(const uint8_t** d, size_t* l) {
 
 static inline uint16_t cmd16(bool rd, bool intr, uint16_t reg) {
     return (rd ? 0x8000u : 0) | (intr ? 0x4000u : 0) |
-           (((reg << 8) & 0x3FFFu));
+           (reg & 0x3FFFu);
 }
 
 static uint16_t spiRd16_fast(uint16_t reg) {
@@ -166,7 +166,7 @@ uint16_t qca7000ReadInternalReg(uint16_t r) {
 }
 bool qca7000ReadSignature(uint16_t* s, uint16_t* v) {
     uint16_t sig = qca7000ReadInternalReg(SPI_REG_SIGNATURE),
-             ver = qca7000ReadInternalReg(0x1B);
+             ver = qca7000ReadInternalReg(0x1B00);
     if (s)
         *s = sig;
     if (v)
