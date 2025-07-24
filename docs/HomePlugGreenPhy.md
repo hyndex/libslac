@@ -1,8 +1,3 @@
-Got it. I’ll convert the entire HomePlug Green PHY whitepaper into a single, complete Markdown document, preserving all headings, section structures, and including references to all diagrams and visuals where applicable.
-
-I’ll get started and let you know once the full Markdown version is ready.
-
-
 # HomePlug Green PHY: The Standard For In-Home Smart Grid Powerline Communications
 
 *Copyright © 2010, HomePlug Powerline Alliance, Inc. All rights reserved.*
