@@ -21,6 +21,7 @@ static inline uint32_t esp_random() {
 }
 #endif
 #include <slac/slac.hpp>
+#include <slac/iso15118_consts.hpp>
 #include <string.h>
 #include <atomic>
 
@@ -267,15 +268,138 @@ size_t spiQCA7000checkForReceivedData(uint8_t* d, size_t m) {
     return c;
 }
 
-// Current SLAC handshake state. 0 = idle, 1 = waiting for parameter confirmation,
-// 2 = waiting for match request, 3 = handshake complete, 0xFF = mismatch.
+// Current SLAC handshake state. 0 = idle, 1 = waiting for CM_SLAC_PARAM.CNF,
+// 2 = sending sounds / waiting for CM_ATTEN_CHAR.IND, 3 = waiting for
+// CM_SET_KEY.REQ, 4 = waiting for CM_SLAC_MATCH.REQ, 5 = complete,
+// 0xFF = mismatch/timeout.
 static uint8_t g_slac = 0;
 static uint8_t g_run_id[slac::defs::RUN_ID_LEN]{};
 static const uint8_t g_src_mac[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+static uint32_t g_slac_timer = 0;
+static uint8_t g_sound_sent = 0;
+
+static bool send_start_atten_char();
+static bool send_mnbc_sound(uint8_t remaining);
+static bool send_atten_char_rsp(const uint8_t* dst,
+                                const slac::messages::cm_atten_char_ind* ind);
+static bool send_set_key_cnf(const uint8_t* dst,
+                             const slac::messages::cm_set_key_req* req);
+
+static bool send_start_atten_char() {
+    struct __attribute__((packed)) {
+        ether_header eth;
+        struct {
+            uint8_t mmv;
+            uint16_t mmtype;
+        } hp;
+        slac::messages::cm_start_atten_char_ind ind;
+    } msg{};
+
+    memset(&msg, 0, sizeof(msg));
+    memset(msg.eth.ether_dhost, 0xFF, ETH_ALEN);
+    memcpy(msg.eth.ether_shost, g_src_mac, ETH_ALEN);
+    msg.eth.ether_type = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
+    msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
+    msg.hp.mmtype = htole16(slac::defs::MMTYPE_CM_START_ATTEN_CHAR |
+                            slac::defs::MMTYPE_MODE_IND);
+    msg.ind.application_type = slac::defs::COMMON_APPLICATION_TYPE;
+    msg.ind.security_type = slac::defs::COMMON_SECURITY_TYPE;
+    msg.ind.num_sounds = slac::defs::C_EV_MATCH_MNBC;
+    msg.ind.timeout = slac::defs::TT_EVSE_MATCH_MNBC_MS / 100;
+    msg.ind.resp_type = slac::defs::CM_SLAC_PARM_CNF_RESP_TYPE;
+    memcpy(msg.ind.forwarding_sta, g_src_mac, ETH_ALEN);
+    memcpy(msg.ind.run_id, g_run_id, sizeof(g_run_id));
+    return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+}
+
+static bool send_mnbc_sound(uint8_t remaining) {
+    struct __attribute__((packed)) {
+        ether_header eth;
+        struct {
+            uint8_t mmv;
+            uint16_t mmtype;
+        } hp;
+        slac::messages::cm_mnbc_sound_ind ind;
+    } msg{};
+
+    memset(&msg, 0, sizeof(msg));
+    memset(msg.eth.ether_dhost, 0xFF, ETH_ALEN);
+    memcpy(msg.eth.ether_shost, g_src_mac, ETH_ALEN);
+    msg.eth.ether_type = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
+    msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
+    msg.hp.mmtype = htole16(slac::defs::MMTYPE_CM_MNBC_SOUND |
+                            slac::defs::MMTYPE_MODE_IND);
+    msg.ind.application_type = slac::defs::COMMON_APPLICATION_TYPE;
+    msg.ind.security_type = slac::defs::COMMON_SECURITY_TYPE;
+    memset(msg.ind.sender_id, 0, sizeof(msg.ind.sender_id));
+    msg.ind.remaining_sound_count = remaining;
+    memcpy(msg.ind.run_id, g_run_id, sizeof(g_run_id));
+    for (uint8_t& b : msg.ind.random)
+        b = static_cast<uint8_t>(esp_random() & 0xFF);
+    return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+}
+
+static bool send_atten_char_rsp(const uint8_t* dst,
+                                const slac::messages::cm_atten_char_ind* ind) {
+    struct __attribute__((packed)) {
+        ether_header eth;
+        struct {
+            uint8_t mmv;
+            uint16_t mmtype;
+        } hp;
+        slac::messages::cm_atten_char_rsp rsp;
+    } msg{};
+
+    memset(&msg, 0, sizeof(msg));
+    memcpy(msg.eth.ether_dhost, dst, ETH_ALEN);
+    memcpy(msg.eth.ether_shost, g_src_mac, ETH_ALEN);
+    msg.eth.ether_type = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
+    msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
+    msg.hp.mmtype = htole16(slac::defs::MMTYPE_CM_ATTEN_CHAR |
+                            slac::defs::MMTYPE_MODE_RSP);
+    msg.rsp.application_type = slac::defs::COMMON_APPLICATION_TYPE;
+    msg.rsp.security_type = slac::defs::COMMON_SECURITY_TYPE;
+    memcpy(msg.rsp.source_address, g_src_mac, ETH_ALEN);
+    memcpy(msg.rsp.run_id, ind->run_id, sizeof(ind->run_id));
+    memcpy(msg.rsp.source_id, ind->source_id, sizeof(ind->source_id));
+    memcpy(msg.rsp.resp_id, ind->resp_id, sizeof(ind->resp_id));
+    msg.rsp.result = slac::defs::CM_ATTEN_CHAR_RSP_RESULT;
+    return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+}
+
+static bool send_set_key_cnf(const uint8_t* dst,
+                             const slac::messages::cm_set_key_req* req) {
+    struct __attribute__((packed)) {
+        ether_header eth;
+        struct {
+            uint8_t mmv;
+            uint16_t mmtype;
+        } hp;
+        slac::messages::cm_set_key_cnf cnf;
+    } msg{};
+
+    memset(&msg, 0, sizeof(msg));
+    memcpy(msg.eth.ether_dhost, dst, ETH_ALEN);
+    memcpy(msg.eth.ether_shost, g_src_mac, ETH_ALEN);
+    msg.eth.ether_type = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
+    msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
+    msg.hp.mmtype = htole16(slac::defs::MMTYPE_CM_SET_KEY |
+                            slac::defs::MMTYPE_MODE_CNF);
+    msg.cnf.result = slac::defs::CM_SET_KEY_CNF_RESULT_SUCCESS;
+    msg.cnf.my_nonce = req->my_nonce;
+    msg.cnf.your_nonce = req->your_nonce;
+    msg.cnf.pid = req->pid;
+    msg.cnf.prn = req->prn;
+    msg.cnf.pmn = req->pmn;
+    msg.cnf.cco_capability = req->cco_capability;
+    return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+}
 
 // Issue a CM_SLAC_PARM.REQ to start the SLAC matching handshake.
 bool qca7000startSlac() {
-    g_slac = 1; // waiting for CNF
+    g_slac = 1; // waiting for CM_SLAC_PARAM.CNF
+    g_slac_timer = slac_millis();
+    g_sound_sent = 0;
 
     for (size_t i = 0; i < sizeof(g_run_id); ++i)
         g_run_id[i] = static_cast<uint8_t>(esp_random() & 0xFF);
@@ -308,6 +432,7 @@ bool qca7000startSlac() {
 // Poll for SLAC confirmation frames and update g_slac accordingly.
 uint8_t qca7000getSlacResult() {
     fetchRx();
+    const uint32_t now = slac_millis();
     const uint8_t* d;
     size_t l;
     while (ringPop(&d, &l)) {
@@ -321,20 +446,59 @@ uint8_t qca7000getSlacResult() {
         uint16_t mmtype = le16toh(*reinterpret_cast<const uint16_t*>(p + 1));
         if (mmv != static_cast<uint8_t>(slac::defs::MMV::AV_1_0))
             continue;
-        if (mmtype == (slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_CNF)) {
+
+        if (mmtype == (slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_CNF) && g_slac == 1) {
             const auto* cnf = reinterpret_cast<const slac::messages::cm_slac_parm_cnf*>(p + 3);
-            if (!memcmp(cnf->run_id, g_run_id, sizeof(g_run_id)))
-                g_slac = 2; // waiting for match
-            else
+            if (!memcmp(cnf->run_id, g_run_id, sizeof(g_run_id))) {
+                g_slac = 2; // start sounding
+                g_slac_timer = now;
+                send_start_atten_char();
+            } else {
                 g_slac = 0xFF;
-        } else if (mmtype == (slac::defs::MMTYPE_CM_SLAC_MATCH | slac::defs::MMTYPE_MODE_REQ)) {
+            }
+        } else if (mmtype == (slac::defs::MMTYPE_CM_ATTEN_CHAR | slac::defs::MMTYPE_MODE_IND) &&
+                   (g_slac == 2 || g_slac == 3)) {
+            const auto* ind = reinterpret_cast<const slac::messages::cm_atten_char_ind*>(p + 3);
+            if (!memcmp(ind->run_id, g_run_id, sizeof(g_run_id))) {
+                send_atten_char_rsp(eth->ether_shost, ind);
+                g_slac = 3; // waiting for set key
+                g_slac_timer = now;
+            } else {
+                g_slac = 0xFF;
+            }
+        } else if (mmtype == (slac::defs::MMTYPE_CM_SET_KEY | slac::defs::MMTYPE_MODE_REQ) && g_slac == 3) {
+            const auto* req = reinterpret_cast<const slac::messages::cm_set_key_req*>(p + 3);
+            send_set_key_cnf(eth->ether_shost, req);
+            g_slac = 4; // wait for match
+            g_slac_timer = now;
+        } else if (mmtype == (slac::defs::MMTYPE_CM_SLAC_MATCH | slac::defs::MMTYPE_MODE_REQ) && g_slac >= 3) {
             const auto* req = reinterpret_cast<const slac::messages::cm_slac_match_req*>(p + 3);
             if (!memcmp(req->run_id, g_run_id, sizeof(g_run_id)))
-                g_slac = 3; // success
+                g_slac = 5; // success
             else
                 g_slac = 0xFF;
         }
     }
+
+    if (g_slac == 2) {
+        if (g_sound_sent < slac::defs::C_EV_MATCH_MNBC &&
+            now - g_slac_timer >= slac::defs::TP_EV_BATCH_MSG_INTERVAL_MS) {
+            uint8_t remaining = slac::defs::C_EV_MATCH_MNBC - g_sound_sent - 1;
+            send_mnbc_sound(remaining);
+            ++g_sound_sent;
+            g_slac_timer = now;
+            if (g_sound_sent == slac::defs::C_EV_MATCH_MNBC)
+                g_slac_timer = now; // start wait for ATTEN_CHAR
+        }
+        if (g_sound_sent == slac::defs::C_EV_MATCH_MNBC &&
+            now - g_slac_timer > slac::defs::TT_EV_ATTEN_RESULTS_MS)
+            g_slac = 0xFF;
+    } else if (g_slac == 3 && now - g_slac_timer > slac::defs::TT_MATCH_SEQUENCE_MS) {
+        g_slac = 0xFF;
+    } else if (g_slac == 4 && now - g_slac_timer > slac::defs::TT_MATCH_JOIN_MS) {
+        g_slac = 0xFF;
+    }
+
     return g_slac;
 }
 
