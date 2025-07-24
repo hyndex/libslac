@@ -32,13 +32,13 @@ additional ``git submodule`` commands are needed.
 Prerequisites
 -------------
 
+
 Install PlatformIO via pip:
 
 .. code-block:: bash
 
    pip install platformio
 
-The repository provides a sample `platformio.ini` with build environments for the examples.
 Building with PlatformIO
 -----------------------
 

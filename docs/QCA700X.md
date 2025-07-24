@@ -45,7 +45,7 @@
 
 ## 2 Introduction
 
-This application note aims to describe the QCA7000 PLC chip SPI/UART interface. The documentation was derived from the original Qualcomm Atheros Linux driver for the QCA7000, which was initially published at [https://github.com/IoE/qca7000](https://github.com/IoE/qca7000). All information within this document can be derived from this code. The basis for this document is the status of the driver at the time this document was released initially. Its focus is on layers 1 and 2 of the OSI model.
+This application note aims to describe the QCA7000 PLC chip SPI/UART interface. The documentation was derived from the original Qualcomm Atheros driver for the QCA7000, which was initially published at [https://github.com/IoE/qca7000](https://github.com/IoE/qca7000). All information within this document can be derived from this code. The basis for this document is the status of the driver at the time this document was released initially. Its focus is on layers 1 and 2 of the OSI model.
 
 **OSI layer vs. Protocol vs. Software component:**
 
@@ -279,11 +279,7 @@ If your SPI communication is not working, you should try the following:
 * Keep the SPI signal lines as short as possible, preferably under 10 cm.
 * If the response of the QCA7000 for the signature register seems to be incorrect, try adding series termination resistors (between 10 Ω and 20 Ω) in the SPI clock and data lines.
 
-## 9 Appendix
-
-1. UART/SPI drivers for Qualcomm Atheros QCA7000 serial-to-powerline bridge chip. This version is specific to Linux 2.6.35 and Freescale i.MX28 CPU. (Provided separately as `an4_qca7000_driver_30_09_2014.zip`.)
-
-## 10 Contact
+## 9 Contact
 
 I2SE GmbH
 Friedrich-List-Platz 2

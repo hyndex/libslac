@@ -1,9 +1,9 @@
 # PlatformIO Basic SLAC Example
 
 This guide walks through creating a minimal PlatformIO project that uses
-`libslac` to communicate with a QCA7000 based power line modem.  It is
-structured as a step-by-step tutorial explaining why each step is
-required.
+`libslac` with an ESP32 board running the Arduino framework.  It
+communicates with a QCA7000 based power line modem and explains the
+required steps in a short tutorial.
 
 ## 1. Install PlatformIO
 
