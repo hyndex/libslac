@@ -38,9 +38,11 @@ static constexpr uint16_t INTR_MASK = SPI_INT_CPU_ON | SPI_INT_PKT_AVLBL | SPI_I
 #ifdef LIBSLAC_TESTING
 SPIClass* g_spi = nullptr;
 int g_cs = -1;
+int g_rst = PLC_SPI_RST_PIN;
 #else
 static SPIClass* g_spi = nullptr;
 static int g_cs = -1;
+static int g_rst = PLC_SPI_RST_PIN;
 #endif
 static SPISettings setSlow(SLOW_HZ, MSBFIRST, SPI_MODE3);
 static SPISettings setFast(FAST_HZ, MSBFIRST, SPI_MODE3);
@@ -108,10 +110,10 @@ static void spiWr16_fast(uint16_t reg, uint16_t val) {
 }
 
 static bool hardReset() {
-    pinMode(PLC_SPI_RST_PIN, OUTPUT);
-    digitalWrite(PLC_SPI_RST_PIN, LOW);
+    pinMode(g_rst, OUTPUT);
+    digitalWrite(g_rst, LOW);
     slac_delay(10);
-    digitalWrite(PLC_SPI_RST_PIN, HIGH);
+    digitalWrite(g_rst, HIGH);
     slac_delay(100);
 
     auto slowRd16 = [&](uint16_t reg) -> uint16_t {
@@ -332,7 +334,7 @@ void qca7000Process() {
         return;
     if (cause & SPI_INT_CPU_ON) {
         hardReset();
-        qca7000setup(g_spi, g_cs);
+        qca7000setup(g_spi, g_cs, g_rst);
         return;
     }
     if (cause & (SPI_INT_WRBUF_ERR | SPI_INT_RDBUF_ERR)) {
@@ -343,11 +345,12 @@ void qca7000Process() {
         fetchRx();
 }
 
-bool qca7000setup(SPIClass* bus, int csPin) {
-    ESP_LOGI(PLC_TAG, "QCA7000 setup: bus=%p CS=%d", bus, csPin);
+bool qca7000setup(SPIClass* bus, int csPin, int rstPin) {
+    ESP_LOGI(PLC_TAG, "QCA7000 setup: bus=%p CS=%d RST=%d", bus, csPin, rstPin);
 #define ESP_LOGW(tag, fmt, ...)
     g_spi = bus;
     g_cs = csPin;
+    g_rst = rstPin;
     if (g_spi)
         g_spi->begin();
     pinMode(g_cs, OUTPUT);

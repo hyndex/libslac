@@ -95,7 +95,7 @@ An example for the ESP32-S3 port:
    #include <port/esp32s3/qca7000_link.hpp>
 
    const uint8_t my_mac[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
-   qca7000_config cfg{&SPI, PLC_SPI_CS_PIN, my_mac};
+   qca7000_config cfg{&SPI, PLC_SPI_CS_PIN, PLC_SPI_RST_PIN, my_mac};
    slac::port::Qca7000Link link(cfg);
    slac::Channel channel(&link);
    if (!channel.open()) {
@@ -112,15 +112,17 @@ QCA7000 Configuration
 
 The SPI pins used to communicate with the QCA7000 modem are defined in
 ``port/esp32s3/qca7000.hpp`` as ``PLC_SPI_CS_PIN`` and ``PLC_SPI_RST_PIN``.
-Override these macros when building to match your hardware wiring.
+Override these macros when building to match your hardware wiring or
+specify the pins through ``qca7000_config`` when opening the link.
 
-The modem's MAC address can be specified via ``qca7000_config`` when
-creating :class:`slac::port::Qca7000Link`:
+The ``qca7000_config`` struct allows selecting the SPI bus, chip select
+and reset pins as well as the modem's MAC address when creating
+``slac::port::Qca7000Link``:
 
 .. code-block:: cpp
 
    const uint8_t my_mac[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
-   qca7000_config cfg{&SPI, PLC_SPI_CS_PIN, my_mac};
+   qca7000_config cfg{&SPI, PLC_SPI_CS_PIN, PLC_SPI_RST_PIN, my_mac};
    slac::port::Qca7000Link link(cfg);
 
 Polling Without IRQ
@@ -142,6 +144,24 @@ modem may remain unconnected.
        }
        delay(1);
    }
+Polling Operation
+-----------------
+
+``libslac`` does not require the QCA7000 interrupt pin. Call
+``qca7000Process()`` regularly to poll the modem for new frames. This
+works on boards where the interrupt line is not connected.
+
+UART Mode
+---------
+
+If ``SLAC_USE_UART`` is defined, ``libslac`` provides
+``slac::port::Qca7000UartLink``. Select the serial port and baud rate
+via ``qca7000_uart_config``:
+
+.. code-block:: cpp
+
+   qca7000_uart_config cfg{&Serial2, 1250000};
+   slac::port::Qca7000UartLink link(cfg);
 
 Custom Port Configuration
 ------------------------
@@ -158,7 +178,7 @@ macros manually when building.
 Tools and Examples
 ------------------
 
-The ``tools`` directory contains small utilities demonstrating how to use ``libslac``. ``tools/evse`` contains a simple state machine for the EVSE side of the SLAC handshake. ``tools/bridge.cpp`` can forward packets between two virtual interfaces on Linux and is disabled on microcontroller builds.
+The ``tools`` directory contains small utilities demonstrating how to use ``libslac``. ``tools/evse`` contains a simple state machine for the EVSE side of the SLAC handshake. ``tools/bridge.cpp`` can forward packets between two virtual interfaces on Linux and is disabled on microcontroller builds. See ``docs/BoardExample.md`` for a complete PlatformIO configuration using custom pins.
 
 Porting to Other Boards
 -----------------------
