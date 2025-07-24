@@ -76,7 +76,7 @@ bool Channel::poll(slac::messages::HomeplugMessage& msg) {
 }
 
 bool Channel::write(slac::messages::HomeplugMessage& msg, int timeout) {
-    assert(("Homeplug message is not valid\n", msg.is_valid()));
+    assert(msg.is_valid() && "Homeplug message is not valid");
     did_timeout = false;
 
     if (!link)
