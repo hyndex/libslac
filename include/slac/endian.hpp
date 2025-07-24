@@ -3,6 +3,19 @@
 
 #include <cstdint>
 
+#ifdef htole16
+#undef htole16
+#undef le16toh
+#endif
+#ifdef htole32
+#undef htole32
+#undef le32toh
+#endif
+#ifdef htole64
+#undef htole64
+#undef le64toh
+#endif
+
 #ifndef __LITTLE_ENDIAN
 #define __LITTLE_ENDIAN 1234
 #endif
@@ -23,47 +36,53 @@
 #define __BYTE_ORDER __BIG_ENDIAN
 #endif
 
-static inline constexpr uint16_t slac_bswap16(uint16_t v) {
+namespace slac {
+
+static inline constexpr uint16_t bswap16(uint16_t v) {
     return __builtin_bswap16(v);
 }
-static inline constexpr uint32_t slac_bswap32(uint32_t v) {
+static inline constexpr uint32_t bswap32(uint32_t v) {
     return __builtin_bswap32(v);
 }
-static inline constexpr uint64_t slac_bswap64(uint64_t v) {
+static inline constexpr uint64_t bswap64(uint64_t v) {
     return __builtin_bswap64(v);
 }
 
+
 #if !defined(ESP_PLATFORM) && !defined(htole16)
-static inline constexpr uint16_t htole16(uint16_t v) {
+inline constexpr uint16_t htole16(uint16_t v) {
 #if __BYTE_ORDER == __LITTLE_ENDIAN
     return v;
 #else
-    return slac_bswap16(v);
+    return bswap16(v);
 #endif
 }
-static inline constexpr uint16_t le16toh(uint16_t v) { return htole16(v); }
+inline constexpr uint16_t le16toh(uint16_t v) { return htole16(v); }
 #endif
 
+
 #if !defined(ESP_PLATFORM) && !defined(htole32)
-static inline constexpr uint32_t htole32(uint32_t v) {
+inline constexpr uint32_t htole32(uint32_t v) {
 #if __BYTE_ORDER == __LITTLE_ENDIAN
     return v;
 #else
-    return slac_bswap32(v);
+    return bswap32(v);
 #endif
 }
-static inline constexpr uint32_t le32toh(uint32_t v) { return htole32(v); }
+inline constexpr uint32_t le32toh(uint32_t v) { return htole32(v); }
 #endif
 
 #if !defined(ESP_PLATFORM) && !defined(htole64)
-static inline constexpr uint64_t htole64(uint64_t v) {
+inline constexpr uint64_t htole64(uint64_t v) {
 #if __BYTE_ORDER == __LITTLE_ENDIAN
     return v;
 #else
-    return slac_bswap64(v);
+    return bswap64(v);
 #endif
 }
-static inline constexpr uint64_t le64toh(uint64_t v) { return htole64(v); }
+inline constexpr uint64_t le64toh(uint64_t v) { return htole64(v); }
 #endif
+
+} // namespace slac
 
 #endif // SLAC_ENDIAN_HPP

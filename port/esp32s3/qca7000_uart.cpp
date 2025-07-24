@@ -1,19 +1,7 @@
 #include "qca7000_uart.hpp"
 #include "port_config.hpp"
 #include "qca7000.hpp"
-#ifdef ESP_PLATFORM
-#include <esp_log.h>
-#else
-#ifndef ESP_LOGI
-#define ESP_LOGI(tag, fmt, ...)
-#endif
-#ifndef ESP_LOGW
-#define ESP_LOGW(tag, fmt, ...)
-#endif
-#ifndef ESP_LOGE
-#define ESP_LOGE(tag, fmt, ...)
-#endif
-#endif
+#include "../logging_compat.hpp"
 #include <atomic>
 #include <string.h>
 
@@ -34,7 +22,9 @@ struct RxEntry {
     size_t len;
     uint8_t data[V2GTP_BUFFER_SIZE];
 };
-static RxEntry ring[4];
+static constexpr uint8_t RING_SIZE = 4;
+static constexpr uint8_t RING_MASK = RING_SIZE - 1;
+static RxEntry ring[RING_SIZE];
 static std::atomic<uint8_t> head{0}, tail{0};
 inline bool ringEmpty() {
     return head.load(std::memory_order_acquire) == tail.load(std::memory_order_acquire);
@@ -44,9 +34,9 @@ static uint32_t frame_timeout_ms = 0;
 inline void ringPush(const uint8_t* d, size_t l) {
     if (l > V2GTP_BUFFER_SIZE)
         l = V2GTP_BUFFER_SIZE;
-    auto h = head.load(std::memory_order_relaxed);
+    auto h = head.load(std::memory_order_acquire);
     auto t = tail.load(std::memory_order_acquire);
-    uint8_t next = (h + 1) & 3;
+    uint8_t next = (h + 1) & RING_MASK;
     if (next == t) {
         ESP_LOGW(PLC_TAG, "RX ring full - dropping frame");
         return;
@@ -56,12 +46,12 @@ inline void ringPush(const uint8_t* d, size_t l) {
     head.store(next, std::memory_order_release);
 }
 inline bool ringPop(const uint8_t** d, size_t* l) {
-    auto t = tail.load(std::memory_order_relaxed);
+    auto t = tail.load(std::memory_order_acquire);
     if (head.load(std::memory_order_acquire) == t)
         return false;
     *d = ring[t].data;
     *l = ring[t].len;
-    tail.store((t + 1) & 3, std::memory_order_release);
+    tail.store((t + 1) & RING_MASK, std::memory_order_release);
     return true;
 }
 

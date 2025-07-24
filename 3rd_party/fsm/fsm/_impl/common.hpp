@@ -3,6 +3,8 @@
 #ifndef LIBFSM__IMPL_COMMON_HPP
 #define LIBFSM__IMPL_COMMON_HPP
 
+#include <type_traits>
+
 namespace fsm::_impl {
 
 template <template <typename, typename, typename> typename BaseStateType, typename DerivedStateType>

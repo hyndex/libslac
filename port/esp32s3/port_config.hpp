@@ -6,18 +6,20 @@
 #ifdef ESP_PLATFORM
 #include <stdint.h>
 
-static inline uint16_t le16toh(uint16_t v) {
+namespace slac {
+inline uint16_t le16toh(uint16_t v) {
     return v;
 }
-static inline uint16_t htole16(uint16_t v) {
+inline uint16_t htole16(uint16_t v) {
     return v;
 }
-static inline uint32_t le32toh(uint32_t v) {
+inline uint32_t le32toh(uint32_t v) {
     return v;
 }
-static inline uint32_t htole32(uint32_t v) {
+inline uint32_t htole32(uint32_t v) {
     return v;
 }
+} // namespace slac
 
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
