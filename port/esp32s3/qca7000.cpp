@@ -223,10 +223,13 @@ size_t spiQCA7000checkForReceivedData(uint8_t* d, size_t m) {
     return c;
 }
 
+// Current SLAC handshake state. 0 = idle, 1 = waiting for parameter confirmation,
+// 2 = waiting for match request, 3 = handshake complete, 0xFF = mismatch.
 static uint8_t g_slac = 0;
 static uint8_t g_run_id[slac::defs::RUN_ID_LEN]{};
 static const uint8_t g_src_mac[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 
+// Issue a CM_SLAC_PARM.REQ to start the SLAC matching handshake.
 bool qca7000startSlac() {
     g_slac = 1; // waiting for CNF
 
@@ -258,6 +261,7 @@ bool qca7000startSlac() {
     return ok;
 }
 
+// Poll for SLAC confirmation frames and update g_slac accordingly.
 uint8_t qca7000getSlacResult() {
     fetchRx();
     const uint8_t* d;
