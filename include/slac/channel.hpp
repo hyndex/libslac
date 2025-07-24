@@ -9,7 +9,7 @@
 #include <string>
 
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2020 - 2021 Pionix GmbH and Contributors to EVerest
+// Copyright 2020 - 2021 Joulepoint Private Limited (Chinmoy Bhuyan) and Contributors to EVerest
 #include <slac/slac.hpp>
 
 namespace slac {

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2023 - 2023 Pionix GmbH and Contributors to EVerest
+// Copyright 2025 - 2025 Joulepoint Private Limited (Chinmoy Bhuyan) and Contributors to EVerest
 #ifndef LIBFSM__IMPL_COMMON_HPP
 #define LIBFSM__IMPL_COMMON_HPP
 
