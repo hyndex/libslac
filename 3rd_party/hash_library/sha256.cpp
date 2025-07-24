@@ -12,12 +12,12 @@
 // big endian architectures need #define __BYTE_ORDER __BIG_ENDIAN
 #ifndef _MSC_VER
 #if defined(ESP_PLATFORM) && !defined(__GLIBC__)
-#include "port/esp32s3/endian_compat.hpp"
+#include "port/microcontroller/endian_compat.hpp"
 #elif defined(__has_include)
 #  if __has_include(<endian.h>)
 #    include <endian.h>
 #  else
-#    include "port/esp32s3/endian_compat.hpp"
+#    include "port/microcontroller/endian_compat.hpp"
 #  endif
 #else
 #include <endian.h>

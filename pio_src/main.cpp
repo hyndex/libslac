@@ -2,7 +2,7 @@
 #include <Arduino.h>
 #endif
 #include <slac/channel.hpp>
-#include <port/esp32s3/qca7000_link.hpp>
+#include <port/microcontroller/qca7000_link.hpp>
 
 #ifdef ARDUINO
 void setup() {

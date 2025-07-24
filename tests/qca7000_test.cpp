@@ -3,7 +3,7 @@
 #define LIBSLAC_TESTING
 #define ARDUINO
 #define SLAC_ETHERNET_DEFS_HPP
-#include "../port/esp32s3/qca7000.cpp"
+#include "../port/microcontroller/qca7000.cpp"
 #include "stubs/SPI.h"
 #include <endian.h>
 #include <net/ethernet.h>

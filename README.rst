@@ -54,16 +54,16 @@ Building with PlatformIO
 
 For embedded targets the library can be built using `PlatformIO <https://platformio.org/>`_. The following environment is provided:
 
-``env:esp32s3``
-    Example configuration for ESP32-S3 development boards. It shows the required compiler flags and source filters.
+``env:microcontroller``
+    Example configuration for microcontroller development boards. It shows the required compiler flags and source filters.
 
 Invoke PlatformIO using:
 
 .. code-block:: bash
 
-   pio run -e esp32s3
+   pio run -e microcontroller
 
-This command builds the example firmware for ESP32-S3 boards and is
+This command builds the example firmware for microcontroller boards and is
 useful to verify compilation after refactoring.
 
 Library Concepts
@@ -88,11 +88,11 @@ Using the Library
 2. Create a :class:`slac::Channel` instance with the link implementation.
 3. Use :class:`slac::messages::HomeplugMessage` to construct and parse SLAC messages.
 
-An example for the ESP32-S3 port:
+An example for the microcontroller port:
 
 .. code-block:: cpp
 
-   #include <port/esp32s3/qca7000_link.hpp>
+   #include <port/microcontroller/qca7000_link.hpp>
 
    const uint8_t my_mac[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
    qca7000_config cfg{&SPI, PLC_SPI_CS_PIN, PLC_SPI_RST_PIN, my_mac};
@@ -111,7 +111,7 @@ QCA7000 Configuration
 ---------------------
 
 The SPI pins used to communicate with the QCA7000 modem are defined in
-``port/esp32s3/qca7000.hpp`` as ``PLC_SPI_CS_PIN`` and ``PLC_SPI_RST_PIN``.
+``port/microcontroller/qca7000.hpp`` as ``PLC_SPI_CS_PIN`` and ``PLC_SPI_RST_PIN``.
 Override these macros when building to match your hardware wiring or
 specify the pins through ``qca7000_config`` when opening the link.
 
@@ -150,8 +150,8 @@ Custom Port Configuration
 The header ``port/generic/port_config.hpp`` provides weak default
 implementations of timing and interrupt helpers used throughout the
 library. Targets can supply their own ``port_config.hpp`` to override
-these functions.  For example the ESP32 port ships with
-``port/esp32s3/port_config.hpp`` which replaces the generic helpers with
+these functions.  For example the microcontroller port ships with
+``port/microcontroller/port_config.hpp`` which replaces the generic helpers with
 FreeRTOS based versions.  Place your custom header in a ``port/<target>``
 directory and ensure it is included before the generic one or define the
 macros manually when building.
@@ -159,12 +159,12 @@ macros manually when building.
 Tools and Examples
 ------------------
 
-The ``tools`` directory contains small utilities demonstrating how to use ``libslac``. ``tools/evse`` contains a simple state machine for the EVSE side of the SLAC handshake. ``tools/bridge.cpp`` can forward packets between two virtual interfaces on Linux and is disabled on microcontroller builds. See ``docs/BoardExample.md`` for a complete PlatformIO configuration using custom pins.
+The ``tools`` directory contains small utilities demonstrating how to use ``libslac``. ``tools/evse`` contains a simple state machine for the EVSE side of the SLAC handshake. ``tools/bridge.cpp`` can forward packets between two virtual interfaces on Linux and is disabled on microcontroller builds. See ``docs/PlatformIOExample.md`` for a complete PlatformIO configuration using custom pins.
 
 Porting to Other Boards
 -----------------------
 
-``libslac`` only ships an ESP32-S3 port. When targeting another MCU you need to
+``libslac`` only ships an microcontroller port. When targeting another MCU you need to
 provide two pieces:
 
 1. A :class:`transport::Link` implementation for sending and receiving ethernet

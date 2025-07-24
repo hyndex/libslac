@@ -11,7 +11,7 @@
 
 #include <arpa/inet.h>
 #if defined(ESP_PLATFORM) && !defined(__GLIBC__)
-#include "port/esp32s3/endian_compat.hpp"
+#include "port/microcontroller/endian_compat.hpp"
 #else
 #include <endian.h>
 #endif

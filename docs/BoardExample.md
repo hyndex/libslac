@@ -1,18 +1,16 @@
-# ESP32-S3 DevKit Board Example
+# Microcontroller DevKit Board Example
 
-This example demonstrates how to wire the QCA7000 modem to an
-ESP32-S3 board using PlatformIO. The board uses custom SPI pins and
-operates the modem without connecting the optional interrupt line.
+This example demonstrates how to wire the QCA7000 modem to a microcontroller board using PlatformIO. The board uses custom SPI pins and operates the modem without connecting the optional interrupt line.
 
 ## PlatformIO configuration
 
 ```ini
-[env:esp32-s3-devkitc-1]
+[env:microcontroller]
 platform = espressif32
-board = esp32-s3-devkitc-1
+board = <your_board>
 framework = arduino
 monitor_speed = 115200
-monitor_filters = esp32_exception_decoder
+# monitor_filters = esp32_exception_decoder
 board_build.partitions = default_8MB.csv
 board_upload.flash_size = 8MB
 board_build.arduino.memory_type = dio_qspi

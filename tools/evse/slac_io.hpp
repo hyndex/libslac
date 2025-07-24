@@ -15,7 +15,7 @@
 
 #include <slac/channel.hpp>
 #ifdef ESP_PLATFORM
-#include <port/esp32s3/qca7000_link.hpp>
+#include <port/microcontroller/qca7000_link.hpp>
 #else
 #include <slac/packet_socket_link.hpp>
 #endif

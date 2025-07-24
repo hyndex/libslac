@@ -2,7 +2,7 @@
 
 #define LIBSLAC_TESTING
 #define ARDUINO
-#include "../port/esp32s3/qca7000_uart.cpp"
+#include "../port/microcontroller/qca7000_uart.cpp"
 #include "stubs/HardwareSerial.h"
 #include <endian.h>
 

@@ -58,12 +58,12 @@ option(SLAC_USE_UART "Use UART interface for QCA7000" OFF)
 if (ESP_PLATFORM)
     if (SLAC_USE_UART)
         list(APPEND SLAC_SOURCES
-            port/esp32s3/qca7000_uart.cpp
+            port/microcontroller/qca7000_uart.cpp
         )
     else()
         list(APPEND SLAC_SOURCES
-            port/esp32s3/qca7000_link.cpp
-            port/esp32s3/qca7000.cpp
+            port/microcontroller/qca7000_link.cpp
+            port/microcontroller/qca7000.cpp
         )
     endif()
 else()
@@ -79,7 +79,7 @@ if (SLAC_USE_UART)
 endif()
 
 if (ESP_PLATFORM)
-    target_include_directories(slac PRIVATE port/esp32s3)
+    target_include_directories(slac PRIVATE port/microcontroller)
 endif()
 target_compile_options(slac PRIVATE -Os -fdata-sections -ffunction-sections -fno-exceptions -fno-rtti)
 
