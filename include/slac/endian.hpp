@@ -25,8 +25,10 @@
 #endif
 
 #if defined(_WIN32)
+#ifndef __BYTE_ORDER
 #define __BYTE_ORDER __LITTLE_ENDIAN
-#elif defined(__BYTE_ORDER__)
+#endif
+#elif defined(__BYTE_ORDER__) && !defined(__BYTE_ORDER)
 #define __BYTE_ORDER __BYTE_ORDER__
 #elif defined(__BYTE_ORDER)
 /* already defined */
