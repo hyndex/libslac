@@ -41,4 +41,5 @@ TEST(Payload, TooLong) {
     const size_t big_len = sizeof(messages::homeplug_message::payload) + 1;
     std::vector<uint8_t> big(big_len, 0);
     EXPECT_FALSE(msg.setup_payload(big.data(), big.size(), 0x1000, defs::MMV::AV_1_0));
+    EXPECT_FALSE(msg.is_valid());
 }

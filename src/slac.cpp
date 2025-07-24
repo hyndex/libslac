@@ -81,8 +81,9 @@ static constexpr auto effective_payload_length(const defs::MMV mmv) {
 bool HomeplugMessage::setup_payload(void const* payload, int len, uint16_t mmtype, const defs::MMV mmv) {
     const auto max_len = effective_payload_length(mmv);
     if (len > max_len) {
-        // keep previous state and signal the failure
+        // mark the message invalid and signal the failure
         assert(("Homeplug Payload length too long", len <= max_len));
+        raw_msg_len = -1;
         return false;
     }
     raw_msg.homeplug_header.mmv = static_cast<std::underlying_type_t<defs::MMV>>(mmv);
@@ -147,7 +148,7 @@ void HomeplugMessage::set_raw_msg_len(int len) {
 }
 
 bool HomeplugMessage::is_valid() const {
-    return raw_msg_len >= defs::MME_MIN_LENGTH;
+    return raw_msg_len >= static_cast<int>(defs::MME_MIN_LENGTH);
 }
 
 } // namespace messages

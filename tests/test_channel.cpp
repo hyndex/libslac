@@ -57,3 +57,31 @@ TEST(Channel, RoundTrip) {
     EXPECT_EQ(in.get_raw_msg_len(), msg.get_raw_msg_len());
     EXPECT_EQ(0, memcmp(in.get_raw_message_ptr(), msg.get_raw_message_ptr(), msg.get_raw_msg_len()));
 }
+
+TEST(Channel, WriteAfterSetupFailure) {
+    MockLink link;
+    slac::Channel channel(&link);
+    ASSERT_TRUE(channel.open());
+
+    slac::messages::HomeplugMessage msg;
+    slac::messages::cm_slac_parm_req req{};
+    req.application_type = 0;
+    req.security_type = 0;
+    memset(req.run_id, 0, sizeof(req.run_id));
+
+    ASSERT_TRUE(msg.setup_payload(&req, sizeof(req),
+                                  slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_REQ,
+                                  slac::defs::MMV::AV_1_0));
+    uint8_t dst[ETH_ALEN] = {0xff,0xff,0xff,0xff,0xff,0xff};
+    msg.setup_ethernet_header(dst);
+
+    ASSERT_TRUE(channel.write(msg, 100));
+
+    const size_t big_len = sizeof(slac::messages::homeplug_message::payload) + 1;
+    std::vector<uint8_t> big(big_len, 0);
+    EXPECT_FALSE(msg.setup_payload(big.data(), big.size(),
+                                   slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_REQ,
+                                   slac::defs::MMV::AV_1_0));
+    EXPECT_FALSE(msg.is_valid());
+    EXPECT_FALSE(channel.write(msg, 100));
+}
