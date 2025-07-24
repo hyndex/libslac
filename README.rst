@@ -1,9 +1,16 @@
 libslac
 =======
 
-Simple ISO15118-3 SLAC library.
+Simple ISO15118-3 SLAC library for microcontrollers.
 
-This repository contains a minimal implementation of the ISO15118-3 Signal Level Attenuation Characterization (SLAC) protocol.  It targets ESP32 microcontrollers using the Arduino framework.  The library has a small dependency footprint and focuses on providing the core data structures and helper functions required to implement the SLAC handshake.
+``libslac`` implements the Signal Level Attenuation Characterization (SLAC)
+protocol with a focus on the ESP32 family running the Arduino framework.  The
+library aims to be small and self-contained, providing just the data structures
+and helpers required to perform the SLAC handshake.
+
+Earlier revisions shipped Linux utilities and a PF\_PACKET based transport
+layer.  These components have been removed in favour of a lean
+microcontroller-only design.
 
 .. contents:: Table of Contents
    :depth: 2
@@ -35,9 +42,9 @@ The repository provides a sample `platformio.ini` with build environments for th
 Building with PlatformIO
 -----------------------
 
-For embedded targets the library can be built using `PlatformIO <https://platformio.org/>`_.
-Add ``libslac`` to ``lib_deps`` in your ``platformio.ini`` to fetch the
-library automatically:
+PlatformIO is the recommended way to build firmware for ESP32 boards.
+Add ``libslac`` to ``lib_deps`` in your ``platformio.ini`` and PlatformIO will
+fetch the library automatically:
 
 .. code-block:: ini
 
@@ -51,6 +58,21 @@ to verify a working setup.  The configuration is provided under the
 .. code-block:: bash
 
    pio run -e esp32s3
+
+Platform Limitations
+--------------------
+
+``libslac`` currently provides only an ESP32‑S3 port targeting the QCA7000
+power line modem.  Other boards must supply their own
+``transport::Link`` implementation and platform timing helpers.  No host
+implementation or Linux packet socket support is included.
+
+Migration from Linux Tools
+-------------------------
+
+Previous releases offered Linux utilities and a packet‑socket transport
+layer.  These have been removed.  Users needing the old functionality
+should use an older commit or tag.
 
 Library Concepts
 ----------------
