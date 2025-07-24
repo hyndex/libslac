@@ -51,6 +51,8 @@ struct SlacContext {
     uint32_t timer{0};
     uint8_t sound_sent{0};
     uint8_t result{0};
+    slac::messages::cm_slac_match_req match_req{};
+    uint8_t match_src_mac[ETH_ALEN]{};
 };
 
 static FSMBuffer g_fsm_buf{};
@@ -488,6 +490,38 @@ static bool send_set_key_cnf(const SlacContext& ctx,
     return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
 }
 
+static bool send_match_cnf(const SlacContext& ctx) {
+    struct __attribute__((packed)) {
+        ether_header eth;
+        struct {
+            uint8_t mmv;
+            uint16_t mmtype;
+        } hp;
+        slac::messages::cm_slac_match_cnf cnf;
+    } msg{};
+
+    memset(&msg, 0, sizeof(msg));
+    memcpy(msg.eth.ether_dhost, ctx.match_src_mac, ETH_ALEN);
+    memcpy(msg.eth.ether_shost, g_src_mac, ETH_ALEN);
+    msg.eth.ether_type = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
+    msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
+    msg.hp.mmtype = slac::htole16(slac::defs::MMTYPE_CM_SLAC_MATCH |
+                            slac::defs::MMTYPE_MODE_CNF);
+    msg.cnf.application_type = ctx.match_req.application_type;
+    msg.cnf.security_type = ctx.match_req.security_type;
+    msg.cnf.mvf_length = slac::htole16(slac::defs::CM_SLAC_MATCH_CNF_MVF_LENGTH);
+    memcpy(msg.cnf.pev_id, ctx.match_req.pev_id, sizeof(msg.cnf.pev_id));
+    memcpy(msg.cnf.pev_mac, ctx.match_req.pev_mac, sizeof(msg.cnf.pev_mac));
+    memcpy(msg.cnf.evse_id, ctx.match_req.evse_id, sizeof(msg.cnf.evse_id));
+    memcpy(msg.cnf.evse_mac, ctx.match_req.evse_mac, sizeof(msg.cnf.evse_mac));
+    memcpy(msg.cnf.run_id, ctx.match_req.run_id, sizeof(msg.cnf.run_id));
+    memset(msg.cnf.nid, 0, sizeof(msg.cnf.nid));
+    msg.cnf._reserved2 = 0;
+    memset(msg.cnf.nmk, 0, sizeof(msg.cnf.nmk));
+
+    return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+}
+
 // FSM state implementations
 struct SoundingState;
 struct WaitSetKeyState;
@@ -568,6 +602,7 @@ struct WaitMatchState : public FSM::SimpleStateType {
     void enter() override { ctx.result = 4; ctx.timer = slac_millis(); }
     fsm::states::HandleEventResult handle_event(FSM::StateAllocatorType& alloc, slac::SlacEvent ev) override {
         if (ev == slac::SlacEvent::GotMatchReq) {
+            send_match_cnf(ctx);
             ctx.result = 5;
             return alloc.create_simple<IdleState>(ctx);
         }
@@ -584,6 +619,8 @@ bool qca7000startSlac() {
     g_slac_ctx.result = 1;
     g_slac_ctx.timer = slac_millis();
     g_slac_ctx.sound_sent = 0;
+    memset(&g_slac_ctx.match_req, 0, sizeof(g_slac_ctx.match_req));
+    memset(g_slac_ctx.match_src_mac, 0, sizeof(g_slac_ctx.match_src_mac));
 
     for (size_t i = 0; i < sizeof(g_slac_ctx.run_id); ++i)
         g_slac_ctx.run_id[i] = static_cast<uint8_t>(esp_random() & 0xFF);
@@ -654,10 +691,13 @@ uint8_t qca7000getSlacResult() {
             g_fsm.handle_event(slac::SlacEvent::GotSetKeyReq);
         } else if (mmtype == (slac::defs::MMTYPE_CM_SLAC_MATCH | slac::defs::MMTYPE_MODE_REQ)) {
             const auto* req = reinterpret_cast<const slac::messages::cm_slac_match_req*>(p + 3);
-            if (!memcmp(req->run_id, g_slac_ctx.run_id, sizeof(g_slac_ctx.run_id)))
+            if (!memcmp(req->run_id, g_slac_ctx.run_id, sizeof(g_slac_ctx.run_id))) {
+                memcpy(&g_slac_ctx.match_req, req, sizeof(g_slac_ctx.match_req));
+                memcpy(g_slac_ctx.match_src_mac, eth->ether_shost, ETH_ALEN);
                 g_fsm.handle_event(slac::SlacEvent::GotMatchReq);
-            else
+            } else {
                 g_fsm.handle_event(slac::SlacEvent::Error);
+            }
         }
     }
 
