@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <utility>
+#include <cstring>
 
 #include "port/esp32s3/ethernet_defs.hpp"
 
@@ -160,13 +161,16 @@ public:
     uint16_t get_mmtype() const;
     uint8_t* get_src_mac();
 
-    template <typename T> const T& get_payload() {
+    template <typename T> T get_payload() const {
+        const uint8_t* src;
         if (raw_msg.homeplug_header.mmv == static_cast<std::underlying_type_t<defs::MMV>>(defs::MMV::AV_1_0)) {
-            return *reinterpret_cast<T*>(raw_msg.payload);
+            src = raw_msg.payload;
+        } else {
+            src = raw_msg.payload + sizeof(homeplug_fragmentation_part);
         }
-
-        // if not av 1.0 message, we need to shift by the fragmentation part
-        return *reinterpret_cast<T*>(raw_msg.payload + sizeof(homeplug_fragmentation_part));
+        T value{};
+        std::memcpy(&value, src, sizeof(T));
+        return value;
     }
 
     bool is_valid() const;

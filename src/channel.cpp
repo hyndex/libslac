@@ -44,6 +44,11 @@ bool Channel::read(slac::messages::HomeplugMessage& msg, int timeout) {
         return false;
     }
 
+    if (out_len == 0) {
+        did_timeout = timeout > 0;
+        return false;
+    }
+
     if (out_len < defs::MME_MIN_LENGTH || out_len > sizeof(messages::homeplug_message)) {
         return false;
     }
@@ -63,6 +68,11 @@ bool Channel::poll(slac::messages::HomeplugMessage& msg) {
                          sizeof(messages::homeplug_message),
                          &out_len, timeout);
     if (!ok) {
+        did_timeout = timeout > 0;
+        return false;
+    }
+
+    if (out_len == 0) {
         did_timeout = timeout > 0;
         return false;
     }
