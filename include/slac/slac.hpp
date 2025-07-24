@@ -12,7 +12,6 @@
 
 namespace slac {
 
-
 namespace defs {
 
 const uint16_t ETH_P_HOMEPLUG_GREENPHY = 0x88E1;
@@ -145,7 +144,16 @@ public:
 
     void set_raw_msg_len(int len);
 
-    void setup_payload(void const* payload, int len, uint16_t mmtype, const defs::MMV mmv);
+    /**
+     * \brief Setup the SLAC payload of this HomePlug message
+     *
+     * Copies \p len bytes from \p payload into the internal buffer and sets
+     * the appropriate HomePlug header fields.  The function returns false if
+     * the payload would exceed the maximum size allowed for the chosen MMV
+     * version.  On success the raw message length is adjusted and the message
+     * becomes valid.
+     */
+    bool setup_payload(void const* payload, int len, uint16_t mmtype, const defs::MMV mmv);
     void setup_ethernet_header(const uint8_t dst_mac_addr[ETH_ALEN], const uint8_t src_mac_addr[ETH_ALEN] = nullptr);
 
     uint16_t get_mmtype() const;
@@ -238,7 +246,7 @@ typedef struct {
     uint8_t sender_id[SENDER_ID_LEN]; // sender id, if application_type = 0x00, it should be the pev's vin code
     uint8_t remaining_sound_count;    // count of remaining sound messages
     uint8_t run_id[defs::RUN_ID_LEN]; // identifier for a matching run
-    uint8_t random[16];   // random value
+    uint8_t random[16];               // random value
 } __attribute__((packed)) cm_mnbc_sound_ind;
 
 // note: this message doesn't seem to part of hpgp, it is defined in ISO15118-3
@@ -269,9 +277,9 @@ typedef struct {
     uint8_t evse_id[EVSE_ID_LEN];     // EVSE id
     uint8_t evse_mac[ETH_ALEN];       // mac address of the EVSE
     uint8_t run_id[defs::RUN_ID_LEN]; // identifier for a matching run
-    uint8_t nid[defs::NID_LEN]; // network id derived from the nmk
-    uint8_t _reserved2;         // note: this is to pad the nid, which is defined to be 8 bytes for this message
-    uint8_t nmk[defs::NMK_LEN]; // private nmk of the EVSE
+    uint8_t nid[defs::NID_LEN];       // network id derived from the nmk
+    uint8_t _reserved2;               // note: this is to pad the nid, which is defined to be 8 bytes for this message
+    uint8_t nmk[defs::NMK_LEN];       // private nmk of the EVSE
 } __attribute__((packed)) cm_slac_match_cnf;
 
 typedef struct {
