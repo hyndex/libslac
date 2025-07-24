@@ -2,7 +2,7 @@
 // Copyright 2022 - 2022 Pionix GmbH and Contributors to EVerest
 #include <slac/slac.hpp>
 #ifdef ESP_PLATFORM
-#include "port/esp32s3/port_config.hpp"
+#include "port/generic/port_config.hpp"
 #endif
 
 #include <algorithm>

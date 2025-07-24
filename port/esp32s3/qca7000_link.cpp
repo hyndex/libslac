@@ -1,4 +1,5 @@
 #include "qca7000_link.hpp"
+#include "../generic/port_config.hpp"
 #include "port_config.hpp"
 #include "qca7000.hpp"
 
