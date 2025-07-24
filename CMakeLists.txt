@@ -16,7 +16,7 @@ if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
 endif()
 option(SLAC_INSTALL "Install the library (shared data might be installed anyway)" ${SLAC_INSTALL_DEFAULT})
 option(${PROJECT_NAME}_BUILD_TESTING "Build unit tests, used if included as dependency" OFF)
-option(BUILD_TESTING "Build unit tests, used if standalone project" OFF)
+set(BUILD_TESTING OFF CACHE BOOL "Build unit tests")
 
 if(ESP_PLATFORM)
   set(BUILD_SLAC_TOOLS OFF CACHE BOOL "Build SLAC tools" FORCE)
