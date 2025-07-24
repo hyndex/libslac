@@ -7,13 +7,13 @@
 #else
 #include <arpa/inet.h>
 #include <stdint.h>
-#ifndef ESP_LOGE
+#if !defined(ESP_LOGE)
 #define ESP_LOGE(tag, fmt, ...)
 #endif
-#ifndef ESP_LOGI
+#if !defined(ESP_LOGI)
 #define ESP_LOGI(tag, fmt, ...)
 #endif
-#ifndef ESP_LOGW
+#if !defined(ESP_LOGW)
 #define ESP_LOGW(tag, fmt, ...)
 #endif
 static inline uint32_t esp_random() {
@@ -149,7 +149,7 @@ static bool hardReset() {
         return false;
     }
     ESP_LOGI(PLC_TAG, "Reset probe OK (SIG=0x%04X)", sig);
-#ifndef ESP_LOGW
+#if !defined(ESP_LOGW)
 #define ESP_LOGW(tag, fmt, ...)
 #endif
 
@@ -365,7 +365,7 @@ void qca7000Process() {
 
 bool qca7000setup(SPIClass* bus, int csPin, int rstPin) {
     ESP_LOGI(PLC_TAG, "QCA7000 setup: bus=%p CS=%d RST=%d", bus, csPin, rstPin);
-#ifndef ESP_LOGW
+#if !defined(ESP_LOGW)
 #define ESP_LOGW(tag, fmt, ...)
 #endif
     g_spi = bus;
@@ -383,7 +383,7 @@ bool qca7000setup(SPIClass* bus, int csPin, int rstPin) {
 
     spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
     ESP_LOGI(PLC_TAG, "QCA7000 ready");
-#ifndef ESP_LOGW
+#if !defined(ESP_LOGW)
 #define ESP_LOGW(tag, fmt, ...)
 #endif
     return true;
