@@ -200,9 +200,15 @@ size_t uartQCA7000checkForReceivedData(uint8_t* d, size_t m) {
         return 0;
     size_t c = l > m ? m : l;
     memcpy(d, s, c);
-    size_t store = l > V2GTP_BUFFER_SIZE ? V2GTP_BUFFER_SIZE : l;
+    size_t store = l;
+    if (l > V2GTP_BUFFER_SIZE) {
+        ESP_LOGW(PLC_TAG,
+                 "RX frame larger than buffer (%zu > %d) - truncating",
+                 l, V2GTP_BUFFER_SIZE);
+        store = V2GTP_BUFFER_SIZE;
+    }
     memcpy(myethreceivebuffer, s, store);
-    myethreceivelen = l;
+    myethreceivelen = store;
     return c;
 }
 
