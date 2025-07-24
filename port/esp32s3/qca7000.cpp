@@ -20,6 +20,7 @@ static inline uint32_t esp_random() {
 #endif
 #include <slac/slac.hpp>
 #include <slac/iso15118_consts.hpp>
+#include <slac/fsm.hpp>
 #include <string.h>
 #include <atomic>
 
@@ -40,6 +41,20 @@ static constexpr uint16_t TX_HDR = 8;
 static constexpr uint16_t RX_HDR = 12;
 static constexpr uint16_t FTR_LEN = 2;
 static constexpr uint16_t INTR_MASK = SPI_INT_CPU_ON | SPI_INT_PKT_AVLBL | SPI_INT_RDBUF_ERR | SPI_INT_WRBUF_ERR;
+
+using FSMBuffer = slac::fsm::buffer::SwapBuffer<64, 0, 1>;
+using FSM = slac::fsm::FSM<slac::SlacEvent, int, FSMBuffer>;
+
+struct SlacContext {
+    uint8_t run_id[slac::defs::RUN_ID_LEN]{};
+    uint32_t timer{0};
+    uint8_t sound_sent{0};
+    uint8_t result{0};
+};
+
+static FSMBuffer g_fsm_buf{};
+static SlacContext g_slac_ctx{};
+static FSM g_fsm(g_fsm_buf);
 
 struct ErrorCallbackCtx {
     qca7000_error_cb_t cb{nullptr};
@@ -284,24 +299,19 @@ size_t spiQCA7000checkForReceivedData(uint8_t* d, size_t m) {
     return c;
 }
 
-// Current SLAC handshake state. 0 = idle, 1 = waiting for CM_SLAC_PARAM.CNF,
-// 2 = sending sounds / waiting for CM_ATTEN_CHAR.IND, 3 = waiting for
-// CM_SET_KEY.REQ, 4 = waiting for CM_SLAC_MATCH.REQ, 5 = complete,
-// 0xFF = mismatch/timeout.
-static uint8_t g_slac = 0;
 static uint8_t g_run_id[slac::defs::RUN_ID_LEN]{};
 static const uint8_t g_src_mac[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
-static uint32_t g_slac_timer = 0;
-static uint8_t g_sound_sent = 0;
 
-static bool send_start_atten_char();
-static bool send_mnbc_sound(uint8_t remaining);
-static bool send_atten_char_rsp(const uint8_t* dst,
+static bool send_start_atten_char(const SlacContext& ctx);
+static bool send_mnbc_sound(const SlacContext& ctx, uint8_t remaining);
+static bool send_atten_char_rsp(const SlacContext& ctx,
+                                const uint8_t* dst,
                                 const slac::messages::cm_atten_char_ind* ind);
-static bool send_set_key_cnf(const uint8_t* dst,
+static bool send_set_key_cnf(const SlacContext& ctx,
+                             const uint8_t* dst,
                              const slac::messages::cm_set_key_req* req);
 
-static bool send_start_atten_char() {
+static bool send_start_atten_char(const SlacContext& ctx) {
     struct __attribute__((packed)) {
         ether_header eth;
         struct {
@@ -324,11 +334,11 @@ static bool send_start_atten_char() {
     msg.ind.timeout = slac::defs::TT_EVSE_MATCH_MNBC_MS / 100;
     msg.ind.resp_type = slac::defs::CM_SLAC_PARM_CNF_RESP_TYPE;
     memcpy(msg.ind.forwarding_sta, g_src_mac, ETH_ALEN);
-    memcpy(msg.ind.run_id, g_run_id, sizeof(g_run_id));
+    memcpy(msg.ind.run_id, ctx.run_id, sizeof(ctx.run_id));
     return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
 }
 
-static bool send_mnbc_sound(uint8_t remaining) {
+static bool send_mnbc_sound(const SlacContext& ctx, uint8_t remaining) {
     struct __attribute__((packed)) {
         ether_header eth;
         struct {
@@ -349,13 +359,14 @@ static bool send_mnbc_sound(uint8_t remaining) {
     msg.ind.security_type = slac::defs::COMMON_SECURITY_TYPE;
     memset(msg.ind.sender_id, 0, sizeof(msg.ind.sender_id));
     msg.ind.remaining_sound_count = remaining;
-    memcpy(msg.ind.run_id, g_run_id, sizeof(g_run_id));
+    memcpy(msg.ind.run_id, ctx.run_id, sizeof(ctx.run_id));
     for (uint8_t& b : msg.ind.random)
         b = static_cast<uint8_t>(esp_random() & 0xFF);
     return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
 }
 
-static bool send_atten_char_rsp(const uint8_t* dst,
+static bool send_atten_char_rsp(const SlacContext& ctx,
+                                const uint8_t* dst,
                                 const slac::messages::cm_atten_char_ind* ind) {
     struct __attribute__((packed)) {
         ether_header eth;
@@ -383,7 +394,8 @@ static bool send_atten_char_rsp(const uint8_t* dst,
     return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
 }
 
-static bool send_set_key_cnf(const uint8_t* dst,
+static bool send_set_key_cnf(const SlacContext& ctx,
+                             const uint8_t* dst,
                              const slac::messages::cm_set_key_req* req) {
     struct __attribute__((packed)) {
         ether_header eth;
@@ -411,14 +423,105 @@ static bool send_set_key_cnf(const uint8_t* dst,
     return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
 }
 
+// FSM state implementations
+struct SoundingState;
+struct WaitSetKeyState;
+struct WaitMatchState;
+struct IdleState : public FSM::SimpleStateType {
+    SlacContext& ctx;
+    IdleState(SlacContext& c) : ctx(c) {}
+    void enter() override { ctx.result = 0; }
+    fsm::states::HandleEventResult handle_event(FSM::StateAllocatorType&, slac::SlacEvent) override {
+        return FSM::StateAllocatorType::PASS_ON;
+    }
+};
+
+struct WaitParmCnfState : public FSM::SimpleStateType {
+    SlacContext& ctx;
+    WaitParmCnfState(SlacContext& c) : ctx(c) {}
+    void enter() override { ctx.result = 1; ctx.sound_sent = 0; ctx.timer = slac_millis(); }
+    fsm::states::HandleEventResult handle_event(FSM::StateAllocatorType& alloc, slac::SlacEvent ev) override {
+        if (ev == slac::SlacEvent::GotParmCnf) {
+            send_start_atten_char(ctx);
+            ctx.timer = slac_millis();
+            ctx.result = 2;
+            return alloc.create_simple<SoundingState>(ctx);
+        }
+        if (ev == slac::SlacEvent::Timeout || ev == slac::SlacEvent::Error) {
+            ctx.result = 0xFF;
+            return alloc.create_simple<IdleState>(ctx);
+        }
+        return FSM::StateAllocatorType::PASS_ON;
+    }
+};
+
+struct SoundingState : public FSM::SimpleStateType {
+    SlacContext& ctx;
+    SoundingState(SlacContext& c) : ctx(c) {}
+    void enter() override { ctx.result = 2; }
+    fsm::states::HandleEventResult handle_event(FSM::StateAllocatorType& alloc, slac::SlacEvent ev) override {
+        if (ev == slac::SlacEvent::SoundIntervalElapsed) {
+            uint8_t remaining = slac::defs::C_EV_MATCH_MNBC - ctx.sound_sent - 1;
+            send_mnbc_sound(ctx, remaining);
+            ++ctx.sound_sent;
+            return FSM::StateAllocatorType::HANDLED_INTERNALLY;
+        }
+        if (ev == slac::SlacEvent::GotAttenCharInd) {
+            ctx.timer = slac_millis();
+            ctx.result = 3;
+            return alloc.create_simple<WaitSetKeyState>(ctx);
+        }
+        if (ev == slac::SlacEvent::Timeout || ev == slac::SlacEvent::Error) {
+            ctx.result = 0xFF;
+            return alloc.create_simple<IdleState>(ctx);
+        }
+        return FSM::StateAllocatorType::PASS_ON;
+    }
+};
+
+struct WaitSetKeyState : public FSM::SimpleStateType {
+    SlacContext& ctx;
+    WaitSetKeyState(SlacContext& c) : ctx(c) {}
+    void enter() override { ctx.result = 3; ctx.timer = slac_millis(); }
+    fsm::states::HandleEventResult handle_event(FSM::StateAllocatorType& alloc, slac::SlacEvent ev) override {
+        if (ev == slac::SlacEvent::GotSetKeyReq) {
+            ctx.timer = slac_millis();
+            ctx.result = 4;
+            return alloc.create_simple<WaitMatchState>(ctx);
+        }
+        if (ev == slac::SlacEvent::Timeout || ev == slac::SlacEvent::Error) {
+            ctx.result = 0xFF;
+            return alloc.create_simple<IdleState>(ctx);
+        }
+        return FSM::StateAllocatorType::PASS_ON;
+    }
+};
+
+struct WaitMatchState : public FSM::SimpleStateType {
+    SlacContext& ctx;
+    WaitMatchState(SlacContext& c) : ctx(c) {}
+    void enter() override { ctx.result = 4; ctx.timer = slac_millis(); }
+    fsm::states::HandleEventResult handle_event(FSM::StateAllocatorType& alloc, slac::SlacEvent ev) override {
+        if (ev == slac::SlacEvent::GotMatchReq) {
+            ctx.result = 5;
+            return alloc.create_simple<IdleState>(ctx);
+        }
+        if (ev == slac::SlacEvent::Timeout || ev == slac::SlacEvent::Error) {
+            ctx.result = 0xFF;
+            return alloc.create_simple<IdleState>(ctx);
+        }
+        return FSM::StateAllocatorType::PASS_ON;
+    }
+};
+
 // Issue a CM_SLAC_PARM.REQ to start the SLAC matching handshake.
 bool qca7000startSlac() {
-    g_slac = 1; // waiting for CM_SLAC_PARAM.CNF
-    g_slac_timer = slac_millis();
-    g_sound_sent = 0;
+    g_slac_ctx.result = 1;
+    g_slac_ctx.timer = slac_millis();
+    g_slac_ctx.sound_sent = 0;
 
-    for (size_t i = 0; i < sizeof(g_run_id); ++i)
-        g_run_id[i] = static_cast<uint8_t>(esp_random() & 0xFF);
+    for (size_t i = 0; i < sizeof(g_slac_ctx.run_id); ++i)
+        g_slac_ctx.run_id[i] = static_cast<uint8_t>(esp_random() & 0xFF);
 
     struct __attribute__((packed)) {
         ether_header eth;
@@ -437,15 +540,17 @@ bool qca7000startSlac() {
     msg.hp.mmtype = slac::htole16(slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_REQ);
     msg.req.application_type = slac::defs::COMMON_APPLICATION_TYPE;
     msg.req.security_type = slac::defs::COMMON_SECURITY_TYPE;
-    memcpy(msg.req.run_id, g_run_id, sizeof(g_run_id));
+    memcpy(msg.req.run_id, g_slac_ctx.run_id, sizeof(g_slac_ctx.run_id));
 
     bool ok = txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
-    if (!ok)
-        g_slac = 0;
+    if (ok)
+        g_fsm.reset<WaitParmCnfState>(g_slac_ctx);
+    else
+        g_fsm.reset<IdleState>(g_slac_ctx);
     return ok;
 }
 
-// Poll for SLAC confirmation frames and update g_slac accordingly.
+// Poll for SLAC confirmation frames and update state accordingly.
 uint8_t qca7000getSlacResult() {
     fetchRx();
     const uint32_t now = slac_millis();
@@ -463,59 +568,52 @@ uint8_t qca7000getSlacResult() {
         if (mmv != static_cast<uint8_t>(slac::defs::MMV::AV_1_0))
             continue;
 
-        if (mmtype == (slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_CNF) && g_slac == 1) {
+        if (mmtype == (slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_CNF)) {
             const auto* cnf = reinterpret_cast<const slac::messages::cm_slac_parm_cnf*>(p + 3);
-            if (!memcmp(cnf->run_id, g_run_id, sizeof(g_run_id))) {
-                g_slac = 2; // start sounding
-                g_slac_timer = now;
-                send_start_atten_char();
+            if (!memcmp(cnf->run_id, g_slac_ctx.run_id, sizeof(g_slac_ctx.run_id))) {
+                g_fsm.handle_event(slac::SlacEvent::GotParmCnf);
             } else {
-                g_slac = 0xFF;
+                g_fsm.handle_event(slac::SlacEvent::Error);
             }
-        } else if (mmtype == (slac::defs::MMTYPE_CM_ATTEN_CHAR | slac::defs::MMTYPE_MODE_IND) &&
-                   (g_slac == 2 || g_slac == 3)) {
+        } else if (mmtype == (slac::defs::MMTYPE_CM_ATTEN_CHAR | slac::defs::MMTYPE_MODE_IND)) {
             const auto* ind = reinterpret_cast<const slac::messages::cm_atten_char_ind*>(p + 3);
-            if (!memcmp(ind->run_id, g_run_id, sizeof(g_run_id))) {
-                send_atten_char_rsp(eth->ether_shost, ind);
-                g_slac = 3; // waiting for set key
-                g_slac_timer = now;
+            if (!memcmp(ind->run_id, g_slac_ctx.run_id, sizeof(g_slac_ctx.run_id))) {
+                send_atten_char_rsp(g_slac_ctx, eth->ether_shost, ind);
+                g_fsm.handle_event(slac::SlacEvent::GotAttenCharInd);
             } else {
-                g_slac = 0xFF;
+                g_fsm.handle_event(slac::SlacEvent::Error);
             }
-        } else if (mmtype == (slac::defs::MMTYPE_CM_SET_KEY | slac::defs::MMTYPE_MODE_REQ) && g_slac == 3) {
+        } else if (mmtype == (slac::defs::MMTYPE_CM_SET_KEY | slac::defs::MMTYPE_MODE_REQ)) {
             const auto* req = reinterpret_cast<const slac::messages::cm_set_key_req*>(p + 3);
-            send_set_key_cnf(eth->ether_shost, req);
-            g_slac = 4; // wait for match
-            g_slac_timer = now;
-        } else if (mmtype == (slac::defs::MMTYPE_CM_SLAC_MATCH | slac::defs::MMTYPE_MODE_REQ) && g_slac >= 3) {
+            send_set_key_cnf(g_slac_ctx, eth->ether_shost, req);
+            g_fsm.handle_event(slac::SlacEvent::GotSetKeyReq);
+        } else if (mmtype == (slac::defs::MMTYPE_CM_SLAC_MATCH | slac::defs::MMTYPE_MODE_REQ)) {
             const auto* req = reinterpret_cast<const slac::messages::cm_slac_match_req*>(p + 3);
-            if (!memcmp(req->run_id, g_run_id, sizeof(g_run_id)))
-                g_slac = 5; // success
+            if (!memcmp(req->run_id, g_slac_ctx.run_id, sizeof(g_slac_ctx.run_id)))
+                g_fsm.handle_event(slac::SlacEvent::GotMatchReq);
             else
-                g_slac = 0xFF;
+                g_fsm.handle_event(slac::SlacEvent::Error);
         }
     }
 
-    if (g_slac == 2) {
-        if (g_sound_sent < slac::defs::C_EV_MATCH_MNBC &&
-            now - g_slac_timer >= slac::defs::TP_EV_BATCH_MSG_INTERVAL_MS) {
-            uint8_t remaining = slac::defs::C_EV_MATCH_MNBC - g_sound_sent - 1;
-            send_mnbc_sound(remaining);
-            ++g_sound_sent;
-            g_slac_timer = now;
-            if (g_sound_sent == slac::defs::C_EV_MATCH_MNBC)
-                g_slac_timer = now; // start wait for ATTEN_CHAR
+    if (g_slac_ctx.result == 2) {
+        if (g_slac_ctx.sound_sent < slac::defs::C_EV_MATCH_MNBC &&
+            now - g_slac_ctx.timer >= slac::defs::TP_EV_BATCH_MSG_INTERVAL_MS) {
+            g_fsm.handle_event(slac::SlacEvent::SoundIntervalElapsed);
+            g_slac_ctx.timer = now;
+            if (g_slac_ctx.sound_sent == slac::defs::C_EV_MATCH_MNBC)
+                g_slac_ctx.timer = now; // start wait for ATTEN_CHAR
         }
-        if (g_sound_sent == slac::defs::C_EV_MATCH_MNBC &&
-            now - g_slac_timer > slac::defs::TT_EV_ATTEN_RESULTS_MS)
-            g_slac = 0xFF;
-    } else if (g_slac == 3 && now - g_slac_timer > slac::defs::TT_MATCH_SEQUENCE_MS) {
-        g_slac = 0xFF;
-    } else if (g_slac == 4 && now - g_slac_timer > slac::defs::TT_MATCH_JOIN_MS) {
-        g_slac = 0xFF;
+        if (g_slac_ctx.sound_sent == slac::defs::C_EV_MATCH_MNBC &&
+            now - g_slac_ctx.timer > slac::defs::TT_EV_ATTEN_RESULTS_MS)
+            g_fsm.handle_event(slac::SlacEvent::Timeout);
+    } else if (g_slac_ctx.result == 3 && now - g_slac_ctx.timer > slac::defs::TT_MATCH_SEQUENCE_MS) {
+        g_fsm.handle_event(slac::SlacEvent::Timeout);
+    } else if (g_slac_ctx.result == 4 && now - g_slac_ctx.timer > slac::defs::TT_MATCH_JOIN_MS) {
+        g_fsm.handle_event(slac::SlacEvent::Timeout);
     }
 
-    return g_slac;
+    return g_slac_ctx.result;
 }
 
 void qca7000Process() {
