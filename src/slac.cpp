@@ -12,6 +12,18 @@
 #include <arpa/inet.h>
 #if defined(ESP_PLATFORM) && !defined(__GLIBC__)
 #include "port/esp32s3/endian_compat.hpp"
+#elif defined(__has_include)
+#  if __has_include(<endian.h>)
+#    include <endian.h>
+#  elif defined(__APPLE__)
+#    if __has_include(<machine/endian.h>)
+#      include <machine/endian.h>
+#    else
+#      include <libkern/OSByteOrder.h>
+#    endif
+#  elif __has_include(<machine/endian.h>)
+#    include <machine/endian.h>
+#  endif
 #else
 #include <endian.h>
 #endif
@@ -82,13 +94,12 @@ static constexpr auto effective_payload_length(const defs::MMV mmv) {
     }
 }
 
-void HomeplugMessage::setup_payload(void const* payload, int len, uint16_t mmtype, const defs::MMV mmv) {
+bool HomeplugMessage::setup_payload(void const* payload, int len, uint16_t mmtype, const defs::MMV mmv) {
     const auto max_len = effective_payload_length(mmv);
     if (len > max_len) {
-        // mark message invalid and abort payload setup in release builds
-        raw_msg_len = -1;
+        // keep previous state and signal the failure
         assert(("Homeplug Payload length too long", len <= max_len));
-        return;
+        return false;
     }
     raw_msg.homeplug_header.mmv = static_cast<std::underlying_type_t<defs::MMV>>(mmv);
     raw_msg.homeplug_header.mmtype = htole16(mmtype);
@@ -118,6 +129,8 @@ void HomeplugMessage::setup_payload(void const* payload, int len, uint16_t mmtyp
         memset(dst_end, 0x00, padding_len);
         raw_msg_len = defs::MME_MIN_LENGTH;
     }
+
+    return true;
 }
 
 void HomeplugMessage::setup_ethernet_header(const uint8_t dst_mac_addr[ETH_ALEN],

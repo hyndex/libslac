@@ -5,13 +5,13 @@
 
 #include "port/port_common.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <utility>
 
 #include "port/esp32s3/ethernet_defs.hpp"
 
 namespace slac {
-
 
 namespace defs {
 
@@ -23,21 +23,21 @@ enum class MMV : uint8_t {
     AV_2_0 = 0x2,
 };
 
-const int MME_MIN_LENGTH = 60;
+constexpr std::size_t MME_MIN_LENGTH = 60;
 
-const int STATION_ID_LEN = 17;
-const int NID_LEN = 7;
-const int NID_MOST_SIGNIFANT_BYTE_SHIFT = 4;
+constexpr std::size_t STATION_ID_LEN = 17;
+constexpr std::size_t NID_LEN = 7;
+constexpr std::size_t NID_MOST_SIGNIFANT_BYTE_SHIFT = 4;
 const uint8_t NID_SECURITY_LEVEL_SIMPLE_CONNECT = 0b00;
-const int NID_SECURITY_LEVEL_OFFSET = 4;
+constexpr std::size_t NID_SECURITY_LEVEL_OFFSET = 4;
 
 const uint8_t DAKS_HASH[] = {0x08, 0x85, 0x6d, 0xaf, 0x7c, 0xf5, 0x81, 0x85};
 const uint8_t NMK_HASH[] = {0x08, 0x85, 0x6d, 0xaf, 0x7c, 0xf5, 0x81, 0x86};
 
-const int NMK_LEN = 16;
+constexpr std::size_t NMK_LEN = 16;
 
-const int AAG_LIST_LEN = 58;
-const int RUN_ID_LEN = 16;
+constexpr std::size_t AAG_LIST_LEN = 58;
+constexpr std::size_t RUN_ID_LEN = 16;
 
 const uint16_t MMTYPE_CM_SET_KEY = 0x6008;
 const uint16_t MMTYPE_CM_SLAC_PARAM = 0x6064;
@@ -145,7 +145,16 @@ public:
 
     void set_raw_msg_len(int len);
 
-    void setup_payload(void const* payload, int len, uint16_t mmtype, const defs::MMV mmv);
+    /**
+     * \brief Setup the SLAC payload of this HomePlug message
+     *
+     * Copies \p len bytes from \p payload into the internal buffer and sets
+     * the appropriate HomePlug header fields.  The function returns false if
+     * the payload would exceed the maximum size allowed for the chosen MMV
+     * version.  On success the raw message length is adjusted and the message
+     * becomes valid.
+     */
+    bool setup_payload(void const* payload, int len, uint16_t mmtype, const defs::MMV mmv);
     void setup_ethernet_header(const uint8_t dst_mac_addr[ETH_ALEN], const uint8_t src_mac_addr[ETH_ALEN] = nullptr);
 
     uint16_t get_mmtype() const;
@@ -172,12 +181,12 @@ private:
     bool keep_src_mac{false};
 };
 
-const int M_SOUND_TARGET_LEN = 6;
-const int SENDER_ID_LEN = defs::STATION_ID_LEN;
-const int SOURCE_ID_LEN = defs::STATION_ID_LEN;
-const int RESP_ID_LEN = defs::STATION_ID_LEN;
-const int PEV_ID_LEN = defs::STATION_ID_LEN;
-const int EVSE_ID_LEN = defs::STATION_ID_LEN;
+constexpr std::size_t M_SOUND_TARGET_LEN = 6;
+constexpr std::size_t SENDER_ID_LEN = defs::STATION_ID_LEN;
+constexpr std::size_t SOURCE_ID_LEN = defs::STATION_ID_LEN;
+constexpr std::size_t RESP_ID_LEN = defs::STATION_ID_LEN;
+constexpr std::size_t PEV_ID_LEN = defs::STATION_ID_LEN;
+constexpr std::size_t EVSE_ID_LEN = defs::STATION_ID_LEN;
 
 typedef struct {
     uint8_t application_type;         // fixed to 0x00, indicating 'pev-evse matching'
@@ -238,7 +247,7 @@ typedef struct {
     uint8_t sender_id[SENDER_ID_LEN]; // sender id, if application_type = 0x00, it should be the pev's vin code
     uint8_t remaining_sound_count;    // count of remaining sound messages
     uint8_t run_id[defs::RUN_ID_LEN]; // identifier for a matching run
-    uint8_t random[16];   // random value
+    uint8_t random[16];               // random value
 } __attribute__((packed)) cm_mnbc_sound_ind;
 
 // note: this message doesn't seem to part of hpgp, it is defined in ISO15118-3
@@ -269,9 +278,9 @@ typedef struct {
     uint8_t evse_id[EVSE_ID_LEN];     // EVSE id
     uint8_t evse_mac[ETH_ALEN];       // mac address of the EVSE
     uint8_t run_id[defs::RUN_ID_LEN]; // identifier for a matching run
-    uint8_t nid[defs::NID_LEN]; // network id derived from the nmk
-    uint8_t _reserved2;         // note: this is to pad the nid, which is defined to be 8 bytes for this message
-    uint8_t nmk[defs::NMK_LEN]; // private nmk of the EVSE
+    uint8_t nid[defs::NID_LEN];       // network id derived from the nmk
+    uint8_t _reserved2;               // note: this is to pad the nid, which is defined to be 8 bytes for this message
+    uint8_t nmk[defs::NMK_LEN];       // private nmk of the EVSE
 } __attribute__((packed)) cm_slac_match_cnf;
 
 typedef struct {

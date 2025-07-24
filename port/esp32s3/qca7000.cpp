@@ -5,11 +5,18 @@
 #include <esp_log.h>
 #include <esp_system.h>
 #else
-#include <stdint.h>
 #include <arpa/inet.h>
+#include <stdint.h>
+#ifndef ESP_LOGE
+#include <mutex>
 #define ESP_LOGE(tag, fmt, ...)
+#endif
+#ifndef ESP_LOGI
 #define ESP_LOGI(tag, fmt, ...)
+#endif
+#ifndef ESP_LOGW
 #define ESP_LOGW(tag, fmt, ...)
+#endif
 static inline uint32_t esp_random() {
     return 0x12345678u;
 }
@@ -54,40 +61,70 @@ struct RxEntry {
 };
 static RxEntry ring[4];
 static volatile uint8_t head = 0, tail = 0;
+#ifdef ESP_PLATFORM
+static portMUX_TYPE ring_mux = portMUX_INITIALIZER_UNLOCKED;
+#else
+static std::mutex ring_mutex;
+#endif
 inline bool ringEmpty() {
     return head == tail;
 }
 inline void ringPush(const uint8_t* d, size_t l) {
-    slac_noInterrupts();
+#ifdef ESP_PLATFORM
+    portENTER_CRITICAL(&ring_mux);
+#else
+    ring_mutex.lock();
+#endif
     if (l > V2GTP_BUFFER_SIZE)
         l = V2GTP_BUFFER_SIZE;
     uint8_t next = (head + 1) & 3;
     if (next == tail) {
-        slac_interrupts();
+#ifdef ESP_PLATFORM
+        portEXIT_CRITICAL(&ring_mux);
+#else
+        ring_mutex.unlock();
+#endif
         ESP_LOGW(PLC_TAG, "RX ring full - dropping frame");
         return;
     }
     memcpy(ring[head].data, d, l);
     ring[head].len = l;
     head = next;
-    slac_interrupts();
+#ifdef ESP_PLATFORM
+    portEXIT_CRITICAL(&ring_mux);
+#else
+    ring_mutex.unlock();
+#endif
 }
 inline bool ringPop(const uint8_t** d, size_t* l) {
-    slac_noInterrupts();
+#ifdef ESP_PLATFORM
+    portENTER_CRITICAL(&ring_mux);
+#else
+    ring_mutex.lock();
+#endif
     if (ringEmpty()) {
-        slac_interrupts();
+#ifdef ESP_PLATFORM
+        portEXIT_CRITICAL(&ring_mux);
+#else
+        ring_mutex.unlock();
+#endif
         return false;
     }
     *d = ring[tail].data;
     *l = ring[tail].len;
     tail = (tail + 1) & 3;
-    slac_interrupts();
+#ifdef ESP_PLATFORM
+    portEXIT_CRITICAL(&ring_mux);
+#else
+    ring_mutex.unlock();
+#endif
     return true;
 }
 } // namespace
 
 static inline uint16_t cmd16(bool rd, bool intr, uint16_t reg) {
-    return (rd ? 0x8000u : 0) | (intr ? 0x4000u : 0) | (reg & 0x3FFFu);
+    return (rd ? 0x8000u : 0) | (intr ? 0x4000u : 0) |
+           (((reg << 8) & 0x3FFFu));
 }
 
 static uint16_t spiRd16_fast(uint16_t reg) {
@@ -141,7 +178,9 @@ static bool hardReset() {
         return false;
     }
     ESP_LOGI(PLC_TAG, "Reset probe OK (SIG=0x%04X)", sig);
+#ifndef ESP_LOGW
 #define ESP_LOGW(tag, fmt, ...)
+#endif
 
     t0 = slac_millis();
     while (!(slowRd16(SPI_REG_INTR_CAUSE) & SPI_INT_CPU_ON) && slac_millis() - t0 < 80)
@@ -151,11 +190,12 @@ static bool hardReset() {
     return true;
 }
 
-uint16_t qca7000ReadInternalReg(uint8_t r) {
-    return spiRd16_fast(r << 8);
+uint16_t qca7000ReadInternalReg(uint16_t r) {
+    return spiRd16_fast(r);
 }
 bool qca7000ReadSignature(uint16_t* s, uint16_t* v) {
-    uint16_t sig = qca7000ReadInternalReg(0x1A), ver = qca7000ReadInternalReg(0x1B);
+    uint16_t sig = qca7000ReadInternalReg(SPI_REG_SIGNATURE),
+             ver = qca7000ReadInternalReg(0x1B);
     if (s)
         *s = sig;
     if (v)
@@ -326,28 +366,35 @@ uint8_t qca7000getSlacResult() {
 }
 
 void qca7000Process() {
-    spiWr16_fast(SPI_REG_INTR_ENABLE, 0);
-    uint16_t cause = spiRd16_fast(SPI_REG_INTR_CAUSE);
+    uint16_t cause;
+    do {
+        spiWr16_fast(SPI_REG_INTR_ENABLE, 0);
+        cause = spiRd16_fast(SPI_REG_INTR_CAUSE);
+        spiWr16_fast(SPI_REG_INTR_CAUSE, cause);
+        spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
+
+        if (cause & SPI_INT_CPU_ON) {
+            hardReset();
+            qca7000setup(g_spi, g_cs, g_rst);
+            return;
+        }
+        if (cause & (SPI_INT_WRBUF_ERR | SPI_INT_RDBUF_ERR)) {
+            hardReset();
+            return;
+        }
+        if (cause & SPI_INT_PKT_AVLBL)
+            fetchRx();
+
+        cause = spiRd16_fast(SPI_REG_INTR_CAUSE);
+    } while (cause != 0);
     spiWr16_fast(SPI_REG_INTR_CAUSE, cause);
-    spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
-    if (!cause)
-        return;
-    if (cause & SPI_INT_CPU_ON) {
-        hardReset();
-        qca7000setup(g_spi, g_cs, g_rst);
-        return;
-    }
-    if (cause & (SPI_INT_WRBUF_ERR | SPI_INT_RDBUF_ERR)) {
-        hardReset();
-        return;
-    }
-    if (cause & SPI_INT_PKT_AVLBL)
-        fetchRx();
 }
 
 bool qca7000setup(SPIClass* bus, int csPin, int rstPin) {
     ESP_LOGI(PLC_TAG, "QCA7000 setup: bus=%p CS=%d RST=%d", bus, csPin, rstPin);
+#ifndef ESP_LOGW
 #define ESP_LOGW(tag, fmt, ...)
+#endif
     g_spi = bus;
     g_cs = csPin;
     g_rst = rstPin;
@@ -363,7 +410,9 @@ bool qca7000setup(SPIClass* bus, int csPin, int rstPin) {
 
     spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
     ESP_LOGI(PLC_TAG, "QCA7000 ready");
+#ifndef ESP_LOGW
 #define ESP_LOGW(tag, fmt, ...)
+#endif
     return true;
 }
 

@@ -1,31 +1,23 @@
 #include "qca7000_uart.hpp"
+#include "qca7000.hpp"
 #include "port_config.hpp"
 #ifdef ESP_PLATFORM
 #include <esp_log.h>
 #else
+#ifndef ESP_LOGI
 #define ESP_LOGI(tag, fmt, ...)
+#endif
+#ifndef ESP_LOGW
 #define ESP_LOGW(tag, fmt, ...)
+#endif
+#ifndef ESP_LOGE
 #define ESP_LOGE(tag, fmt, ...)
 #endif
+#endif
 #include <string.h>
+#include <mutex>
 
-#ifdef LIBSLAC_TESTING
-static const char* PLC_TAG = "PLC_IF";
-#else
-const char* PLC_TAG = "PLC_IF";
-#endif
 
-#ifdef LIBSLAC_TESTING
-static uint8_t myethtransmitbuffer[V2GTP_BUFFER_SIZE]{};
-static size_t myethtransmitlen = 0;
-static uint8_t myethreceivebuffer[V2GTP_BUFFER_SIZE]{};
-static size_t myethreceivelen = 0;
-#else
-uint8_t myethtransmitbuffer[V2GTP_BUFFER_SIZE]{};
-size_t myethtransmitlen = 0;
-uint8_t myethreceivebuffer[V2GTP_BUFFER_SIZE]{};
-size_t myethreceivelen = 0;
-#endif
 
 
 static constexpr uint16_t SOF_WORD = 0xAAAA;
@@ -47,32 +39,63 @@ struct RxEntry {
 };
 static RxEntry ring[4];
 static volatile uint8_t head = 0, tail = 0;
+#ifdef ESP_PLATFORM
+static portMUX_TYPE ring_mux = portMUX_INITIALIZER_UNLOCKED;
+#else
+static std::mutex ring_mutex;
+#endif
 inline bool ringEmpty() { return head == tail; }
+static uint32_t last_rx_time = 0;
+static uint32_t frame_timeout_ms = 0;
 inline void ringPush(const uint8_t* d, size_t l) {
-    slac_noInterrupts();
+#ifdef ESP_PLATFORM
+    portENTER_CRITICAL(&ring_mux);
+#else
+    ring_mutex.lock();
+#endif
     if (l > V2GTP_BUFFER_SIZE)
         l = V2GTP_BUFFER_SIZE;
     uint8_t next = (head + 1) & 3;
     if (next == tail) {
-        slac_interrupts();
+#ifdef ESP_PLATFORM
+        portEXIT_CRITICAL(&ring_mux);
+#else
+        ring_mutex.unlock();
+#endif
         ESP_LOGW(PLC_TAG, "RX ring full - dropping frame");
         return;
     }
     memcpy(ring[head].data, d, l);
     ring[head].len = l;
     head = next;
-    slac_interrupts();
+#ifdef ESP_PLATFORM
+    portEXIT_CRITICAL(&ring_mux);
+#else
+    ring_mutex.unlock();
+#endif
 }
 inline bool ringPop(const uint8_t** d, size_t* l) {
-    slac_noInterrupts();
+#ifdef ESP_PLATFORM
+    portENTER_CRITICAL(&ring_mux);
+#else
+    ring_mutex.lock();
+#endif
     if (ringEmpty()) {
-        slac_interrupts();
+#ifdef ESP_PLATFORM
+        portEXIT_CRITICAL(&ring_mux);
+#else
+        ring_mutex.unlock();
+#endif
         return false;
     }
     *d = ring[tail].data;
     *l = ring[tail].len;
     tail = (tail + 1) & 3;
-    slac_interrupts();
+#ifdef ESP_PLATFORM
+    portEXIT_CRITICAL(&ring_mux);
+#else
+    ring_mutex.unlock();
+#endif
     return true;
 }
 
@@ -133,11 +156,19 @@ inline void processByte(uint8_t b) {
 }
 
 inline void pollRx() {
+    uint32_t now = slac_millis();
+    if (state != WAIT_SOF && frame_timeout_ms &&
+        now - last_rx_time > frame_timeout_ms) {
+        state = WAIT_SOF;
+        sof_count = 0;
+        rx_pos = 0;
+    }
     while (g_serial && g_serial->available()) {
         int v = g_serial->read();
         if (v < 0)
             break;
         processByte(static_cast<uint8_t>(v));
+        last_rx_time = slac_millis();
     }
 }
 } // namespace
@@ -216,9 +247,18 @@ bool Qca7000UartLink::open() {
 
     g_serial = cfg.serial ? cfg.serial : &Serial;
 #ifdef ARDUINO
-    if (g_serial)
-        g_serial->begin(cfg.baud ? cfg.baud : 115200);
+    if (g_serial) {
+        uint32_t baud = cfg.baud ? cfg.baud : 115200;
+        g_serial->begin(baud);
+        frame_timeout_ms =
+            static_cast<uint32_t>(((V2GTP_BUFFER_SIZE + TX_HDR + FTR_LEN) * 10ULL * 1000ULL + baud - 1) / baud);
+    }
+#else
+    uint32_t baud = cfg.baud ? cfg.baud : 115200;
+    frame_timeout_ms =
+        static_cast<uint32_t>(((V2GTP_BUFFER_SIZE + TX_HDR + FTR_LEN) * 10ULL * 1000ULL + baud - 1) / baud);
 #endif
+    last_rx_time = slac_millis();
     if (cfg.mac_addr)
         memcpy(mac_addr, cfg.mac_addr, ETH_ALEN);
     else {
