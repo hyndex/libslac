@@ -20,7 +20,12 @@ void setup() {
     static slac::port::Qca7000Link link(cfg);
     static slac::Channel channel(&link);
     g_channel = &channel;
-    channel.open();
+    if (!channel.open()) {
+        Serial.println("Failed to open SLAC channel, aborting");
+        g_channel = nullptr;
+        while (true)
+            delay(1000);
+    }
 }
 
 void loop() {
