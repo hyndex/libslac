@@ -7,8 +7,21 @@
 namespace slac {
 namespace port {
 
-Qca7000Link::Qca7000Link(const qca7000_config& c) : cfg(c) {
+Qca7000Link::Qca7000Link(const qca7000_config& c,
+                         ErrorCallback cb,
+                         void* cb_arg)
+    : cfg(c), error_cb(cb), error_arg(cb_arg) {
     memset(mac_addr, 0, sizeof(mac_addr));
+}
+
+Qca7000Link::~Qca7000Link() {
+    qca7000SetErrorCallback(nullptr, nullptr, nullptr);
+}
+
+void Qca7000Link::set_error_callback(ErrorCallback cb, void* arg) {
+    error_cb = cb;
+    error_arg = arg;
+    qca7000SetErrorCallback(error_cb, error_arg, &fatal_error_flag);
 }
 
 bool Qca7000Link::open() {
@@ -25,6 +38,7 @@ bool Qca7000Link::open() {
         initialization_error = true;
         return false;
     }
+    qca7000SetErrorCallback(error_cb, error_arg, &fatal_error_flag);
 
     if (cfg.mac_addr)
         memcpy(mac_addr, cfg.mac_addr, ETH_ALEN);

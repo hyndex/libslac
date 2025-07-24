@@ -43,6 +43,19 @@ static constexpr uint16_t RX_HDR = 12;
 static constexpr uint16_t FTR_LEN = 2;
 static constexpr uint16_t INTR_MASK = SPI_INT_CPU_ON | SPI_INT_PKT_AVLBL | SPI_INT_RDBUF_ERR | SPI_INT_WRBUF_ERR;
 
+struct ErrorCallbackCtx {
+    qca7000_error_cb_t cb{nullptr};
+    void* arg{nullptr};
+    bool* flag{nullptr};
+};
+static ErrorCallbackCtx g_err_cb;
+
+void qca7000SetErrorCallback(qca7000_error_cb_t cb, void* arg, bool* flag) {
+    g_err_cb.cb = cb;
+    g_err_cb.arg = arg;
+    g_err_cb.flag = flag;
+}
+
 #ifdef LIBSLAC_TESTING
 SPIClass* g_spi = nullptr;
 int g_cs = -1;
@@ -520,6 +533,10 @@ void qca7000Process() {
         if (cause & SPI_INT_CPU_ON) {
             clear_mask |= SPI_INT_CPU_ON;
             hardReset();
+            if (g_err_cb.flag)
+                *g_err_cb.flag = true;
+            if (g_err_cb.cb)
+                g_err_cb.cb(g_err_cb.arg);
             qca7000setup(g_spi, g_cs, g_rst);
             spiWr16_fast(SPI_REG_INTR_CAUSE, clear_mask);
             spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
@@ -528,6 +545,10 @@ void qca7000Process() {
         if (cause & (SPI_INT_WRBUF_ERR | SPI_INT_RDBUF_ERR)) {
             clear_mask |= SPI_INT_WRBUF_ERR | SPI_INT_RDBUF_ERR;
             hardReset();
+            if (g_err_cb.flag)
+                *g_err_cb.flag = true;
+            if (g_err_cb.cb)
+                g_err_cb.cb(g_err_cb.arg);
             spiWr16_fast(SPI_REG_INTR_CAUSE, clear_mask);
             spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
             return;

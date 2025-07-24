@@ -115,6 +115,11 @@ When :func:`channel.open()` fails, the link enters an error state and further
 calls will not attempt to reinitialise the modem.  Call
 ``link.init_failed()`` to query this condition and react accordingly.
 
+Unexpected modem resets are reported through an optional callback or
+error flag. Use ``link.set_error_callback(cb, arg)`` to register a
+callback and periodically check ``link.fatal_error()`` when polling the
+driver.
+
 QCA7000 Configuration
 ---------------------
 

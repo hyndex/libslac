@@ -15,7 +15,17 @@ namespace port {
 
 class Qca7000Link : public transport::Link {
 public:
-    explicit Qca7000Link(const qca7000_config& cfg);
+    using ErrorCallback = qca7000_error_cb_t;
+
+    explicit Qca7000Link(const qca7000_config& cfg,
+                         ErrorCallback cb = nullptr,
+                         void* cb_arg = nullptr);
+
+    void set_error_callback(ErrorCallback cb, void* arg);
+    bool fatal_error() const { return fatal_error_flag; }
+    void clear_fatal_error() { fatal_error_flag = false; }
+
+    ~Qca7000Link();
 
     bool open() override;
     bool write(const uint8_t* b, size_t l, uint32_t timeout_ms) override;
@@ -39,6 +49,9 @@ public:
 private:
     bool initialized{false};
     bool initialization_error{false};
+    bool fatal_error_flag{false};
+    ErrorCallback error_cb{nullptr};
+    void* error_arg{nullptr};
     qca7000_config cfg;
     uint8_t mac_addr[ETH_ALEN]{};
 };
