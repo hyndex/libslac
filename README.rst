@@ -107,6 +107,16 @@ When :func:`channel.open()` fails, the link enters an error state and further
 calls will not attempt to reinitialise the modem.  Call
 ``link.init_failed()`` to query this condition and react accordingly.
 
+Custom Port Configuration
+-------------------------
+
+The library ships with ``port/generic/port_config.hpp`` providing weak
+implementations for ``slac_millis``, ``slac_delay`` and the interrupt helpers.
+To adapt these functions to a new platform create ``port/<target>/port_config.hpp``
+and add that directory to your compiler include paths.  The ESP32 port in
+``port/esp32s3`` shows how a platform specific header can override the generic
+defaults.
+
 QCA7000 Configuration
 ---------------------
 

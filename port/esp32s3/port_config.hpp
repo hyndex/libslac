@@ -1,6 +1,8 @@
 #ifndef SLAC_PORT_CONFIG_HPP
 #define SLAC_PORT_CONFIG_HPP
 
+#include "../generic/port_config.hpp"
+
 #include <stdint.h>
 
 #ifdef ESP_PLATFORM
@@ -33,14 +35,6 @@ static inline void slac_noInterrupts() {
 static inline void slac_interrupts() {
     portENABLE_INTERRUPTS();
 }
-#else
-#ifdef ARDUINO
-#include <Arduino.h>
-#endif
-#define slac_millis       millis
-#define slac_delay(ms)    delay(ms)
-#define slac_noInterrupts noInterrupts
-#define slac_interrupts   interrupts
 #endif
 
 #endif // SLAC_PORT_CONFIG_HPP

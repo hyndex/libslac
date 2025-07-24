@@ -8,6 +8,8 @@
 
 #ifdef ESP_PLATFORM
 #include "port/esp32s3/port_config.hpp"
+#else
+#include "../../port/generic/port_config.hpp"
 #endif
 #include "sha256.h"
 
