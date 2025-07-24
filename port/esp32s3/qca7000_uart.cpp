@@ -33,6 +33,8 @@ struct RxEntry {
 static RxEntry ring[4];
 static volatile uint8_t head = 0, tail = 0;
 inline bool ringEmpty() { return head == tail; }
+static uint32_t last_rx_time = 0;
+static uint32_t frame_timeout_ms = 0;
 inline void ringPush(const uint8_t* d, size_t l) {
     slac_noInterrupts();
     if (l > V2GTP_BUFFER_SIZE)
@@ -118,11 +120,19 @@ inline void processByte(uint8_t b) {
 }
 
 inline void pollRx() {
+    uint32_t now = slac_millis();
+    if (state != WAIT_SOF && frame_timeout_ms &&
+        now - last_rx_time > frame_timeout_ms) {
+        state = WAIT_SOF;
+        sof_count = 0;
+        rx_pos = 0;
+    }
     while (g_serial && g_serial->available()) {
         int v = g_serial->read();
         if (v < 0)
             break;
         processByte(static_cast<uint8_t>(v));
+        last_rx_time = slac_millis();
     }
 }
 } // namespace
@@ -201,9 +211,18 @@ bool Qca7000UartLink::open() {
 
     g_serial = cfg.serial ? cfg.serial : &Serial;
 #ifdef ARDUINO
-    if (g_serial)
-        g_serial->begin(cfg.baud ? cfg.baud : 115200);
+    if (g_serial) {
+        uint32_t baud = cfg.baud ? cfg.baud : 115200;
+        g_serial->begin(baud);
+        frame_timeout_ms =
+            static_cast<uint32_t>(((V2GTP_BUFFER_SIZE + TX_HDR + FTR_LEN) * 10ULL * 1000ULL + baud - 1) / baud);
+    }
+#else
+    uint32_t baud = cfg.baud ? cfg.baud : 115200;
+    frame_timeout_ms =
+        static_cast<uint32_t>(((V2GTP_BUFFER_SIZE + TX_HDR + FTR_LEN) * 10ULL * 1000ULL + baud - 1) / baud);
 #endif
+    last_rx_time = slac_millis();
     if (cfg.mac_addr)
         memcpy(mac_addr, cfg.mac_addr, ETH_ALEN);
     else {
