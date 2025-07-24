@@ -80,18 +80,30 @@ bool Channel::poll(slac::messages::HomeplugMessage& msg) {
 }
 
 bool Channel::write(slac::messages::HomeplugMessage& msg, int timeout) {
-    assert(msg.is_valid() && "Homeplug message is not valid");
     did_timeout = false;
 
-    if (!link)
+    if (!link) {
+        error = "No transport link";
         return false;
+    }
+
+    if (!msg.is_valid()) {
+        error = "Invalid HomeplugMessage";
+        return false;
+    }
 
     auto raw_msg_ether_shost = msg.get_src_mac();
     if (!msg.keep_source_mac()) {
         memcpy(raw_msg_ether_shost, orig_if_mac, sizeof(orig_if_mac));
     }
 
-    return link->write(reinterpret_cast<const uint8_t*>(msg.get_raw_message_ptr()), msg.get_raw_msg_len(), timeout);
+    if (!link->write(reinterpret_cast<const uint8_t*>(msg.get_raw_message_ptr()),
+                     msg.get_raw_msg_len(), timeout)) {
+        error = "Write failed";
+        return false;
+    }
+
+    return true;
 }
 
 const uint8_t* Channel::get_mac_addr() {

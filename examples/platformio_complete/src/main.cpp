@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <slac/channel.hpp>
+#include <slac/slac.hpp>
 #include <port/esp32s3/qca7000_link.hpp>
 
 // Default MAC address for the modem. Adjust as required.
@@ -25,6 +26,25 @@ void setup() {
         g_channel = nullptr;
         while (true)
             delay(1000);
+    }
+
+    // send a minimal CM_SLAC_PARM.REQ as an example
+    slac::messages::HomeplugMessage msg;
+    slac::messages::cm_slac_parm_req req{};
+    req.application_type = 0;
+    req.security_type = 0;
+    memset(req.run_id, 0x00, sizeof(req.run_id));
+
+    if (!msg.setup_payload(&req, sizeof(req),
+                           slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_REQ,
+                           slac::defs::MMV::AV_1_0)) {
+        Serial.println("setup_payload failed: payload too large");
+    } else {
+        uint8_t dst_mac[ETH_ALEN] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+        msg.setup_ethernet_header(dst_mac);
+        if (!channel.write(msg, 1000)) {
+            Serial.println("Failed to transmit SLAC parameter request");
+        }
     }
 }
 
