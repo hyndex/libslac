@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstring>
+#include <type_traits>
 
 #include <arpa/inet.h>
 #include <slac/endian.hpp>

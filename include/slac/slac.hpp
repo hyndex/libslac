@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <type_traits>
 #include <utility>
 
 #include "port/esp32s3/ethernet_defs.hpp"
