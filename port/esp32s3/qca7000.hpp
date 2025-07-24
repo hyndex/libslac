@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../generic/port_config.hpp"
 #ifdef ESP_PLATFORM
 #include "port_config.hpp"
 #endif
@@ -68,6 +69,8 @@ uint16_t qca7000ReadInternalReg(uint8_t reg);
 bool qca7000ReadSignature(uint16_t* sig = nullptr, uint16_t* ver = nullptr);
 size_t spiQCA7000checkForReceivedData(uint8_t* dst, size_t maxLen);
 bool spiQCA7000SendEthFrame(const uint8_t* frame, size_t len);
+bool qca7000startSlac();
+uint8_t qca7000getSlacResult();
 void qca7000Process();
 #ifdef ESP_PLATFORM
 #include <freertos/FreeRTOS.h>

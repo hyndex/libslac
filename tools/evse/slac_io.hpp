@@ -44,7 +44,7 @@ public:
     /// incoming messages. This is intended for use when run() was called with
     /// spawn_background set to false.
     void process(int timeout_ms = 10);
-    void send(slac::messages::HomeplugMessage& msg);
+    bool send(slac::messages::HomeplugMessage& msg);
     void quit();
 
 private:

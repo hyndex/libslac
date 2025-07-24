@@ -1,8 +1,21 @@
-#ifdef ESP_PLATFORM
-#include "port_config.hpp"
-#endif
 #include "qca7000.hpp"
+#include "../generic/port_config.hpp"
+#include "port_config.hpp"
+#ifdef ESP_PLATFORM
 #include <esp_log.h>
+#include <esp_system.h>
+#else
+#include <stdint.h>
+#include <arpa/inet.h>
+#define ESP_LOGE(tag, fmt, ...)
+#define ESP_LOGI(tag, fmt, ...)
+#define ESP_LOGW(tag, fmt, ...)
+static inline uint32_t esp_random() {
+    return 0x12345678u;
+}
+#endif
+#include <slac/slac.hpp>
+#include <string.h>
 
 const char* PLC_TAG = "PLC_IF";
 
@@ -22,8 +35,13 @@ static constexpr uint16_t RX_HDR = 12;
 static constexpr uint16_t FTR_LEN = 2;
 static constexpr uint16_t INTR_MASK = SPI_INT_CPU_ON | SPI_INT_PKT_AVLBL | SPI_INT_RDBUF_ERR | SPI_INT_WRBUF_ERR;
 
+#ifdef LIBSLAC_TESTING
+SPIClass* g_spi = nullptr;
+int g_cs = -1;
+#else
 static SPIClass* g_spi = nullptr;
 static int g_cs = -1;
+#endif
 static SPISettings setSlow(SLOW_HZ, MSBFIRST, SPI_MODE3);
 static SPISettings setFast(FAST_HZ, MSBFIRST, SPI_MODE3);
 
@@ -38,26 +56,30 @@ inline bool ringEmpty() {
     return head == tail;
 }
 inline void ringPush(const uint8_t* d, size_t l) {
-    noInterrupts();
+    slac_noInterrupts();
     if (l > V2GTP_BUFFER_SIZE)
         l = V2GTP_BUFFER_SIZE;
+    uint8_t next = (head + 1) & 3;
+    if (next == tail) {
+        slac_interrupts();
+        ESP_LOGW(PLC_TAG, "RX ring full - dropping frame");
+        return;
+    }
     memcpy(ring[head].data, d, l);
     ring[head].len = l;
-    head = (head + 1) & 3;
-    if (head == tail)
-        tail = (tail + 1) & 3;
-    interrupts();
+    head = next;
+    slac_interrupts();
 }
 inline bool ringPop(const uint8_t** d, size_t* l) {
-    noInterrupts();
+    slac_noInterrupts();
     if (ringEmpty()) {
-        interrupts();
+        slac_interrupts();
         return false;
     }
     *d = ring[tail].data;
     *l = ring[tail].len;
     tail = (tail + 1) & 3;
-    interrupts();
+    slac_interrupts();
     return true;
 }
 } // namespace
@@ -88,9 +110,9 @@ static void spiWr16_fast(uint16_t reg, uint16_t val) {
 static bool hardReset() {
     pinMode(PLC_SPI_RST_PIN, OUTPUT);
     digitalWrite(PLC_SPI_RST_PIN, LOW);
-    delay(10);
+    slac_delay(10);
     digitalWrite(PLC_SPI_RST_PIN, HIGH);
-    delay(100);
+    slac_delay(100);
 
     auto slowRd16 = [&](uint16_t reg) -> uint16_t {
         g_spi->beginTransaction(setSlow);
@@ -102,24 +124,25 @@ static bool hardReset() {
         return v;
     };
 
-    uint32_t t0 = millis();
+    uint32_t t0 = slac_millis();
     uint16_t sig = 0, buf = 0;
     do {
         sig = slowRd16(SPI_REG_SIGNATURE);
         buf = slowRd16(SPI_REG_WRBUF_SPC_AVA);
         if (sig == SIG && buf == WRBUF_RST)
             break;
-        delay(5);
-    } while (millis() - t0 < 200);
+        slac_delay(5);
+    } while (slac_millis() - t0 < 200);
 
     if (sig != SIG || buf != WRBUF_RST) {
         ESP_LOGE(PLC_TAG, "Reset probe failed (SIG=0x%04X BUF=0x%04X)", sig, buf);
         return false;
     }
     ESP_LOGI(PLC_TAG, "Reset probe OK (SIG=0x%04X)", sig);
+#define ESP_LOGW(tag, fmt, ...)
 
-    t0 = millis();
-    while (!(slowRd16(SPI_REG_INTR_CAUSE) & SPI_INT_CPU_ON) && millis() - t0 < 80)
+    t0 = slac_millis();
+    while (!(slowRd16(SPI_REG_INTR_CAUSE) & SPI_INT_CPU_ON) && slac_millis() - t0 < 80)
         ;
 
     spiWr16_fast(SPI_REG_INTR_CAUSE, 0xFFFF);
@@ -138,7 +161,11 @@ bool qca7000ReadSignature(uint16_t* s, uint16_t* v) {
     return sig == SIG;
 }
 
+#ifdef LIBSLAC_TESTING
+bool txFrame(const uint8_t* eth, size_t ethLen) {
+#else
 static bool txFrame(const uint8_t* eth, size_t ethLen) {
+#endif
     if (ethLen > 1522)
         return false;
     size_t frameLen = ethLen;
@@ -168,8 +195,11 @@ static bool txFrame(const uint8_t* eth, size_t ethLen) {
     g_spi->endTransaction();
     return true;
 }
-
+#ifdef LIBSLAC_TESTING
+void fetchRx() {
+#else
 static void fetchRx() {
+#endif
     uint16_t avail = spiRd16_fast(SPI_REG_RDBUF_BYTE_AVA);
     if (avail < RX_HDR + FTR_LEN || avail > V2GTP_BUFFER_SIZE)
         return;
@@ -222,13 +252,74 @@ size_t spiQCA7000checkForReceivedData(uint8_t* d, size_t m) {
     return c;
 }
 
+// Current SLAC handshake state. 0 = idle, 1 = waiting for parameter confirmation,
+// 2 = waiting for match request, 3 = handshake complete, 0xFF = mismatch.
 static uint8_t g_slac = 0;
+static uint8_t g_run_id[slac::defs::RUN_ID_LEN]{};
+static const uint8_t g_src_mac[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+
+// Issue a CM_SLAC_PARM.REQ to start the SLAC matching handshake.
 bool qca7000startSlac() {
-    g_slac = 0;
-    return txFrame(nullptr, 0);
-} // stub
+    g_slac = 1; // waiting for CNF
+
+    for (size_t i = 0; i < sizeof(g_run_id); ++i)
+        g_run_id[i] = static_cast<uint8_t>(esp_random() & 0xFF);
+
+    struct __attribute__((packed)) {
+        ether_header eth;
+        struct {
+            uint8_t mmv;
+            uint16_t mmtype;
+        } hp;
+        slac::messages::cm_slac_parm_req req;
+    } msg{};
+
+    memset(&msg, 0, sizeof(msg));
+    memset(msg.eth.ether_dhost, 0xFF, ETH_ALEN);
+    memcpy(msg.eth.ether_shost, g_src_mac, ETH_ALEN);
+    msg.eth.ether_type = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
+    msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
+    msg.hp.mmtype = htole16(slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_REQ);
+    msg.req.application_type = slac::defs::COMMON_APPLICATION_TYPE;
+    msg.req.security_type = slac::defs::COMMON_SECURITY_TYPE;
+    memcpy(msg.req.run_id, g_run_id, sizeof(g_run_id));
+
+    bool ok = txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+    if (!ok)
+        g_slac = 0;
+    return ok;
+}
+
+// Poll for SLAC confirmation frames and update g_slac accordingly.
 uint8_t qca7000getSlacResult() {
     fetchRx();
+    const uint8_t* d;
+    size_t l;
+    while (ringPop(&d, &l)) {
+        if (l < sizeof(ether_header) + 3)
+            continue;
+        const ether_header* eth = reinterpret_cast<const ether_header*>(d);
+        if (eth->ether_type != htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY))
+            continue;
+        const uint8_t* p = d + sizeof(ether_header);
+        uint8_t mmv = p[0];
+        uint16_t mmtype = le16toh(*reinterpret_cast<const uint16_t*>(p + 1));
+        if (mmv != static_cast<uint8_t>(slac::defs::MMV::AV_1_0))
+            continue;
+        if (mmtype == (slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_CNF)) {
+            const auto* cnf = reinterpret_cast<const slac::messages::cm_slac_parm_cnf*>(p + 3);
+            if (!memcmp(cnf->run_id, g_run_id, sizeof(g_run_id)))
+                g_slac = 2; // waiting for match
+            else
+                g_slac = 0xFF;
+        } else if (mmtype == (slac::defs::MMTYPE_CM_SLAC_MATCH | slac::defs::MMTYPE_MODE_REQ)) {
+            const auto* req = reinterpret_cast<const slac::messages::cm_slac_match_req*>(p + 3);
+            if (!memcmp(req->run_id, g_run_id, sizeof(g_run_id)))
+                g_slac = 3; // success
+            else
+                g_slac = 0xFF;
+        }
+    }
     return g_slac;
 }
 
@@ -254,6 +345,7 @@ void qca7000Process() {
 
 bool qca7000setup(SPIClass* bus, int csPin) {
     ESP_LOGI(PLC_TAG, "QCA7000 setup: bus=%p CS=%d", bus, csPin);
+#define ESP_LOGW(tag, fmt, ...)
     g_spi = bus;
     g_cs = csPin;
     if (g_spi)
@@ -268,6 +360,7 @@ bool qca7000setup(SPIClass* bus, int csPin) {
 
     spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
     ESP_LOGI(PLC_TAG, "QCA7000 ready");
+#define ESP_LOGW(tag, fmt, ...)
     return true;
 }
 
