@@ -10,20 +10,7 @@
 #include "sha256.h"
 #include <cstring>
 
-// big endian architectures need #define __BYTE_ORDER __BIG_ENDIAN
-#ifndef _MSC_VER
-#if defined(ESP_PLATFORM) && !defined(__GLIBC__)
-#include "port/esp32s3/endian_compat.hpp"
-#elif defined(__has_include)
-#  if __has_include(<endian.h>)
-#    include <endian.h>
-#  else
-#    include "port/esp32s3/endian_compat.hpp"
-#  endif
-#else
-#include <endian.h>
-#endif
-#endif
+#include <slac/endian.hpp>
 
 // #define SHA2_224_SEED_VECTOR
 
