@@ -11,9 +11,9 @@
 #endif
 
 #ifndef slac_millis
-#ifdef ARDUINO
+#if defined(ARDUINO) && !defined(ESP_PLATFORM)
 #define slac_millis millis
-#else
+#elif !defined(ARDUINO)
 static inline uint32_t slac_millis() {
     using namespace std::chrono;
     return (uint32_t)duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count();
@@ -22,9 +22,9 @@ static inline uint32_t slac_millis() {
 #endif
 
 #ifndef slac_delay
-#ifdef ARDUINO
+#if defined(ARDUINO) && !defined(ESP_PLATFORM)
 #define slac_delay(ms) delay(ms)
-#else
+#elif !defined(ARDUINO)
 static inline void slac_delay(uint32_t ms) {
     std::this_thread::sleep_for(std::chrono::milliseconds(ms));
 }
@@ -32,17 +32,17 @@ static inline void slac_delay(uint32_t ms) {
 #endif
 
 #ifndef slac_noInterrupts
-#ifdef ARDUINO
+#if defined(ARDUINO) && !defined(ESP_PLATFORM)
 #define slac_noInterrupts noInterrupts
-#else
+#elif !defined(ARDUINO)
 static inline void slac_noInterrupts() {}
 #endif
 #endif
 
 #ifndef slac_interrupts
-#ifdef ARDUINO
+#if defined(ARDUINO) && !defined(ESP_PLATFORM)
 #define slac_interrupts interrupts
-#else
+#elif !defined(ARDUINO)
 static inline void slac_interrupts() {}
 #endif
 #endif
