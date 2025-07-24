@@ -5,12 +5,18 @@
 #include <esp_log.h>
 #include <esp_system.h>
 #else
-#include <stdint.h>
 #include <arpa/inet.h>
+#include <stdint.h>
+#ifndef ESP_LOGE
 #include <mutex>
 #define ESP_LOGE(tag, fmt, ...)
+#endif
+#ifndef ESP_LOGI
 #define ESP_LOGI(tag, fmt, ...)
+#endif
+#ifndef ESP_LOGW
 #define ESP_LOGW(tag, fmt, ...)
+#endif
 static inline uint32_t esp_random() {
     return 0x12345678u;
 }
@@ -171,7 +177,9 @@ static bool hardReset() {
         return false;
     }
     ESP_LOGI(PLC_TAG, "Reset probe OK (SIG=0x%04X)", sig);
+#ifndef ESP_LOGW
 #define ESP_LOGW(tag, fmt, ...)
+#endif
 
     t0 = slac_millis();
     while (!(slowRd16(SPI_REG_INTR_CAUSE) & SPI_INT_CPU_ON) && slac_millis() - t0 < 80)
@@ -382,7 +390,9 @@ void qca7000Process() {
 
 bool qca7000setup(SPIClass* bus, int csPin, int rstPin) {
     ESP_LOGI(PLC_TAG, "QCA7000 setup: bus=%p CS=%d RST=%d", bus, csPin, rstPin);
+#ifndef ESP_LOGW
 #define ESP_LOGW(tag, fmt, ...)
+#endif
     g_spi = bus;
     g_cs = csPin;
     g_rst = rstPin;
@@ -398,7 +408,9 @@ bool qca7000setup(SPIClass* bus, int csPin, int rstPin) {
 
     spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
     ESP_LOGI(PLC_TAG, "QCA7000 ready");
+#ifndef ESP_LOGW
 #define ESP_LOGW(tag, fmt, ...)
+#endif
     return true;
 }
 
