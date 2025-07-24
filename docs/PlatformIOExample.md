@@ -13,7 +13,7 @@ Install the PlatformIO command line tools via `pip`:
 pip install platformio
 ```
 
-PlatformIO handles building the firmware and running the example tests.
+PlatformIO handles building the firmware for the selected target.
 
 ## 2. Create a new Project
 
