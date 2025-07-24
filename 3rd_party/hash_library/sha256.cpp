@@ -10,6 +10,10 @@
 #include "sha256.h"
 #include <cstring>
 
+#ifdef _MSC_VER
+#    include <intrin.h>
+#endif
+
 #include <slac/endian.hpp>
 
 // #define SHA2_224_SEED_VECTOR
