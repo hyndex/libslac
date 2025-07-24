@@ -5,6 +5,8 @@
 #include <fsm/specialization/sync/simple.hpp>
 
 #include "../tools/evse/evse_fsm.hpp"
+#include "../port/esp32s3/qca7000.hpp"
+#include "stubs/SPI.h"
 
 namespace {
 
@@ -21,7 +23,8 @@ void set_src(slac::messages::HomeplugMessage& msg, const uint8_t mac[ETH_ALEN]) 
 }
 
 TEST(EvseFSM, complete_handshake) {
-    SlacIO io("lo");
+    qca7000_config cfg{&SPI, PLC_SPI_CS_PIN, PLC_SPI_RST_PIN, nullptr};
+    SlacIO io(cfg);
     EvseFSM fsm(io);
     fsm.set_nmk(SAMPLE_NMK);
 

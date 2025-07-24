@@ -5,6 +5,9 @@ add_executable(slac_unit_test
     qca7000_uart_test.cpp
     ../tools/evse/evse_fsm.cpp
     ../tools/evse/slac_io.cpp
+    ../port/esp32s3/qca7000_link.cpp
+    ../port/esp32s3/qca7000.cpp
+    ../port/esp32s3/qca7000_uart.cpp
     stubs/SPI.cpp
     stubs/HardwareSerial.cpp
 )
@@ -32,5 +35,7 @@ target_link_libraries(slac_unit_test PRIVATE
     libfsm
     Threads::Threads
 )
+
+target_compile_definitions(slac_unit_test PRIVATE ARDUINO LIBSLAC_TESTING)
 
 add_test(slac_unit_test slac_unit_test)

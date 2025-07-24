@@ -1,12 +1,18 @@
 #include <gtest/gtest.h>
 
-#define LIBSLAC_TESTING
-#define ARDUINO
-#define SLAC_ETHERNET_DEFS_HPP
-#include "../port/esp32s3/qca7000.cpp"
+#include "../port/esp32s3/ethernet_defs.hpp"
+#include "../port/esp32s3/qca7000.hpp"
 #include "stubs/SPI.h"
 #include <endian.h>
-#include <net/ethernet.h>
+
+static constexpr uint16_t RX_HDR = 12;
+static constexpr uint16_t FTR_LEN = 2;
+
+extern bool txFrame(const uint8_t* eth, size_t ethLen);
+extern void fetchRx();
+extern size_t spiQCA7000checkForReceivedData(uint8_t* dst, size_t maxLen);
+extern SPIClass* g_spi;
+extern int g_cs;
 
 class QCA7000Test : public ::testing::Test {
 protected:

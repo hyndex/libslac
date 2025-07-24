@@ -11,7 +11,7 @@
 #include <thread>
 #endif
 
-SlacIO::SlacIO(const slac::port::qca7000_config& cfg) : link(cfg), slac_channel(&link) {
+SlacIO::SlacIO(const qca7000_config& cfg) : link(cfg), slac_channel(&link) {
     if (!slac_channel.open()) {
         throw std::runtime_error("Failed to open channel");
     }

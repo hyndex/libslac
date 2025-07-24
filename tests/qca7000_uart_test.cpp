@@ -1,10 +1,16 @@
 #include <gtest/gtest.h>
 
-#define LIBSLAC_TESTING
-#define ARDUINO
-#include "../port/esp32s3/qca7000_uart.cpp"
+#include "../port/esp32s3/qca7000_uart.hpp"
 #include "stubs/HardwareSerial.h"
 #include <endian.h>
+
+static constexpr uint16_t TX_HDR = 8;
+static constexpr uint16_t FTR_LEN = 2;
+
+extern HardwareSerial* g_serial;
+extern bool uartTxFrame(const uint8_t* frame, size_t len);
+extern void uartFetchRx();
+extern size_t uartQCA7000checkForReceivedData(uint8_t* dst, size_t len);
 
 class QCA7000UartTest : public ::testing::Test {
 protected:
