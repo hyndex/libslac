@@ -112,6 +112,10 @@ public:
         return success ? State::NEW_STATE : State::ALLOCATION_ERROR;
     }
 
+    auto allocator_state() const {
+        return allocator.get_internal_state();
+    }
+
     // NOTE (aw): this could also be a non-static function, which checks if any states have been set
     static constexpr HandleEventResult PASS_ON{HandleEventResult::InternalState::PASS_ON};
     static constexpr HandleEventResult HANDLED_INTERNALLY{HandleEventResult::InternalState::HANDLED_INTERNALY};
@@ -137,6 +141,10 @@ public:
         using State = HandleEventResult::InternalState;
         const auto success = allocator.template create_simple<StateType>(std::forward<Args>(args)...);
         return success ? State::NEW_STATE : State::ALLOCATION_ERROR;
+    }
+
+    auto allocator_state() const {
+        return allocator.get_internal_state();
     }
 
     // NOTE (aw): this could also be a non-static function, which checks if any states have been set

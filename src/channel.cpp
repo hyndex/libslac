@@ -56,8 +56,10 @@ transport::LinkError Channel::read(slac::messages::HomeplugMessage& msg, int tim
 
 bool Channel::poll(slac::messages::HomeplugMessage& msg) {
     did_timeout = false;
-    if (!link)
+    if (!link) {
+        error = "No transport link";
         return false;
+    }
 
     size_t out_len = 0;
     const int timeout = 0;
@@ -65,10 +67,22 @@ bool Channel::poll(slac::messages::HomeplugMessage& msg) {
                           sizeof(messages::homeplug_message), &out_len, timeout);
     did_timeout = res == transport::LinkError::Timeout;
     if (res != transport::LinkError::Ok) {
+        switch (res) {
+        case transport::LinkError::Timeout:
+            error = "Timeout";
+            break;
+        case transport::LinkError::Transport:
+            error = "Transport error";
+            break;
+        default:
+            error = "Link error";
+            break;
+        }
         return false;
     }
 
     if (out_len < defs::MME_MIN_LENGTH || out_len > sizeof(messages::homeplug_message)) {
+        error = "Invalid frame length";
         return false;
     }
 
