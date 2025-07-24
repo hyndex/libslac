@@ -5,12 +5,13 @@
 #include <chrono>
 
 #include "../logging.hpp"
-#include <slac/iso15118_consts.hpp>
 #include <cstring>
+#include <slac/iso15118_consts.hpp>
 
-// FIXME (aw):
-//  - handle evse, ev, sender and source id, probably also the mac
-//  - what is the correct PLC peer mac?
+// NOTE:
+//  - The EVSE and EV identifiers as well as source addresses are
+//    currently filled with zero.  A real implementation should provide
+//    proper identifiers and mac addresses of the PLC peers.
 
 void setup_atten_char_ind_message(slac::messages::HomeplugMessage& msg, const MatchingSessionContext& matching_ctx) {
     auto atten_char_ind = matching_ctx.calculate_avg();
@@ -63,13 +64,15 @@ EvseFSM::EvseFSM(SlacIO& slac_io) : slac_io(slac_io) {
 
         this->slac_io.send(msg_out);
 
-        // FIXME (aw): timemout for correct response
-        ctx.set_next_timeout(100);
+        // wait for CM_SET_KEY.CNF from the PLC. 1s should be plenty of time
+        // for the modem to respond.
+        ctx.set_next_timeout(1000);
     };
 
     sd_reset.handler = [this](FSMContextType& ctx) {
-        // FIXME (aw): what to do here? should fail hard with IOError
-        LOG_ERROR("Failed to setup NMK key\n");
+        // timeout waiting for CM_SET_KEY.CNF
+        LOG_ERROR("Timeout waiting for CM_SET_KEY.CNF\n");
+        ctx.submit_event(EventResetDone());
     };
 
     sd_idle.transitions = [this](const EventBaseType& ev, TransitionType& trans) {
@@ -89,16 +92,17 @@ EvseFSM::EvseFSM(SlacIO& slac_io) : slac_io(slac_io) {
         case EventID::StartMatching:
             return trans.set(sd_matching);
         case EventID::InitTimout:
-            // FIXME (aw): where to put MAX_INIT_RETRIES?
-            if (ac_mode_five_percent) {
-                return trans.set(sd_signal_error);
-            } else {
+            ++init_retry_count;
+            if (init_retry_count >= MAX_INIT_RETRIES || !ac_mode_five_percent) {
                 return trans.set(sd_no_slac_performed);
+            } else {
+                return trans.set(sd_signal_error);
             }
         }
     };
 
     sd_wait_for_matching_start.entry = [this](FSMInitContextType& ctx) {
+        init_retry_count = 0;
         ctx.set_next_timeout(slac::defs::TT_EVSE_SLAC_INIT_MS);
     };
 
@@ -224,13 +228,12 @@ EvseFSM::EvseFSM(SlacIO& slac_io) : slac_io(slac_io) {
 
     sd_signal_error.transitions = [this](const EventBaseType& ev, TransitionType& trans) {
         switch (ev.id) {
-        // FIXME (aw): what about SLAC messages that we receive while in this mode?
+        case EventID::SlacMessage:
+            // ignore SLAC traffic while signalling the error sequence
+            return;
         case EventID::ErrorSequenceDone:
-            // FIXME (aw): where/when to reset init_retry_count?
             ++init_retry_count;
-            if (init_retry_count == MAX_INIT_RETRIES) {
-                // FIXME (aw): we need to signal this to the EvseManager
-                // somehow
+            if (init_retry_count >= MAX_INIT_RETRIES) {
                 return trans.set(sd_no_slac_performed);
             } else {
                 return trans.set(sd_wait_for_matching_start);
@@ -241,9 +244,8 @@ EvseFSM::EvseFSM(SlacIO& slac_io) : slac_io(slac_io) {
     };
 
     sd_signal_error.entry = [this](FSMInitContextType& ctx) {
-        // FIXME (aw): how long do we want/need to wait for the
-        //             EventErrorSequenceDone event?
-        //             right now, we're stipulating it by ourself ..
+        // Trigger EventErrorSequenceDone shortly after entering the state to
+        // restart the matching attempt.
         ctx.set_next_timeout(30);
     };
 
@@ -290,7 +292,12 @@ void EvseFSM::sd_wait_for_matching_hsm(FSMContextType& ctx, const EventSlacMessa
 void EvseFSM::sd_matching_hsm(FSMContextType& ctx, const EventSlacMessage& ev) {
     auto& msg_in = ev.data;
 
-    // FIXME (aw): we should also deal with the CM_SLAC_PARAM_REQ, right?
+    if (msg_in.get_mmtype() == (slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_REQ)) {
+        // respond with another parameter confirm if the EV retries
+        sd_wait_for_matching_hsm(ctx, ev);
+        return;
+    }
+
     if (msg_in.get_mmtype() != (slac::defs::MMTYPE_CM_START_ATTEN_CHAR | slac::defs::MMTYPE_MODE_IND)) {
         LOG_ERROR("Received non-expected message of type 0x%04x\n", msg_in.get_mmtype());
         return;
@@ -339,9 +346,11 @@ void EvseFSM::sd_sounding_hsm(FSMContextType& ctx, const EventSlacMessage& ev) {
         matching_ctx.captured_sounds++;
         // handle CM_ATTEN_PROFILE.IND
     } else if (mmtype == (slac::defs::MMTYPE_CM_START_ATTEN_CHAR | slac::defs::MMTYPE_MODE_IND)) {
-        // FIXME (aw): could we just skip that?
+        // duplicate start indication, ignore
+        return;
     } else if (mmtype == (slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_IND)) {
-        // FIXME (aw): how should this be handled?
+        // parameter indication is not expected - ignore
+        return;
     } else {
         LOG_ERROR("Received non-expected message of type 0x%04x\n", msg_in.get_mmtype());
         return;
@@ -365,8 +374,8 @@ void EvseFSM::sd_wait_for_atten_char_rsp_hsm(FSMContextType& ctx, const EventSla
             return;
         }
 
-        // FIXME (aw): shall we use the source address from the atten_char_rsp message?
-
+        // ignore the source address contained in the payload and rely on the
+        // ethernet header instead
         ctx.submit_event(EventAttenCharRspReceived());
     }
 }
@@ -376,9 +385,20 @@ void EvseFSM::sd_wait_for_slac_match_hsm(FSMContextType& ctx, const EventSlacMes
 
     const auto mmtype = msg_in.get_mmtype();
 
+    if (mmtype == (slac::defs::MMTYPE_CM_VALIDATE | slac::defs::MMTYPE_MODE_REQ)) {
+        slac::messages::cm_validate_cnf cnf{};
+        cnf.signal_type = slac::defs::CM_VALIDATE_REQ_SIGNAL_TYPE;
+        cnf.toggle_num = 0;
+        cnf.result = slac::defs::CM_VALIDATE_REQ_RESULT_READY;
+        msg_out.setup_ethernet_header(msg_in.get_src_mac());
+        msg_out.setup_payload(&cnf, sizeof(cnf), slac::defs::MMTYPE_CM_VALIDATE | slac::defs::MMTYPE_MODE_CNF,
+                              slac::defs::MMV::AV_1_0);
+        slac_io.send(msg_out);
+        return;
+    }
+
     if (mmtype != (slac::defs::MMTYPE_CM_SLAC_MATCH | slac::defs::MMTYPE_MODE_REQ)) {
         // unexpected message
-        // FIXME (aw): need to also deal with CM_VALIDATE.REQ
         return;
     }
 
@@ -418,9 +438,20 @@ void EvseFSM::sd_reset_hsm(FSMContextType& ctx, const EventSlacMessage& ev) {
 
     const auto mmtype = msg_in.get_mmtype();
 
+    if (mmtype == (slac::defs::MMTYPE_CM_VALIDATE | slac::defs::MMTYPE_MODE_REQ)) {
+        slac::messages::cm_validate_cnf cnf{};
+        cnf.signal_type = slac::defs::CM_VALIDATE_REQ_SIGNAL_TYPE;
+        cnf.toggle_num = 0;
+        cnf.result = slac::defs::CM_VALIDATE_REQ_RESULT_READY;
+        msg_out.setup_ethernet_header(msg_in.get_src_mac());
+        msg_out.setup_payload(&cnf, sizeof(cnf), slac::defs::MMTYPE_CM_VALIDATE | slac::defs::MMTYPE_MODE_CNF,
+                              slac::defs::MMV::AV_1_0);
+        slac_io.send(msg_out);
+        return;
+    }
+
     if (mmtype != (slac::defs::MMTYPE_CM_SET_KEY | slac::defs::MMTYPE_MODE_CNF)) {
         // unexpected message
-        // FIXME (aw): need to also deal with CM_VALIDATE.REQ
         return;
     }
 
@@ -477,7 +508,7 @@ slac::messages::cm_atten_char_ind MatchingSessionContext::calculate_avg() const 
             atten_char_ind.attenuation_profile.aag[i] = captured_aags[i] / captured_sounds;
         }
     } else {
-        // FIXME (aw): what to do here, if we didn't receive any sounds?
+        // no sounds received -> send default attenuation profile
         memset(atten_char_ind.attenuation_profile.aag, 0x01, sizeof(atten_char_ind.attenuation_profile.aag));
     }
 
