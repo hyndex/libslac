@@ -14,20 +14,12 @@
 #endif
 
 #include <slac/channel.hpp>
-#ifdef ESP_PLATFORM
 #include <port/esp32s3/qca7000_link.hpp>
-#else
-#include <slac/packet_socket_link.hpp>
-#endif
 
 class SlacIO {
 public:
     using InputHandlerFnType = void(slac::messages::HomeplugMessage&);
-#ifdef ESP_PLATFORM
     explicit SlacIO(const slac::port::qca7000_config& cfg);
-#else
-    explicit SlacIO(const std::string& if_name);
-#endif
 
     void release_input();
     /**
@@ -49,11 +41,7 @@ public:
 
 private:
     void loop();
-#ifdef ESP_PLATFORM
     slac::port::Qca7000Link link;
-#else
-    slac::PacketSocketLink link;
-#endif
 
     slac::Channel slac_channel;
     slac::messages::HomeplugMessage incoming_msg;
