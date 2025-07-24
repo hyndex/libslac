@@ -4,6 +4,8 @@ add_library(HashLibrary OBJECT
 
 target_include_directories(HashLibrary PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../port/generic>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>
 )
 
 # header-only libfsm

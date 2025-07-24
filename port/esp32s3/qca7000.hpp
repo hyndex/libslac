@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../generic/port_config.hpp"
 #ifdef ESP_PLATFORM
 #include "port_config.hpp"
 #endif

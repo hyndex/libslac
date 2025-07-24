@@ -1,9 +1,11 @@
 #ifndef SLAC_PORT_CONFIG_HPP
 #define SLAC_PORT_CONFIG_HPP
 
-#include <stdint.h>
+#include "../generic/port_config.hpp"
 
 #ifdef ESP_PLATFORM
+#include <stdint.h>
+
 static inline uint16_t le16toh(uint16_t v) {
     return v;
 }
@@ -21,6 +23,7 @@ static inline uint32_t htole32(uint32_t v) {
 #include <freertos/FreeRTOS.h>
 #include <freertos/portmacro.h>
 #include <freertos/task.h>
+
 static inline uint32_t slac_millis() {
     return (uint32_t)(esp_timer_get_time() / 1000ULL);
 }
@@ -33,14 +36,6 @@ static inline void slac_noInterrupts() {
 static inline void slac_interrupts() {
     portENABLE_INTERRUPTS();
 }
-#else
-#ifdef ARDUINO
-#include <Arduino.h>
-#endif
-#define slac_millis       millis
-#define slac_delay(ms)    delay(ms)
-#define slac_noInterrupts noInterrupts
-#define slac_interrupts   interrupts
-#endif
+#endif // ESP_PLATFORM
 
 #endif // SLAC_PORT_CONFIG_HPP

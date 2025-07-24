@@ -21,6 +21,8 @@ target_include_directories(slac_unit_test PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/../tools/evse
     ${CMAKE_CURRENT_SOURCE_DIR}/stubs
     ${CMAKE_CURRENT_SOURCE_DIR}/../port/esp32s3
+    ${CMAKE_CURRENT_SOURCE_DIR}/../port/generic
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
 )
 
 target_link_libraries(slac_unit_test PRIVATE

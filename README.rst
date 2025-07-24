@@ -123,6 +123,18 @@ creating :class:`slac::port::Qca7000Link`:
    qca7000_config cfg{&SPI, PLC_SPI_CS_PIN, my_mac};
    slac::port::Qca7000Link link(cfg);
 
+Custom Port Configuration
+------------------------
+
+The header ``port/generic/port_config.hpp`` provides weak default
+implementations of timing and interrupt helpers used throughout the
+library. Targets can supply their own ``port_config.hpp`` to override
+these functions.  For example the ESP32 port ships with
+``port/esp32s3/port_config.hpp`` which replaces the generic helpers with
+FreeRTOS based versions.  Place your custom header in a ``port/<target>``
+directory and ensure it is included before the generic one or define the
+macros manually when building.
+
 Tools and Examples
 ------------------
 
