@@ -19,7 +19,7 @@
 class SlacIO {
 public:
     using InputHandlerFnType = void(slac::messages::HomeplugMessage&);
-    explicit SlacIO(const slac::port::qca7000_config& cfg);
+    explicit SlacIO(const qca7000_config& cfg);
 
     void release_input();
     /**
