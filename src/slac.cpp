@@ -87,7 +87,7 @@ bool HomeplugMessage::setup_payload(void const* payload, int len, uint16_t mmtyp
         return false;
     }
     raw_msg.homeplug_header.mmv = static_cast<std::underlying_type_t<defs::MMV>>(mmv);
-    raw_msg.homeplug_header.mmtype = htole16(mmtype);
+    raw_msg.homeplug_header.mmtype = slac::htole16(mmtype);
 
     uint8_t* dst = raw_msg.payload;
 
@@ -136,7 +136,7 @@ void HomeplugMessage::setup_ethernet_header(const uint8_t dst_mac_addr[ETH_ALEN]
 }
 
 uint16_t HomeplugMessage::get_mmtype() const {
-    return le16toh(raw_msg.homeplug_header.mmtype);
+    return slac::le16toh(raw_msg.homeplug_header.mmtype);
 }
 
 uint8_t* HomeplugMessage::get_src_mac() {

@@ -1,21 +1,10 @@
 #include "qca7000.hpp"
 #include "../port_common.hpp"
 #include "port_config.hpp"
-#ifdef ESP_PLATFORM
-#include <esp_log.h>
-#include <esp_system.h>
-#else
+#include "../logging_compat.hpp"
 #include <arpa/inet.h>
 #include <stdint.h>
-#if !defined(ESP_LOGE)
-#define ESP_LOGE(tag, fmt, ...)
-#endif
-#if !defined(ESP_LOGI)
-#define ESP_LOGI(tag, fmt, ...)
-#endif
-#if !defined(ESP_LOGW)
-#define ESP_LOGW(tag, fmt, ...)
-#endif
+#ifndef ESP_PLATFORM
 static inline uint32_t esp_random() {
     return 0x12345678u;
 }
@@ -73,7 +62,9 @@ struct RxEntry {
     size_t len;
     uint8_t data[V2GTP_BUFFER_SIZE];
 };
-static RxEntry ring[4];
+static constexpr uint8_t RING_SIZE = 4;
+static constexpr uint8_t RING_MASK = RING_SIZE - 1;
+static RxEntry ring[RING_SIZE];
 static std::atomic<uint8_t> head{0}, tail{0};
 
 inline bool ringEmpty() {
@@ -84,9 +75,9 @@ inline bool ringEmpty() {
 inline void ringPush(const uint8_t* d, size_t l) {
     if (l > V2GTP_BUFFER_SIZE)
         l = V2GTP_BUFFER_SIZE;
-    auto h = head.load(std::memory_order_relaxed);
+    auto h = head.load(std::memory_order_acquire);
     auto t = tail.load(std::memory_order_acquire);
-    uint8_t next = (h + 1) & 3;
+    uint8_t next = (h + 1) & RING_MASK;
     if (next == t) {
         ESP_LOGW(PLC_TAG, "RX ring full - dropping frame");
         return;
@@ -97,12 +88,12 @@ inline void ringPush(const uint8_t* d, size_t l) {
 }
 
 inline bool ringPop(const uint8_t** d, size_t* l) {
-    auto t = tail.load(std::memory_order_relaxed);
+    auto t = tail.load(std::memory_order_acquire);
     if (head.load(std::memory_order_acquire) == t)
         return false;
     *d = ring[t].data;
     *l = ring[t].len;
-    tail.store((t + 1) & 3, std::memory_order_release);
+    tail.store((t + 1) & RING_MASK, std::memory_order_release);
     return true;
 }
 } // namespace
@@ -163,9 +154,6 @@ static bool hardReset() {
         return false;
     }
     ESP_LOGI(PLC_TAG, "Reset probe OK (SIG=0x%04X)", sig);
-#if !defined(ESP_LOGW)
-#define ESP_LOGW(tag, fmt, ...)
-#endif
 
     t0 = slac_millis();
     while (!(slowRd16(SPI_REG_INTR_CAUSE) & SPI_INT_CPU_ON) && slac_millis() - t0 < 80)
@@ -209,7 +197,7 @@ static bool txFrame(const uint8_t* eth, size_t ethLen) {
     g_spi->transfer16(cmd16(false, false, 0));
     g_spi->transfer16(SOF_WORD);
     g_spi->transfer16(SOF_WORD);
-    g_spi->transfer16(htole16(static_cast<uint16_t>(frameLen)));
+    g_spi->transfer16(slac::htole16(static_cast<uint16_t>(frameLen)));
     g_spi->transfer16(0);
     if (ethLen)
         g_spi->writeBytes(eth, ethLen);
@@ -251,7 +239,7 @@ static void fetchRx() {
     }
     if (memcmp(p + 4, "\xAA\xAA\xAA\xAA", 4) != 0)
         return;
-    uint16_t fl = le16toh(static_cast<uint16_t>((p[9] << 8) | p[8]));
+    uint16_t fl = slac::le16toh(static_cast<uint16_t>((p[9] << 8) | p[8]));
     if (fl > avail - RX_HDR - FTR_LEN)
         return;
     if (p[RX_HDR + fl] != 0x55 || p[RX_HDR + fl + 1] != 0x55)
@@ -319,7 +307,7 @@ static bool send_start_atten_char() {
     memcpy(msg.eth.ether_shost, g_src_mac, ETH_ALEN);
     msg.eth.ether_type = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
     msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
-    msg.hp.mmtype = htole16(slac::defs::MMTYPE_CM_START_ATTEN_CHAR |
+    msg.hp.mmtype = slac::htole16(slac::defs::MMTYPE_CM_START_ATTEN_CHAR |
                             slac::defs::MMTYPE_MODE_IND);
     msg.ind.application_type = slac::defs::COMMON_APPLICATION_TYPE;
     msg.ind.security_type = slac::defs::COMMON_SECURITY_TYPE;
@@ -346,7 +334,7 @@ static bool send_mnbc_sound(uint8_t remaining) {
     memcpy(msg.eth.ether_shost, g_src_mac, ETH_ALEN);
     msg.eth.ether_type = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
     msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
-    msg.hp.mmtype = htole16(slac::defs::MMTYPE_CM_MNBC_SOUND |
+    msg.hp.mmtype = slac::htole16(slac::defs::MMTYPE_CM_MNBC_SOUND |
                             slac::defs::MMTYPE_MODE_IND);
     msg.ind.application_type = slac::defs::COMMON_APPLICATION_TYPE;
     msg.ind.security_type = slac::defs::COMMON_SECURITY_TYPE;
@@ -374,7 +362,7 @@ static bool send_atten_char_rsp(const uint8_t* dst,
     memcpy(msg.eth.ether_shost, g_src_mac, ETH_ALEN);
     msg.eth.ether_type = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
     msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
-    msg.hp.mmtype = htole16(slac::defs::MMTYPE_CM_ATTEN_CHAR |
+    msg.hp.mmtype = slac::htole16(slac::defs::MMTYPE_CM_ATTEN_CHAR |
                             slac::defs::MMTYPE_MODE_RSP);
     msg.rsp.application_type = slac::defs::COMMON_APPLICATION_TYPE;
     msg.rsp.security_type = slac::defs::COMMON_SECURITY_TYPE;
@@ -402,7 +390,7 @@ static bool send_set_key_cnf(const uint8_t* dst,
     memcpy(msg.eth.ether_shost, g_src_mac, ETH_ALEN);
     msg.eth.ether_type = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
     msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
-    msg.hp.mmtype = htole16(slac::defs::MMTYPE_CM_SET_KEY |
+    msg.hp.mmtype = slac::htole16(slac::defs::MMTYPE_CM_SET_KEY |
                             slac::defs::MMTYPE_MODE_CNF);
     msg.cnf.result = slac::defs::CM_SET_KEY_CNF_RESULT_SUCCESS;
     msg.cnf.my_nonce = req->my_nonce;
@@ -437,7 +425,7 @@ bool qca7000startSlac() {
     memcpy(msg.eth.ether_shost, g_src_mac, ETH_ALEN);
     msg.eth.ether_type = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
     msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
-    msg.hp.mmtype = htole16(slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_REQ);
+    msg.hp.mmtype = slac::htole16(slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_REQ);
     msg.req.application_type = slac::defs::COMMON_APPLICATION_TYPE;
     msg.req.security_type = slac::defs::COMMON_SECURITY_TYPE;
     memcpy(msg.req.run_id, g_run_id, sizeof(g_run_id));
@@ -462,7 +450,7 @@ uint8_t qca7000getSlacResult() {
             continue;
         const uint8_t* p = d + sizeof(ether_header);
         uint8_t mmv = p[0];
-        uint16_t mmtype = le16toh(*reinterpret_cast<const uint16_t*>(p + 1));
+        uint16_t mmtype = slac::le16toh(*reinterpret_cast<const uint16_t*>(p + 1));
         if (mmv != static_cast<uint8_t>(slac::defs::MMV::AV_1_0))
             continue;
 
@@ -566,9 +554,6 @@ void qca7000Process() {
 
 bool qca7000setup(SPIClass* bus, int csPin, int rstPin) {
     ESP_LOGI(PLC_TAG, "QCA7000 setup: bus=%p CS=%d RST=%d", bus, csPin, rstPin);
-#if !defined(ESP_LOGW)
-#define ESP_LOGW(tag, fmt, ...)
-#endif
     g_spi = bus;
     g_cs = csPin;
     g_rst = rstPin;
@@ -584,9 +569,6 @@ bool qca7000setup(SPIClass* bus, int csPin, int rstPin) {
 
     spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
     ESP_LOGI(PLC_TAG, "QCA7000 ready");
-#if !defined(ESP_LOGW)
-#define ESP_LOGW(tag, fmt, ...)
-#endif
     return true;
 }
 
