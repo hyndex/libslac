@@ -98,7 +98,14 @@ An example for the ESP32-S3 port:
    qca7000_config cfg{&SPI, PLC_SPI_CS_PIN, my_mac};
    slac::port::Qca7000Link link(cfg);
    slac::Channel channel(&link);
-   channel.open();
+   if (!channel.open()) {
+       // initialization failed, query link.init_failed() for details
+       return;
+   }
+
+When :func:`channel.open()` fails, the link enters an error state and further
+calls will not attempt to reinitialise the modem.  Call
+``link.init_failed()`` to query this condition and react accordingly.
 
 QCA7000 Configuration
 ---------------------
