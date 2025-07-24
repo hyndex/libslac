@@ -2,7 +2,7 @@
 // Copyright 2024 Joulepoint Private Limited (Author Chinmoy Bhuyan)
 #include <slac/slac.hpp>
 #ifdef ESP_PLATFORM
-#include "port/generic/port_config.hpp"
+#include "port/port_common.hpp"
 #endif
 
 #include <algorithm>
