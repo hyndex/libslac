@@ -125,6 +125,25 @@ and reset pins as well as the modem's MAC address when creating
    qca7000_config cfg{&SPI, PLC_SPI_CS_PIN, PLC_SPI_RST_PIN, my_mac};
    slac::port::Qca7000Link link(cfg);
 
+Polling Without IRQ
+-------------------
+
+The QCA7000 driver can be polled instead of relying on an interrupt
+line.  The ``pio_src/polling_example.cpp`` example calls
+``qca7000Process()`` from the ``loop()`` function and then polls the
+channel for new packets.  When using this approach the IRQ pin on the
+modem may remain unconnected.
+
+.. code-block:: cpp
+
+   void loop() {
+       qca7000Process();
+       slac::messages::HomeplugMessage msg;
+       if (channel.poll(msg)) {
+           // handle message
+       }
+       delay(1);
+   }
 Polling Operation
 -----------------
 
