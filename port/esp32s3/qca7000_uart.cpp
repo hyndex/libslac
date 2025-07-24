@@ -15,7 +15,7 @@
 #endif
 #endif
 #include <string.h>
-#include <mutex>
+#include <atomic>
 
 
 
@@ -38,64 +38,34 @@ struct RxEntry {
     uint8_t data[V2GTP_BUFFER_SIZE];
 };
 static RxEntry ring[4];
-static volatile uint8_t head = 0, tail = 0;
-#ifdef ESP_PLATFORM
-static portMUX_TYPE ring_mux = portMUX_INITIALIZER_UNLOCKED;
-#else
-static std::mutex ring_mutex;
-#endif
-inline bool ringEmpty() { return head == tail; }
+static std::atomic<uint8_t> head{0}, tail{0};
+inline bool ringEmpty() {
+    return head.load(std::memory_order_acquire) ==
+           tail.load(std::memory_order_acquire);
+}
 static uint32_t last_rx_time = 0;
 static uint32_t frame_timeout_ms = 0;
 inline void ringPush(const uint8_t* d, size_t l) {
-#ifdef ESP_PLATFORM
-    portENTER_CRITICAL(&ring_mux);
-#else
-    ring_mutex.lock();
-#endif
     if (l > V2GTP_BUFFER_SIZE)
         l = V2GTP_BUFFER_SIZE;
-    uint8_t next = (head + 1) & 3;
-    if (next == tail) {
-#ifdef ESP_PLATFORM
-        portEXIT_CRITICAL(&ring_mux);
-#else
-        ring_mutex.unlock();
-#endif
+    auto h = head.load(std::memory_order_relaxed);
+    auto t = tail.load(std::memory_order_acquire);
+    uint8_t next = (h + 1) & 3;
+    if (next == t) {
         ESP_LOGW(PLC_TAG, "RX ring full - dropping frame");
         return;
     }
-    memcpy(ring[head].data, d, l);
-    ring[head].len = l;
-    head = next;
-#ifdef ESP_PLATFORM
-    portEXIT_CRITICAL(&ring_mux);
-#else
-    ring_mutex.unlock();
-#endif
+    memcpy(ring[h].data, d, l);
+    ring[h].len = l;
+    head.store(next, std::memory_order_release);
 }
 inline bool ringPop(const uint8_t** d, size_t* l) {
-#ifdef ESP_PLATFORM
-    portENTER_CRITICAL(&ring_mux);
-#else
-    ring_mutex.lock();
-#endif
-    if (ringEmpty()) {
-#ifdef ESP_PLATFORM
-        portEXIT_CRITICAL(&ring_mux);
-#else
-        ring_mutex.unlock();
-#endif
+    auto t = tail.load(std::memory_order_relaxed);
+    if (ringEmpty())
         return false;
-    }
-    *d = ring[tail].data;
-    *l = ring[tail].len;
-    tail = (tail + 1) & 3;
-#ifdef ESP_PLATFORM
-    portEXIT_CRITICAL(&ring_mux);
-#else
-    ring_mutex.unlock();
-#endif
+    *d = ring[t].data;
+    *l = ring[t].len;
+    tail.store((t + 1) & 3, std::memory_order_release);
     return true;
 }
 
