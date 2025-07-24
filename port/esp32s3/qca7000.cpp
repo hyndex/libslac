@@ -123,7 +123,8 @@ inline bool ringPop(const uint8_t** d, size_t* l) {
 } // namespace
 
 static inline uint16_t cmd16(bool rd, bool intr, uint16_t reg) {
-    return (rd ? 0x8000u : 0) | (intr ? 0x4000u : 0) | (reg & 0x3FFFu);
+    return (rd ? 0x8000u : 0) | (intr ? 0x4000u : 0) |
+           (((reg << 8) & 0x3FFFu));
 }
 
 static uint16_t spiRd16_fast(uint16_t reg) {
@@ -189,11 +190,12 @@ static bool hardReset() {
     return true;
 }
 
-uint16_t qca7000ReadInternalReg(uint8_t r) {
-    return spiRd16_fast(r << 8);
+uint16_t qca7000ReadInternalReg(uint16_t r) {
+    return spiRd16_fast(r);
 }
 bool qca7000ReadSignature(uint16_t* s, uint16_t* v) {
-    uint16_t sig = qca7000ReadInternalReg(0x1A), ver = qca7000ReadInternalReg(0x1B);
+    uint16_t sig = qca7000ReadInternalReg(SPI_REG_SIGNATURE),
+             ver = qca7000ReadInternalReg(0x1B);
     if (s)
         *s = sig;
     if (v)
