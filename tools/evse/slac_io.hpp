@@ -17,7 +17,7 @@
 #ifdef ESP_PLATFORM
 #include <port/esp32s3/qca7000_link.hpp>
 #else
-#include <slac/packet_socket_link.hpp>
+#include "packet_socket_link.hpp"
 #endif
 
 class SlacIO {
@@ -52,7 +52,7 @@ private:
 #ifdef ESP_PLATFORM
     slac::port::Qca7000Link link;
 #else
-    slac::PacketSocketLink link;
+    PacketSocketLink link;
 #endif
 
     slac::Channel slac_channel;

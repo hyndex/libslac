@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2022 - 2022 Pionix GmbH and Contributors to EVerest
 #ifndef ESP_PLATFORM
-#include <slac/packet_socket.hpp>
+#include "packet_socket.hpp"
 
 #include <cstring>
 
@@ -15,7 +14,6 @@
 
 namespace utils {
 InterfaceInfo::InterfaceInfo(const std::string& interface_name) {
-    // fetch all interfaces
     struct ifaddrs* if_addrs;
     int ret = getifaddrs(&if_addrs);
     if (ret == -1) {
@@ -24,7 +22,6 @@ InterfaceInfo::InterfaceInfo(const std::string& interface_name) {
         return;
     }
 
-    // iterate through them and list them
     struct ifaddrs* cur_if_addr = if_addrs;
     while (cur_if_addr) {
         if (cur_if_addr->ifa_addr && cur_if_addr->ifa_addr->sa_family == AF_PACKET) {
@@ -48,9 +45,6 @@ InterfaceInfo::InterfaceInfo(const std::string& interface_name) {
 }
 
 PacketSocket::PacketSocket(const InterfaceInfo& if_info, int protocol) {
-    // Open the socket in non blocking mode. We rely on poll() for the
-    // blocking behaviour and non-blocking sockets guard against potential
-    // race conditions between poll() and read()/write().
     socket_fd = socket(AF_PACKET, SOCK_RAW | SOCK_NONBLOCK, htons(protocol));
 
     if (socket_fd == -1) {
@@ -59,15 +53,14 @@ PacketSocket::PacketSocket(const InterfaceInfo& if_info, int protocol) {
         return;
     }
 
-    // bind this packet socket to a specific interface
     struct sockaddr_ll sock_addr = {
-        AF_PACKET,                                       // sll_family
-        htons(protocol),                                 // sll_protocol
-        if_info.get_index(),                             // sll_ifindex
-        0x00,                                            // sll_hatype, set on receiving
-        0x00,                                            // sll_pkttype, set on receiving
-        ETH_ALEN,                                        // sll_halen
-        {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00} // sll_addr[8]
+        AF_PACKET,
+        htons(protocol),
+        if_info.get_index(),
+        0x00,
+        0x00,
+        ETH_ALEN,
+        {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
     };
 
     if (-1 == bind(socket_fd, (struct sockaddr*)&sock_addr, sizeof(sock_addr))) {
@@ -76,16 +69,11 @@ PacketSocket::PacketSocket(const InterfaceInfo& if_info, int protocol) {
         close(socket_fd);
     }
 
-    // everything should have worked out
     valid = true;
 }
 
 PacketSocket::IOResult PacketSocket::read(uint8_t* buffer, int timeout) {
-    struct pollfd poll_fd = {
-        socket_fd, // file descriptor
-        POLLIN,    // requested event
-        0          // returned event
-    };
+    struct pollfd poll_fd = { socket_fd, POLLIN, 0 };
     int ret = poll(&poll_fd, 1, timeout);
     if (-1 == ret) {
         error = std::string("poll() failed with: ") + strerror(errno);
@@ -111,11 +99,7 @@ PacketSocket::IOResult PacketSocket::read(uint8_t* buffer, int timeout) {
 }
 
 PacketSocket::IOResult PacketSocket::write(const void* buf, size_t size, int timeout) {
-    struct pollfd poll_fd = {
-        socket_fd, // file descriptor
-        POLLOUT,   // requested event
-        0          // returned event
-    };
+    struct pollfd poll_fd = { socket_fd, POLLOUT, 0 };
 
     int ret = poll(&poll_fd, 1, timeout);
 
