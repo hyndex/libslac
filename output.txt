@@ -1,0 +1,2575 @@
+// ===== 3rd_party\hash_library\sha256.cpp =====
+// SPDX-License-Identifier: Zlib
+
+// //////////////////////////////////////////////////////////
+// sha256.cpp
+// Copyright (c) 2014,2015,2021 Stephan Brumme. All rights reserved.
+// see http://create.stephan-brumme.com/disclaimer.html
+//
+
+#include "port/port_common.hpp"
+#include "sha256.h"
+
+// big endian architectures need #define __BYTE_ORDER __BIG_ENDIAN
+#ifndef _MSC_VER
+#if defined(ESP_PLATFORM) && !defined(__GLIBC__)
+#include "port/esp32s3/endian_compat.hpp"
+#elif defined(__has_include)
+#  if __has_include(<endian.h>)
+#    include <endian.h>
+#  else
+#    include "port/esp32s3/endian_compat.hpp"
+#  endif
+#else
+#include <endian.h>
+#endif
+#endif
+
+// #define SHA2_224_SEED_VECTOR
+
+/// same as reset()
+SHA256::SHA256() {
+    reset();
+}
+
+/// restart
+void SHA256::reset() {
+    m_numBytes = 0;
+    m_bufferSize = 0;
+
+    // according to RFC 1321
+    // "These words were obtained by taking the first thirty-two bits of the
+    //  fractional parts of the square roots of the first eight prime numbers"
+    m_hash[0] = 0x6a09e667;
+    m_hash[1] = 0xbb67ae85;
+    m_hash[2] = 0x3c6ef372;
+    m_hash[3] = 0xa54ff53a;
+    m_hash[4] = 0x510e527f;
+    m_hash[5] = 0x9b05688c;
+    m_hash[6] = 0x1f83d9ab;
+    m_hash[7] = 0x5be0cd19;
+
+#ifdef SHA2_224_SEED_VECTOR
+    // if you want SHA2-224 instead then use these seeds
+    // and throw away the last 32 bits of getHash
+    m_hash[0] = 0xc1059ed8;
+    m_hash[1] = 0x367cd507;
+    m_hash[2] = 0x3070dd17;
+    m_hash[3] = 0xf70e5939;
+    m_hash[4] = 0xffc00b31;
+    m_hash[5] = 0x68581511;
+    m_hash[6] = 0x64f98fa7;
+    m_hash[7] = 0xbefa4fa4;
+#endif
+}
+
+namespace {
+inline uint32_t rotate(uint32_t a, uint32_t c) {
+    return (a >> c) | (a << (32 - c));
+}
+
+inline uint32_t swap(uint32_t x) {
+#if defined(__GNUC__) || defined(__clang__)
+    return __builtin_bswap32(x);
+#endif
+#ifdef MSC_VER
+    return _byteswap_ulong(x);
+#endif
+
+    return (x >> 24) | ((x >> 8) & 0x0000FF00) | ((x << 8) & 0x00FF0000) | (x << 24);
+}
+
+// mix functions for processBlock()
+inline uint32_t f1(uint32_t e, uint32_t f, uint32_t g) {
+    uint32_t term1 = rotate(e, 6) ^ rotate(e, 11) ^ rotate(e, 25);
+    uint32_t term2 = (e & f) ^ (~e & g); //(g ^ (e & (f ^ g)))
+    return term1 + term2;
+}
+
+inline uint32_t f2(uint32_t a, uint32_t b, uint32_t c) {
+    uint32_t term1 = rotate(a, 2) ^ rotate(a, 13) ^ rotate(a, 22);
+    uint32_t term2 = ((a | b) & c) | (a & b); //(a & (b ^ c)) ^ (b & c);
+    return term1 + term2;
+}
+} // namespace
+
+/// process 64 bytes
+void SHA256::processBlock(const void* data) {
+    // get last hash
+    uint32_t a = m_hash[0];
+    uint32_t b = m_hash[1];
+    uint32_t c = m_hash[2];
+    uint32_t d = m_hash[3];
+    uint32_t e = m_hash[4];
+    uint32_t f = m_hash[5];
+    uint32_t g = m_hash[6];
+    uint32_t h = m_hash[7];
+
+    // data represented as 16x 32-bit words
+    const uint32_t* input = (uint32_t*)data;
+    // convert to big endian
+    uint32_t words[64];
+    int i;
+    for (i = 0; i < 16; i++)
+#if defined(__BYTE_ORDER) && (__BYTE_ORDER != 0) && (__BYTE_ORDER == __BIG_ENDIAN)
+        words[i] = input[i];
+#else
+        words[i] = swap(input[i]);
+#endif
+
+    uint32_t x, y; // temporaries
+
+    // first round
+    x = h + f1(e, f, g) + 0x428a2f98 + words[0];
+    y = f2(a, b, c);
+    d += x;
+    h = x + y;
+    x = g + f1(d, e, f) + 0x71374491 + words[1];
+    y = f2(h, a, b);
+    c += x;
+    g = x + y;
+    x = f + f1(c, d, e) + 0xb5c0fbcf + words[2];
+    y = f2(g, h, a);
+    b += x;
+    f = x + y;
+    x = e + f1(b, c, d) + 0xe9b5dba5 + words[3];
+    y = f2(f, g, h);
+    a += x;
+    e = x + y;
+    x = d + f1(a, b, c) + 0x3956c25b + words[4];
+    y = f2(e, f, g);
+    h += x;
+    d = x + y;
+    x = c + f1(h, a, b) + 0x59f111f1 + words[5];
+    y = f2(d, e, f);
+    g += x;
+    c = x + y;
+    x = b + f1(g, h, a) + 0x923f82a4 + words[6];
+    y = f2(c, d, e);
+    f += x;
+    b = x + y;
+    x = a + f1(f, g, h) + 0xab1c5ed5 + words[7];
+    y = f2(b, c, d);
+    e += x;
+    a = x + y;
+
+    // secound round
+    x = h + f1(e, f, g) + 0xd807aa98 + words[8];
+    y = f2(a, b, c);
+    d += x;
+    h = x + y;
+    x = g + f1(d, e, f) + 0x12835b01 + words[9];
+    y = f2(h, a, b);
+    c += x;
+    g = x + y;
+    x = f + f1(c, d, e) + 0x243185be + words[10];
+    y = f2(g, h, a);
+    b += x;
+    f = x + y;
+    x = e + f1(b, c, d) + 0x550c7dc3 + words[11];
+    y = f2(f, g, h);
+    a += x;
+    e = x + y;
+    x = d + f1(a, b, c) + 0x72be5d74 + words[12];
+    y = f2(e, f, g);
+    h += x;
+    d = x + y;
+    x = c + f1(h, a, b) + 0x80deb1fe + words[13];
+    y = f2(d, e, f);
+    g += x;
+    c = x + y;
+    x = b + f1(g, h, a) + 0x9bdc06a7 + words[14];
+    y = f2(c, d, e);
+    f += x;
+    b = x + y;
+    x = a + f1(f, g, h) + 0xc19bf174 + words[15];
+    y = f2(b, c, d);
+    e += x;
+    a = x + y;
+
+    // extend to 24 words
+    for (; i < 24; i++)
+        words[i] = words[i - 16] + (rotate(words[i - 15], 7) ^ rotate(words[i - 15], 18) ^ (words[i - 15] >> 3)) +
+                   words[i - 7] + (rotate(words[i - 2], 17) ^ rotate(words[i - 2], 19) ^ (words[i - 2] >> 10));
+
+    // third round
+    x = h + f1(e, f, g) + 0xe49b69c1 + words[16];
+    y = f2(a, b, c);
+    d += x;
+    h = x + y;
+    x = g + f1(d, e, f) + 0xefbe4786 + words[17];
+    y = f2(h, a, b);
+    c += x;
+    g = x + y;
+    x = f + f1(c, d, e) + 0x0fc19dc6 + words[18];
+    y = f2(g, h, a);
+    b += x;
+    f = x + y;
+    x = e + f1(b, c, d) + 0x240ca1cc + words[19];
+    y = f2(f, g, h);
+    a += x;
+    e = x + y;
+    x = d + f1(a, b, c) + 0x2de92c6f + words[20];
+    y = f2(e, f, g);
+    h += x;
+    d = x + y;
+    x = c + f1(h, a, b) + 0x4a7484aa + words[21];
+    y = f2(d, e, f);
+    g += x;
+    c = x + y;
+    x = b + f1(g, h, a) + 0x5cb0a9dc + words[22];
+    y = f2(c, d, e);
+    f += x;
+    b = x + y;
+    x = a + f1(f, g, h) + 0x76f988da + words[23];
+    y = f2(b, c, d);
+    e += x;
+    a = x + y;
+
+    // extend to 32 words
+    for (; i < 32; i++)
+        words[i] = words[i - 16] + (rotate(words[i - 15], 7) ^ rotate(words[i - 15], 18) ^ (words[i - 15] >> 3)) +
+                   words[i - 7] + (rotate(words[i - 2], 17) ^ rotate(words[i - 2], 19) ^ (words[i - 2] >> 10));
+
+    // fourth round
+    x = h + f1(e, f, g) + 0x983e5152 + words[24];
+    y = f2(a, b, c);
+    d += x;
+    h = x + y;
+    x = g + f1(d, e, f) + 0xa831c66d + words[25];
+    y = f2(h, a, b);
+    c += x;
+    g = x + y;
+    x = f + f1(c, d, e) + 0xb00327c8 + words[26];
+    y = f2(g, h, a);
+    b += x;
+    f = x + y;
+    x = e + f1(b, c, d) + 0xbf597fc7 + words[27];
+    y = f2(f, g, h);
+    a += x;
+    e = x + y;
+    x = d + f1(a, b, c) + 0xc6e00bf3 + words[28];
+    y = f2(e, f, g);
+    h += x;
+    d = x + y;
+    x = c + f1(h, a, b) + 0xd5a79147 + words[29];
+    y = f2(d, e, f);
+    g += x;
+    c = x + y;
+    x = b + f1(g, h, a) + 0x06ca6351 + words[30];
+    y = f2(c, d, e);
+    f += x;
+    b = x + y;
+    x = a + f1(f, g, h) + 0x14292967 + words[31];
+    y = f2(b, c, d);
+    e += x;
+    a = x + y;
+
+    // extend to 40 words
+    for (; i < 40; i++)
+        words[i] = words[i - 16] + (rotate(words[i - 15], 7) ^ rotate(words[i - 15], 18) ^ (words[i - 15] >> 3)) +
+                   words[i - 7] + (rotate(words[i - 2], 17) ^ rotate(words[i - 2], 19) ^ (words[i - 2] >> 10));
+
+    // fifth round
+    x = h + f1(e, f, g) + 0x27b70a85 + words[32];
+    y = f2(a, b, c);
+    d += x;
+    h = x + y;
+    x = g + f1(d, e, f) + 0x2e1b2138 + words[33];
+    y = f2(h, a, b);
+    c += x;
+    g = x + y;
+    x = f + f1(c, d, e) + 0x4d2c6dfc + words[34];
+    y = f2(g, h, a);
+    b += x;
+    f = x + y;
+    x = e + f1(b, c, d) + 0x53380d13 + words[35];
+    y = f2(f, g, h);
+    a += x;
+    e = x + y;
+    x = d + f1(a, b, c) + 0x650a7354 + words[36];
+    y = f2(e, f, g);
+    h += x;
+    d = x + y;
+    x = c + f1(h, a, b) + 0x766a0abb + words[37];
+    y = f2(d, e, f);
+    g += x;
+    c = x + y;
+    x = b + f1(g, h, a) + 0x81c2c92e + words[38];
+    y = f2(c, d, e);
+    f += x;
+    b = x + y;
+    x = a + f1(f, g, h) + 0x92722c85 + words[39];
+    y = f2(b, c, d);
+    e += x;
+    a = x + y;
+
+    // extend to 48 words
+    for (; i < 48; i++)
+        words[i] = words[i - 16] + (rotate(words[i - 15], 7) ^ rotate(words[i - 15], 18) ^ (words[i - 15] >> 3)) +
+                   words[i - 7] + (rotate(words[i - 2], 17) ^ rotate(words[i - 2], 19) ^ (words[i - 2] >> 10));
+
+    // sixth round
+    x = h + f1(e, f, g) + 0xa2bfe8a1 + words[40];
+    y = f2(a, b, c);
+    d += x;
+    h = x + y;
+    x = g + f1(d, e, f) + 0xa81a664b + words[41];
+    y = f2(h, a, b);
+    c += x;
+    g = x + y;
+    x = f + f1(c, d, e) + 0xc24b8b70 + words[42];
+    y = f2(g, h, a);
+    b += x;
+    f = x + y;
+    x = e + f1(b, c, d) + 0xc76c51a3 + words[43];
+    y = f2(f, g, h);
+    a += x;
+    e = x + y;
+    x = d + f1(a, b, c) + 0xd192e819 + words[44];
+    y = f2(e, f, g);
+    h += x;
+    d = x + y;
+    x = c + f1(h, a, b) + 0xd6990624 + words[45];
+    y = f2(d, e, f);
+    g += x;
+    c = x + y;
+    x = b + f1(g, h, a) + 0xf40e3585 + words[46];
+    y = f2(c, d, e);
+    f += x;
+    b = x + y;
+    x = a + f1(f, g, h) + 0x106aa070 + words[47];
+    y = f2(b, c, d);
+    e += x;
+    a = x + y;
+
+    // extend to 56 words
+    for (; i < 56; i++)
+        words[i] = words[i - 16] + (rotate(words[i - 15], 7) ^ rotate(words[i - 15], 18) ^ (words[i - 15] >> 3)) +
+                   words[i - 7] + (rotate(words[i - 2], 17) ^ rotate(words[i - 2], 19) ^ (words[i - 2] >> 10));
+
+    // seventh round
+    x = h + f1(e, f, g) + 0x19a4c116 + words[48];
+    y = f2(a, b, c);
+    d += x;
+    h = x + y;
+    x = g + f1(d, e, f) + 0x1e376c08 + words[49];
+    y = f2(h, a, b);
+    c += x;
+    g = x + y;
+    x = f + f1(c, d, e) + 0x2748774c + words[50];
+    y = f2(g, h, a);
+    b += x;
+    f = x + y;
+    x = e + f1(b, c, d) + 0x34b0bcb5 + words[51];
+    y = f2(f, g, h);
+    a += x;
+    e = x + y;
+    x = d + f1(a, b, c) + 0x391c0cb3 + words[52];
+    y = f2(e, f, g);
+    h += x;
+    d = x + y;
+    x = c + f1(h, a, b) + 0x4ed8aa4a + words[53];
+    y = f2(d, e, f);
+    g += x;
+    c = x + y;
+    x = b + f1(g, h, a) + 0x5b9cca4f + words[54];
+    y = f2(c, d, e);
+    f += x;
+    b = x + y;
+    x = a + f1(f, g, h) + 0x682e6ff3 + words[55];
+    y = f2(b, c, d);
+    e += x;
+    a = x + y;
+
+    // extend to 64 words
+    for (; i < 64; i++)
+        words[i] = words[i - 16] + (rotate(words[i - 15], 7) ^ rotate(words[i - 15], 18) ^ (words[i - 15] >> 3)) +
+                   words[i - 7] + (rotate(words[i - 2], 17) ^ rotate(words[i - 2], 19) ^ (words[i - 2] >> 10));
+
+    // eigth round
+    x = h + f1(e, f, g) + 0x748f82ee + words[56];
+    y = f2(a, b, c);
+    d += x;
+    h = x + y;
+    x = g + f1(d, e, f) + 0x78a5636f + words[57];
+    y = f2(h, a, b);
+    c += x;
+    g = x + y;
+    x = f + f1(c, d, e) + 0x84c87814 + words[58];
+    y = f2(g, h, a);
+    b += x;
+    f = x + y;
+    x = e + f1(b, c, d) + 0x8cc70208 + words[59];
+    y = f2(f, g, h);
+    a += x;
+    e = x + y;
+    x = d + f1(a, b, c) + 0x90befffa + words[60];
+    y = f2(e, f, g);
+    h += x;
+    d = x + y;
+    x = c + f1(h, a, b) + 0xa4506ceb + words[61];
+    y = f2(d, e, f);
+    g += x;
+    c = x + y;
+    x = b + f1(g, h, a) + 0xbef9a3f7 + words[62];
+    y = f2(c, d, e);
+    f += x;
+    b = x + y;
+    x = a + f1(f, g, h) + 0xc67178f2 + words[63];
+    y = f2(b, c, d);
+    e += x;
+    a = x + y;
+
+    // update hash
+    m_hash[0] += a;
+    m_hash[1] += b;
+    m_hash[2] += c;
+    m_hash[3] += d;
+    m_hash[4] += e;
+    m_hash[5] += f;
+    m_hash[6] += g;
+    m_hash[7] += h;
+}
+
+/// add arbitrary number of bytes
+void SHA256::add(const void* data, size_t numBytes) {
+    const uint8_t* current = (const uint8_t*)data;
+
+    if (m_bufferSize > 0) {
+        while (numBytes > 0 && m_bufferSize < BlockSize) {
+            m_buffer[m_bufferSize++] = *current++;
+            numBytes--;
+        }
+    }
+
+    // full buffer
+    if (m_bufferSize == BlockSize) {
+        processBlock(m_buffer);
+        m_numBytes += BlockSize;
+        m_bufferSize = 0;
+    }
+
+    // no more data ?
+    if (numBytes == 0)
+        return;
+
+    // process full blocks
+    while (numBytes >= BlockSize) {
+        processBlock(current);
+        current += BlockSize;
+        m_numBytes += BlockSize;
+        numBytes -= BlockSize;
+    }
+
+    // keep remaining bytes in buffer
+    while (numBytes > 0) {
+        m_buffer[m_bufferSize++] = *current++;
+        numBytes--;
+    }
+}
+
+/// process final block, less than 64 bytes
+void SHA256::processBuffer() {
+    // the input bytes are considered as bits strings, where the first bit is the most significant bit of the byte
+
+    // - append "1" bit to message
+    // - append "0" bits until message length in bit mod 512 is 448
+    // - append length as 64 bit integer
+
+    // number of bits
+    size_t paddedLength = m_bufferSize * 8;
+
+    // plus one bit set to 1 (always appended)
+    paddedLength++;
+
+    // number of bits must be (numBits % 512) = 448
+    size_t lower11Bits = paddedLength & 511;
+    if (lower11Bits <= 448)
+        paddedLength += 448 - lower11Bits;
+    else
+        paddedLength += 512 + 448 - lower11Bits;
+    // convert from bits to bytes
+    paddedLength /= 8;
+
+    // only needed if additional data flows over into a second block
+    unsigned char extra[BlockSize];
+
+    // append a "1" bit, 128 => binary 10000000
+    if (m_bufferSize < BlockSize)
+        m_buffer[m_bufferSize] = 128;
+    else
+        extra[0] = 128;
+
+    size_t i;
+    for (i = m_bufferSize + 1; i < BlockSize; i++)
+        m_buffer[i] = 0;
+    for (; i < paddedLength; i++)
+        extra[i - BlockSize] = 0;
+
+    // add message length in bits as 64 bit number
+    uint64_t msgBits = 8 * (m_numBytes + m_bufferSize);
+    // find right position
+    unsigned char* addLength;
+    if (paddedLength < BlockSize)
+        addLength = m_buffer + paddedLength;
+    else
+        addLength = extra + paddedLength - BlockSize;
+
+    // must be big endian
+    *addLength++ = (unsigned char)((msgBits >> 56) & 0xFF);
+    *addLength++ = (unsigned char)((msgBits >> 48) & 0xFF);
+    *addLength++ = (unsigned char)((msgBits >> 40) & 0xFF);
+    *addLength++ = (unsigned char)((msgBits >> 32) & 0xFF);
+    *addLength++ = (unsigned char)((msgBits >> 24) & 0xFF);
+    *addLength++ = (unsigned char)((msgBits >> 16) & 0xFF);
+    *addLength++ = (unsigned char)((msgBits >> 8) & 0xFF);
+    *addLength = (unsigned char)(msgBits & 0xFF);
+
+    // process blocks
+    processBlock(m_buffer);
+    // flowed over into a second block ?
+    if (paddedLength > BlockSize)
+        processBlock(extra);
+}
+
+/// return latest hash as 64 hex characters
+std::string SHA256::getHash() {
+    // compute hash (as raw bytes)
+    unsigned char rawHash[HashBytes];
+    getHash(rawHash);
+
+    // convert to hex string
+    std::string result;
+    result.reserve(2 * HashBytes);
+    for (int i = 0; i < HashBytes; i++) {
+        static const char dec2hex[16 + 1] = "0123456789abcdef";
+        result += dec2hex[(rawHash[i] >> 4) & 15];
+        result += dec2hex[rawHash[i] & 15];
+    }
+
+    return result;
+}
+
+/// return latest hash as bytes
+void SHA256::getHash(unsigned char buffer[SHA256::HashBytes]) {
+    // save old hash if buffer is partially filled
+    uint32_t oldHash[HashValues];
+    for (int i = 0; i < HashValues; i++)
+        oldHash[i] = m_hash[i];
+
+    // process remaining bytes
+    processBuffer();
+
+    unsigned char* current = buffer;
+    for (int i = 0; i < HashValues; i++) {
+        *current++ = (m_hash[i] >> 24) & 0xFF;
+        *current++ = (m_hash[i] >> 16) & 0xFF;
+        *current++ = (m_hash[i] >> 8) & 0xFF;
+        *current++ = m_hash[i] & 0xFF;
+
+        // restore old hash
+        m_hash[i] = oldHash[i];
+    }
+}
+
+/// compute SHA256 of a memory block
+std::string SHA256::operator()(const void* data, size_t numBytes) {
+    reset();
+    add(data, numBytes);
+    return getHash();
+}
+
+/// compute SHA256 of a string, excluding final zero
+std::string SHA256::operator()(const std::string& text) {
+    reset();
+    add(text.c_str(), text.size());
+    return getHash();
+}
+
+
+// ===== 3rd_party\hash_library\sha256.h =====
+// SPDX-License-Identifier: Zlib
+
+// //////////////////////////////////////////////////////////
+// sha256.h
+// Copyright (c) 2014,2015 Stephan Brumme. All rights reserved.
+// see http://create.stephan-brumme.com/disclaimer.html
+//
+
+#pragma once
+
+//#include "hash.h"
+#include <string>
+
+// define fixed size integer types
+#ifdef _MSC_VER
+// Windows
+typedef unsigned __int8  uint8_t;
+typedef unsigned __int32 uint32_t;
+typedef unsigned __int64 uint64_t;
+#else
+// GCC
+#include <stdint.h>
+#endif
+
+
+/// compute SHA256 hash
+/** Usage:
+    SHA256 sha256;
+    std::string myHash  = sha256("Hello World");     // std::string
+    std::string myHash2 = sha256("How are you", 11); // arbitrary data, 11 bytes
+
+    // or in a streaming fashion:
+
+    SHA256 sha256;
+    while (more data available)
+      sha256.add(pointer to fresh data, number of new bytes);
+    std::string myHash3 = sha256.getHash();
+  */
+class SHA256 //: public Hash
+{
+public:
+  /// split into 64 byte blocks (=> 512 bits), hash is 32 bytes long
+  enum { BlockSize = 512 / 8, HashBytes = 32 };
+
+  /// same as reset()
+  SHA256();
+
+  /// compute SHA256 of a memory block
+  std::string operator()(const void* data, size_t numBytes);
+  /// compute SHA256 of a string, excluding final zero
+  std::string operator()(const std::string& text);
+
+  /// add arbitrary number of bytes
+  void add(const void* data, size_t numBytes);
+
+  /// return latest hash as 64 hex characters
+  std::string getHash();
+  /// return latest hash as bytes
+  void        getHash(unsigned char buffer[HashBytes]);
+
+  /// restart
+  void reset();
+
+private:
+  /// process 64 bytes
+  void processBlock(const void* data);
+  /// process everything left in the internal buffer
+  void processBuffer();
+
+  /// size of processed data in bytes
+  uint64_t m_numBytes;
+  /// valid bytes in m_buffer
+  size_t   m_bufferSize;
+  /// bytes not processed yet
+  uint8_t  m_buffer[BlockSize];
+
+  enum { HashValues = HashBytes / 4 };
+  /// hash, stored as integers
+  uint32_t m_hash[HashValues];
+};
+
+
+// ===== examples\platformio_complete\src\main.cpp =====
+#include <Arduino.h>
+#include <slac/channel.hpp>
+#include <port/esp32s3/qca7000_link.hpp>
+
+// Default MAC address for the modem. Adjust as required.
+static const uint8_t MY_MAC[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+
+// Global pointer used by the polling loop
+static slac::Channel* g_channel = nullptr;
+
+void setup() {
+    Serial.begin(115200);
+
+    // Initialise the SPI bus with custom chip select pin.
+    // PLC_SPI_CS_PIN and PLC_SPI_RST_PIN can be overridden via
+    // build flags in platformio.ini to match your wiring.
+    SPI.begin(48 /*SCK*/, 21 /*MISO*/, 47 /*MOSI*/, PLC_SPI_CS_PIN);
+    qca7000_config cfg{&SPI, PLC_SPI_CS_PIN, PLC_SPI_RST_PIN, MY_MAC};
+
+    static slac::port::Qca7000Link link(cfg);
+    static slac::Channel channel(&link);
+    g_channel = &channel;
+    channel.open();
+}
+
+void loop() {
+    // Poll the modem even when the IRQ line is not connected.
+    qca7000Process();
+
+    slac::messages::HomeplugMessage msg;
+    if (g_channel && g_channel->poll(msg)) {
+        // Handle incoming SLAC messages here
+    }
+    delay(1);
+}
+
+
+// ===== examples\platformio_complete\test\test_basic.cpp =====
+#include <cassert>
+#include <slac/channel.hpp>
+#include <slac/transport.hpp>
+
+class DummyLink : public slac::transport::Link {
+public:
+    bool open() override { return true; }
+    bool write(const uint8_t*, size_t, uint32_t) override { return true; }
+    bool read(uint8_t*, size_t, size_t* out_len, uint32_t) override {
+        if (out_len)
+            *out_len = 0;
+        return true;
+    }
+    const uint8_t* mac() const override {
+        static const uint8_t mac[6] = {0};
+        return mac;
+    }
+};
+
+int main() {
+    DummyLink link;
+    slac::Channel channel(&link);
+    assert(channel.open());
+    return 0;
+}
+
+
+// ===== include\slac\channel.hpp =====
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024 Joulepoint Private Limited (Author Chinmoy Bhuyan)
+#ifndef SLAC_CHANNEL_HPP
+#define SLAC_CHANNEL_HPP
+
+#include "port/port_common.hpp"
+
+#include <slac/transport.hpp>
+#include <string>
+
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2020 - 2021 Pionix GmbH and Contributors to EVerest
+#include <slac/slac.hpp>
+
+namespace slac {
+
+/**
+ * \brief Convenience wrapper around a transport::Link.
+ *
+ * Channel does not manage the lifetime of the underlying Link; the caller must
+ * create and maintain the link instance.  The current implementation operates
+ * solely on untagged Ethernet frames and assumes that at most one SLAC session
+ * is active.  Applications requiring VLAN encapsulation or multiplexing of
+ * multiple sessions need to handle those aspects outside of this class.
+ */
+
+class Channel {
+public:
+    explicit Channel(transport::Link* link);
+    ~Channel();
+
+    bool open();
+    bool read(slac::messages::HomeplugMessage& msg, int timeout);
+    bool poll(slac::messages::HomeplugMessage& msg);
+    bool write(slac::messages::HomeplugMessage& msg, int timeout);
+
+    const std::string& get_error() const {
+        return error;
+    }
+
+    bool got_timeout() const {
+        return did_timeout;
+    }
+
+    const uint8_t* get_mac_addr();
+
+private:
+    transport::Link* link;
+    uint8_t orig_if_mac[ETH_ALEN]{};
+
+    std::string error;
+    bool did_timeout{false};
+};
+
+} // namespace slac
+
+#endif // SLAC_CHANNEL_HPP
+
+
+// ===== include\slac\iso15118_consts.hpp =====
+#ifndef SLAC_ISO15118_CONSTS_HPP
+#define SLAC_ISO15118_CONSTS_HPP
+
+namespace slac {
+namespace defs {
+
+const int C_EV_START_ATTEN_CHAR_INDS = 3;
+const int C_EV_MATCH_RETRY = 2;
+const int C_EV_MATCH_MNBC = 10;
+const int TP_EV_BATCH_MSG_INTERVAL_MS = 40; // 20ms - 50ms, interval between start_atten_char and mnbc_sound msgs
+const int TT_EV_ATTEN_RESULTS_MS = 1200;    // max. 1200ms
+const int TT_EVSE_MATCH_MNBC_MS = 600;
+const int TT_MATCH_SEQUENCE_MS = 400;
+const int TT_MATCH_RESPONSE_MS = 200;
+const int TT_EVSE_MATCH_SESSION_MS = 10000;
+const int TT_EVSE_SLAC_INIT_MS = 40000; // (20s - 50s)
+const int TT_MATCH_JOIN_MS = 12000;     // max. 12s
+const int T_STEP_EF_MS = 4000;          // min. 4s
+
+} // namespace defs
+} // namespace slac
+
+#endif // SLAC_ISO15118_CONSTS_HPP
+
+
+// ===== include\slac\slac.hpp =====
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024 Joulepoint Private Limited (Author Chinmoy Bhuyan)
+#ifndef SLAC_SLAC_HPP
+#define SLAC_SLAC_HPP
+
+#include "port/port_common.hpp"
+
+#include <cstdint>
+#include <utility>
+
+#include "port/esp32s3/ethernet_defs.hpp"
+
+namespace slac {
+
+
+namespace defs {
+
+const uint16_t ETH_P_HOMEPLUG_GREENPHY = 0x88E1;
+
+enum class MMV : uint8_t {
+    AV_1_0 = 0x0,
+    AV_1_1 = 0x1,
+    AV_2_0 = 0x2,
+};
+
+const int MME_MIN_LENGTH = 60;
+
+const int STATION_ID_LEN = 17;
+const int NID_LEN = 7;
+const int NID_MOST_SIGNIFANT_BYTE_SHIFT = 4;
+const uint8_t NID_SECURITY_LEVEL_SIMPLE_CONNECT = 0b00;
+const int NID_SECURITY_LEVEL_OFFSET = 4;
+
+const uint8_t DAKS_HASH[] = {0x08, 0x85, 0x6d, 0xaf, 0x7c, 0xf5, 0x81, 0x85};
+const uint8_t NMK_HASH[] = {0x08, 0x85, 0x6d, 0xaf, 0x7c, 0xf5, 0x81, 0x86};
+
+const int NMK_LEN = 16;
+
+const int AAG_LIST_LEN = 58;
+const int RUN_ID_LEN = 16;
+
+const uint16_t MMTYPE_CM_SET_KEY = 0x6008;
+const uint16_t MMTYPE_CM_SLAC_PARAM = 0x6064;
+const uint16_t MMTYPE_CM_START_ATTEN_CHAR = 0x6068;
+const uint16_t MMTYPE_CM_ATTEN_CHAR = 0x606C;
+const uint16_t MMTYPE_CM_MNBC_SOUND = 0x6074;
+const uint16_t MMTYPE_CM_VALIDATE = 0x6078;
+const uint16_t MMTYPE_CM_SLAC_MATCH = 0x607C;
+const uint16_t MMTYPE_CM_ATTEN_PROFILE = 0x6084;
+
+// Qualcomm Vendor MMEs
+namespace qualcomm {
+const uint16_t MMTYPE_CM_RESET_DEVICE = 0xA01C;
+const uint16_t MMTYPE_LINK_STATUS = 0xA0B8;
+const uint16_t MMTYPE_OP_ATTR = 0xA068;
+const uint16_t MMTYPE_NW_INFO = 0xA038;
+const uint16_t MMTYPE_GET_SW = 0xA000;
+} // namespace qualcomm
+
+// Lumissil Vendor MMEs
+namespace lumissil {
+const uint16_t MMTYPE_NSCM_RESET_DEVICE = 0xAC70;
+const uint16_t MMTYPE_NSCM_GET_VERSION = 0xAC6C;
+const uint16_t MMTYPE_NSCM_GET_D_LINK_STATUS = 0xAC9C;
+} // namespace lumissil
+
+// Standard mmtypes
+const uint16_t MMTYPE_MODE_REQ = 0x0000;
+const uint16_t MMTYPE_MODE_CNF = 0x0001;
+const uint16_t MMTYPE_MODE_IND = 0x0002;
+const uint16_t MMTYPE_MODE_RSP = 0x0003;
+const uint16_t MMTYPE_MODE_MASK = 0x0003;
+
+const uint16_t MMTYPE_CATEGORY_STA_CCO = 0x0000;
+const uint16_t MMTYPE_CATEGORY_PROXY = 0x2000;
+const uint16_t MMTYPE_CATEGORY_CCO_CCO = 0x4000;
+const uint16_t MMTYPE_CATEGORY_STA_STA = 0x6000;
+const uint16_t MMTYPE_CATEGORY_MANUFACTOR_SPECIFIC = 0x8000;
+const uint16_t MMTYPE_CATEGORY_VENDOR_SPECIFIC = 0xA000;
+const uint16_t MMTYPE_CATEGORY_MASK = 0xE000;
+
+const uint8_t COMMON_APPLICATION_TYPE = 0x00;
+const uint8_t COMMON_SECURITY_TYPE = 0x00;
+
+const uint8_t CM_VALIDATE_REQ_SIGNAL_TYPE = 0x00;
+const uint8_t CM_VALIDATE_REQ_RESULT_READY = 0x01;
+const uint8_t CM_VALIDATE_REQ_RESULT_FAILURE = 0x03;
+
+const uint16_t CM_SLAC_MATCH_REQ_MVF_LENGTH = 0x3e;
+
+const uint16_t CM_SLAC_MATCH_CNF_MVF_LENGTH = 0x56;
+
+const uint8_t CM_SLAC_PARM_CNF_RESP_TYPE = 0x01; // = other GP station
+const uint8_t CM_SLAC_PARM_CNF_NUM_SOUNDS = 10;  // typical value
+const uint8_t CM_SLAC_PARM_CNF_TIMEOUT = 0x06;   // 600ms
+
+const uint8_t CM_SET_KEY_REQ_KEY_TYPE_NMK = 0x01; // NMK (AES-128), Network Management Key
+const uint8_t CM_SET_KEY_REQ_PID_HLE = 0x04;
+const uint16_t CM_SET_KEY_REQ_PRN_UNUSED = 0x0000;
+const uint8_t CM_SET_KEY_REQ_PMN_UNUSED = 0x00;
+const uint8_t CM_SET_KEY_REQ_CCO_CAP_NONE = 0x00; // Level-0 CCo Capable, neither QoS nor TDMA
+const uint8_t CM_SET_KEY_REQ_PEKS_NMK_KNOWN_TO_STA = 0x01;
+
+const uint8_t CM_SET_KEY_CNF_RESULT_SUCCESS = 0x0;
+
+const uint8_t CM_ATTEN_CHAR_RSP_RESULT = 0x00;
+
+const uint8_t BROADCAST_MAC_ADDRESS[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+
+} // namespace defs
+
+namespace utils {
+void generate_nmk_hs(uint8_t nmk_hs[slac::defs::NMK_LEN], const char* plain_password, int password_len);
+void generate_nid_from_nmk(uint8_t nid[slac::defs::NID_LEN], const uint8_t nmk[slac::defs::NMK_LEN]);
+} // namespace utils
+
+namespace messages {
+
+typedef struct {
+    struct ether_header ethernet_header;
+    struct {
+        uint8_t mmv;     // management message version
+        uint16_t mmtype; // management message type
+
+    } __attribute__((packed)) homeplug_header;
+
+    // the rest of this message is potentially payload data
+    uint8_t payload[ETH_FRAME_LEN - ETH_HLEN - sizeof(homeplug_header)];
+} __attribute__((packed)) homeplug_message;
+
+typedef struct {
+    uint8_t fmni; // fragmentation management number information
+    uint8_t fmsn; // fragmentation message sequence number
+} __attribute__((packed)) homeplug_fragmentation_part;
+
+class HomeplugMessage {
+public:
+    homeplug_message* get_raw_message_ptr() {
+        return &raw_msg;
+    };
+
+    int get_raw_msg_len() const {
+        return raw_msg_len;
+    }
+
+    void set_raw_msg_len(int len);
+
+    void setup_payload(void const* payload, int len, uint16_t mmtype, const defs::MMV mmv);
+    void setup_ethernet_header(const uint8_t dst_mac_addr[ETH_ALEN], const uint8_t src_mac_addr[ETH_ALEN] = nullptr);
+
+    uint16_t get_mmtype() const;
+    uint8_t* get_src_mac();
+
+    template <typename T> const T& get_payload() {
+        if (raw_msg.homeplug_header.mmv == static_cast<std::underlying_type_t<defs::MMV>>(defs::MMV::AV_1_0)) {
+            return *reinterpret_cast<T*>(raw_msg.payload);
+        }
+
+        // if not av 1.0 message, we need to shift by the fragmentation part
+        return *reinterpret_cast<T*>(raw_msg.payload + sizeof(homeplug_fragmentation_part));
+    }
+
+    bool is_valid() const;
+    bool keep_source_mac() const {
+        return keep_src_mac;
+    }
+
+private:
+    homeplug_message raw_msg;
+
+    int raw_msg_len{-1};
+    bool keep_src_mac{false};
+};
+
+const int M_SOUND_TARGET_LEN = 6;
+const int SENDER_ID_LEN = defs::STATION_ID_LEN;
+const int SOURCE_ID_LEN = defs::STATION_ID_LEN;
+const int RESP_ID_LEN = defs::STATION_ID_LEN;
+const int PEV_ID_LEN = defs::STATION_ID_LEN;
+const int EVSE_ID_LEN = defs::STATION_ID_LEN;
+
+typedef struct {
+    uint8_t application_type;         // fixed to 0x00, indicating 'pev-evse matching'
+    uint8_t security_type;            // fixed to 0x00, indicating 'no security'
+    uint8_t run_id[defs::RUN_ID_LEN]; // indentifier for a matching run
+    // cipher fields are missing, because we restrict to security_type = 0x00
+} __attribute__((packed)) cm_slac_parm_req;
+
+typedef struct {
+    uint8_t m_sound_target[M_SOUND_TARGET_LEN]; // fixed to 0xFFFFFFFFFFFF
+    uint8_t num_sounds;                         // number of expected m-sounds
+    uint8_t timeout;                            // corresponds to TT_EVSE_match_MNBC, in units of 100ms
+    uint8_t resp_type;                          // fixed to 0x01, indicating 'other gp station'
+    uint8_t forwarding_sta[ETH_ALEN];           // ev host mac address
+    uint8_t application_type;                   // fixed to 0x00, indicating 'pev-evse matching'
+    uint8_t security_type;                      // fixed to 0x00, indicating 'no security'
+    uint8_t run_id[defs::RUN_ID_LEN];           // matching run identifier, corresponding to the request
+    // cipher field is missing, because we restrict to security_type = 0x00
+} __attribute__((packed)) cm_slac_parm_cnf;
+
+typedef struct {
+    uint8_t application_type;         // fixed to 0x00, indicating 'pev-evse matching'
+    uint8_t security_type;            // fixed to 0x00, indicating 'no security'
+    uint8_t num_sounds;               // number of expected m-sounds
+    uint8_t timeout;                  // corresponds to TT_EVSE_match_MNBC
+    uint8_t resp_type;                // fixed to 0x01, indicating 'other gp station'
+    uint8_t forwarding_sta[ETH_ALEN]; // ev host mac address
+    uint8_t run_id[defs::RUN_ID_LEN]; // indentifier for a matching run
+} __attribute__((packed)) cm_start_atten_char_ind;
+
+typedef struct {
+    uint8_t application_type;         // fixed to 0x00, indicating 'pev-evse matching'
+    uint8_t security_type;            // fixed to 0x00, indicating 'no security'
+    uint8_t source_address[ETH_ALEN]; // mac address of EV host, which initiates matching
+    uint8_t run_id[defs::RUN_ID_LEN]; // indentifier for a matching run
+    uint8_t source_id[SOURCE_ID_LEN]; // unique id of the station, that sent the m-sounds
+    uint8_t resp_id[RESP_ID_LEN];     // unique id of the station, that is sending this message
+    uint8_t num_sounds;               // number of sounds used for attenuation profile
+    struct {
+        uint8_t num_groups;              // number of OFDM carrier groups
+        uint8_t aag[defs::AAG_LIST_LEN]; // AAG_1 .. AAG_N
+    } __attribute__((packed)) attenuation_profile;
+} __attribute__((packed)) cm_atten_char_ind;
+
+typedef struct {
+    uint8_t application_type;         // fixed to 0x00, indicating 'pev-evse matching'
+    uint8_t security_type;            // fixed to 0x00, indicating 'no security'
+    uint8_t source_address[ETH_ALEN]; // mac address of EV host, which initiates matching
+    uint8_t run_id[defs::RUN_ID_LEN]; // indentifier for a matching run
+    uint8_t source_id[SOURCE_ID_LEN]; // unique id of the station, that sent the m-sounds
+    uint8_t resp_id[RESP_ID_LEN];     // unique id of the station, that is sending this message
+    uint8_t result;                   // fixed to 0x00, indicates successful SLAC process
+} __attribute__((packed)) cm_atten_char_rsp;
+
+typedef struct {
+    uint8_t application_type;         // fixed to 0x00, indicating 'pev-evse matching'
+    uint8_t security_type;            // fixed to 0x00, indicating 'no security'
+    uint8_t sender_id[SENDER_ID_LEN]; // sender id, if application_type = 0x00, it should be the pev's vin code
+    uint8_t remaining_sound_count;    // count of remaining sound messages
+    uint8_t run_id[defs::RUN_ID_LEN]; // identifier for a matching run
+    uint8_t random[16];   // random value
+} __attribute__((packed)) cm_mnbc_sound_ind;
+
+// note: this message doesn't seem to part of hpgp, it is defined in ISO15118-3
+typedef struct {
+    uint8_t pev_mac[ETH_ALEN]; // mac address of the EV host
+    uint8_t num_groups;        // number of OFDM carrier groups
+    uint8_t _reserved;
+    uint8_t aag[defs::AAG_LIST_LEN]; // list of average attenuation for each group
+} __attribute__((packed)) cm_atten_profile_ind;
+
+typedef struct {
+    uint8_t application_type;         // fixed to 0x00, indicating 'pev-evse matching'
+    uint8_t security_type;            // fixed to 0x00, indicating 'no security'
+    uint16_t mvf_length;              // fixed to 0x3e = 62 bytes following
+    uint8_t pev_id[PEV_ID_LEN];       // vin code of PEV
+    uint8_t pev_mac[ETH_ALEN];        // mac address of the EV host
+    uint8_t evse_id[EVSE_ID_LEN];     // EVSE id
+    uint8_t evse_mac[ETH_ALEN];       // mac address of the EVSE
+    uint8_t run_id[defs::RUN_ID_LEN]; // identifier for a matching run
+} __attribute__((packed)) cm_slac_match_req;
+
+typedef struct {
+    uint8_t application_type;         // fixed to 0x00, indicating 'pev-evse matching'
+    uint8_t security_type;            // fixed to 0x00, indicating 'no security'
+    uint16_t mvf_length;              // fixed to 0x56 = 86 bytes following
+    uint8_t pev_id[PEV_ID_LEN];       // vin code of PEV
+    uint8_t pev_mac[ETH_ALEN];        // mac address of the EV host
+    uint8_t evse_id[EVSE_ID_LEN];     // EVSE id
+    uint8_t evse_mac[ETH_ALEN];       // mac address of the EVSE
+    uint8_t run_id[defs::RUN_ID_LEN]; // identifier for a matching run
+    uint8_t nid[defs::NID_LEN]; // network id derived from the nmk
+    uint8_t _reserved2;         // note: this is to pad the nid, which is defined to be 8 bytes for this message
+    uint8_t nmk[defs::NMK_LEN]; // private nmk of the EVSE
+} __attribute__((packed)) cm_slac_match_cnf;
+
+typedef struct {
+    uint8_t signal_type; // fixed to 0x00: PEV S2 toggles on control pilot line
+    uint8_t timer;       // in the first request response exchange: should be set to 0x00
+                         // in the second request response exchange: 0x00 = 100ms, 0x01 = 200ms TT_EVSE_vald_toggle
+    uint8_t result;      // in the first request response exchange: should be set to 0x01 = ready
+                         // in the second request response exchange: should be set to 0x01 = ready
+} __attribute__((packed)) cm_validate_req;
+
+typedef struct {
+    uint8_t signal_type; // fixed to 0x00: PEV S2 toggles on control pilot line
+    uint8_t toggle_num;  // in the first request response exchange: should be set to 0x00
+                         // in the second request response exchange: number of detected BC
+                         // edges during TT_EVSE_vald_toggle
+    uint8_t result;      // 0x00 = not ready, 0x01 = ready, 0x02 = success, 0x03 = failure, 0x04 = not required
+} __attribute__((packed)) cm_validate_cnf;
+
+typedef struct {
+    uint8_t key_type;               // fixed to 0x01, indicating NMK
+    uint32_t my_nonce;              // fixed to 0x00000000: encrypted payload not used
+    uint32_t your_nonce;            // fixed to 0x00000000: encrypted payload not used
+    uint8_t pid;                    // fixed to 0x04: HLE protocol
+    uint16_t prn;                   // fixed to 0x0000: encrypted payload not used
+    uint8_t pmn;                    // fixed to 0x00: encrypted payload not used
+    uint8_t cco_capability;         // CCo capability according to the station role
+    uint8_t nid[defs::NID_LEN];     // 54 LSBs = NID, 2 MSBs = 0b00
+    uint8_t new_eks;                // fixed to 0x01: NMK
+    uint8_t new_key[defs::NMK_LEN]; // new NMK
+} __attribute__((packed)) cm_set_key_req;
+
+typedef struct {
+    uint8_t result; // 0x00 = success, 0x01 = failure, 0x02 - 0xFF = reserved
+    uint32_t my_nonce;
+    uint32_t your_nonce;
+    uint8_t pid;
+    uint16_t prn;
+    uint8_t pmn;
+    uint8_t cco_capability;
+} __attribute__((packed)) cm_set_key_cnf;
+
+namespace qualcomm {
+
+typedef struct {
+    uint8_t vendor_mme[3] = {0x00, 0xb0, 0x52}; // Qualcomm Vendor MME code
+} __attribute__((packed)) cm_reset_device_req;
+
+typedef struct {
+    uint8_t vendor_mme[3]; // Vendor MME code
+    uint8_t success;
+} __attribute__((packed)) cm_reset_device_cnf;
+
+typedef struct {
+    uint8_t vendor_mme[3] = {0x00, 0xb0, 0x52}; // Qualcomm Vendor MME code
+} __attribute__((packed)) link_status_req;
+
+typedef struct {
+    uint8_t vendor_mme[3]; // Vendor MME code
+    uint8_t reserved;
+    uint8_t link_status;
+} __attribute__((packed)) link_status_cnf;
+
+typedef struct {
+    uint8_t vendor_mme[3] = {0x00, 0xb0, 0x52}; // Qualcomm Vendor MME code
+    uint32_t cookie{0x12345};                   // some cookie we will also get in the reply
+    uint8_t report_type{0};                     // binary report
+} __attribute__((packed)) op_attr_req;
+
+typedef struct {
+    uint8_t vendor_mme[3]; // Vendor MME code
+    uint16_t success;      // 0x00 means success
+    uint32_t cookie;
+    uint8_t report_type; // should be 0x00 (binary)
+    uint16_t size;       // should be 118, otherwise we do not know the structure
+    uint8_t hw_platform[16];
+    uint8_t sw_platform[16];
+    uint32_t version_major;
+    uint32_t version_minor;
+    uint32_t version_pib;
+    uint32_t version_build;
+    uint32_t reserved;
+    uint8_t build_date[8];
+    uint8_t release_type[12];
+    uint8_t sdram_type;
+    uint8_t reserved2;
+    uint8_t line_freq_zc;
+    uint32_t sdram_size;
+    uint8_t authorization_mode;
+} __attribute__((packed)) op_attr_cnf;
+
+} // namespace qualcomm
+
+namespace lumissil {
+
+typedef struct {
+    uint16_t version;
+    uint32_t reserved;
+    uint8_t request_id;
+    uint8_t reserved2[12];
+} __attribute__((packed)) lms_header;
+
+typedef struct {
+    uint8_t vendor_mme[3] = {0x00, 0x16, 0xE8}; // Lumissil Vendor MME code
+    lms_header lms;
+    uint8_t mode{0}; // Normal reset
+} __attribute__((packed)) nscm_reset_device_req;
+
+typedef struct {
+    uint8_t vendor_mme[3] = {0x00, 0x16, 0xE8}; // Lumissil Vendor MME code
+    lms_header lms;
+} __attribute__((packed)) nscm_get_version_req;
+
+typedef struct {
+    uint8_t vendor_mme[3] = {0x00, 0x16, 0xE8}; // Lumissil Vendor MME code
+    lms_header lms;
+    uint16_t version_major;
+    uint16_t version_minor;
+    uint16_t version_patch;
+    uint16_t version_build;
+    uint16_t reserved;
+} __attribute__((packed)) nscm_get_version_cnf;
+
+typedef struct {
+    uint8_t vendor_mme[3] = {0x00, 0x16, 0xE8}; // Lumissil Vendor MME code
+    lms_header lms;
+} __attribute__((packed)) nscm_get_d_link_status_req;
+
+typedef struct {
+    uint8_t vendor_mme[3] = {0x00, 0x16, 0xE8}; // Lumissil Vendor MME code
+    lms_header lms;
+    uint8_t link_status;
+} __attribute__((packed)) nscm_get_d_link_status_cnf;
+
+// There is no CNF for this reset packet
+
+} // namespace lumissil
+
+} // namespace messages
+} // namespace slac
+
+#endif // SLAC_SLAC_HPP
+
+
+// ===== include\slac\transport.hpp =====
+#ifndef SLAC_TRANSPORT_HPP
+#define SLAC_TRANSPORT_HPP
+
+#include "port/port_common.hpp"
+
+#include <cstdint>
+#include <cstddef>
+
+namespace slac::transport {
+class Link {
+public:
+    virtual bool open() = 0;
+    virtual bool write(const uint8_t* buf, size_t len, uint32_t timeout_ms) = 0;
+    virtual bool read(uint8_t* buf, size_t len, size_t* out_len, uint32_t timeout_ms) = 0;
+    virtual const uint8_t* mac() const = 0;
+    virtual ~Link() = default;
+};
+} // namespace slac::transport
+
+#endif // SLAC_TRANSPORT_HPP
+
+
+// ===== port\esp32s3\endian_compat.hpp =====
+#ifndef SLAC_ENDIAN_COMPAT_HPP
+#define SLAC_ENDIAN_COMPAT_HPP
+
+#include <stdint.h>
+
+#ifndef htons
+static inline uint16_t htons(uint16_t x) { return (x << 8) | (x >> 8); }
+#endif
+#ifndef ntohs
+static inline uint16_t ntohs(uint16_t x) { return htons(x); }
+#endif
+
+#endif // SLAC_ENDIAN_COMPAT_HPP
+
+
+// ===== port\esp32s3\ethernet_defs.hpp =====
+#ifndef SLAC_ETHERNET_DEFS_HPP
+#define SLAC_ETHERNET_DEFS_HPP
+
+#include "../port_common.hpp"
+#ifdef ESP_PLATFORM
+#include "port_config.hpp"
+#endif
+
+#include <stdint.h>
+
+#define ETH_ALEN 6
+#define ETH_HLEN 14
+#define ETH_FRAME_LEN 1514
+
+struct ether_header {
+    uint8_t ether_dhost[ETH_ALEN];
+    uint8_t ether_shost[ETH_ALEN];
+    uint16_t ether_type;
+} __attribute__((packed));
+
+#endif // SLAC_ETHERNET_DEFS_HPP
+
+
+// ===== port\esp32s3\port_config.hpp =====
+#ifndef SLAC_PORT_CONFIG_HPP
+#define SLAC_PORT_CONFIG_HPP
+
+#include "../port_common.hpp"
+
+#ifdef ESP_PLATFORM
+#include <stdint.h>
+
+static inline uint16_t le16toh(uint16_t v) {
+    return v;
+}
+static inline uint16_t htole16(uint16_t v) {
+    return v;
+}
+static inline uint32_t le32toh(uint32_t v) {
+    return v;
+}
+static inline uint32_t htole32(uint32_t v) {
+    return v;
+}
+
+#include <esp_timer.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/portmacro.h>
+#include <freertos/task.h>
+
+static inline uint32_t slac_millis() {
+    return (uint32_t)(esp_timer_get_time() / 1000ULL);
+}
+static inline void slac_delay(uint32_t ms) {
+    vTaskDelay(pdMS_TO_TICKS(ms));
+}
+static inline void slac_noInterrupts() {
+    portDISABLE_INTERRUPTS();
+}
+static inline void slac_interrupts() {
+    portENABLE_INTERRUPTS();
+}
+#endif // ESP_PLATFORM
+
+#endif // SLAC_PORT_CONFIG_HPP
+
+
+// ===== port\esp32s3\qca7000.cpp =====
+#include "qca7000.hpp"
+#include "../port_common.hpp"
+#include "port_config.hpp"
+#ifdef ESP_PLATFORM
+#include <esp_log.h>
+#include <esp_system.h>
+#else
+#include <stdint.h>
+#include <arpa/inet.h>
+#define ESP_LOGE(tag, fmt, ...)
+#define ESP_LOGI(tag, fmt, ...)
+#define ESP_LOGW(tag, fmt, ...)
+static inline uint32_t esp_random() {
+    return 0x12345678u;
+}
+#endif
+#include <slac/slac.hpp>
+#include <string.h>
+
+const char* PLC_TAG = "PLC_IF";
+
+uint8_t myethtransmitbuffer[V2GTP_BUFFER_SIZE]{};
+size_t myethtransmitlen = 0;
+uint8_t myethreceivebuffer[V2GTP_BUFFER_SIZE]{};
+size_t myethreceivelen = 0;
+
+static constexpr uint16_t SIG = 0xAA55;
+static constexpr uint16_t WRBUF_RST = 0x0C5B;
+static constexpr uint32_t FAST_HZ = 8000000;
+static constexpr uint32_t SLOW_HZ = 1000000;
+static constexpr uint16_t SOF_WORD = 0xAAAA;
+static constexpr uint16_t EOF_WORD = 0x5555;
+static constexpr uint16_t TX_HDR = 8;
+static constexpr uint16_t RX_HDR = 12;
+static constexpr uint16_t FTR_LEN = 2;
+static constexpr uint16_t INTR_MASK = SPI_INT_CPU_ON | SPI_INT_PKT_AVLBL | SPI_INT_RDBUF_ERR | SPI_INT_WRBUF_ERR;
+
+#ifdef LIBSLAC_TESTING
+SPIClass* g_spi = nullptr;
+int g_cs = -1;
+int g_rst = PLC_SPI_RST_PIN;
+#else
+static SPIClass* g_spi = nullptr;
+static int g_cs = -1;
+static int g_rst = PLC_SPI_RST_PIN;
+#endif
+static SPISettings setSlow(SLOW_HZ, MSBFIRST, SPI_MODE3);
+static SPISettings setFast(FAST_HZ, MSBFIRST, SPI_MODE3);
+
+namespace {
+struct RxEntry {
+    size_t len;
+    uint8_t data[V2GTP_BUFFER_SIZE];
+};
+static RxEntry ring[4];
+static volatile uint8_t head = 0, tail = 0;
+inline bool ringEmpty() {
+    return head == tail;
+}
+inline void ringPush(const uint8_t* d, size_t l) {
+    slac_noInterrupts();
+    if (l > V2GTP_BUFFER_SIZE)
+        l = V2GTP_BUFFER_SIZE;
+    uint8_t next = (head + 1) & 3;
+    if (next == tail) {
+        slac_interrupts();
+        ESP_LOGW(PLC_TAG, "RX ring full - dropping frame");
+        return;
+    }
+    memcpy(ring[head].data, d, l);
+    ring[head].len = l;
+    head = next;
+    slac_interrupts();
+}
+inline bool ringPop(const uint8_t** d, size_t* l) {
+    slac_noInterrupts();
+    if (ringEmpty()) {
+        slac_interrupts();
+        return false;
+    }
+    *d = ring[tail].data;
+    *l = ring[tail].len;
+    tail = (tail + 1) & 3;
+    slac_interrupts();
+    return true;
+}
+} // namespace
+
+static inline uint16_t cmd16(bool rd, bool intr, uint16_t reg) {
+    return (rd ? 0x8000u : 0) | (intr ? 0x4000u : 0) | (reg & 0x3FFFu);
+}
+
+static uint16_t spiRd16_fast(uint16_t reg) {
+    g_spi->beginTransaction(setFast);
+    digitalWrite(g_cs, LOW);
+    g_spi->transfer16(cmd16(true, true, reg));
+    uint16_t v = g_spi->transfer16(0);
+    digitalWrite(g_cs, HIGH);
+    g_spi->endTransaction();
+    return v;
+}
+
+static void spiWr16_fast(uint16_t reg, uint16_t val) {
+    g_spi->beginTransaction(setFast);
+    digitalWrite(g_cs, LOW);
+    g_spi->transfer16(cmd16(false, true, reg));
+    g_spi->transfer16(val);
+    digitalWrite(g_cs, HIGH);
+    g_spi->endTransaction();
+}
+
+static bool hardReset() {
+    pinMode(g_rst, OUTPUT);
+    digitalWrite(g_rst, LOW);
+    slac_delay(10);
+    digitalWrite(g_rst, HIGH);
+    slac_delay(100);
+
+    auto slowRd16 = [&](uint16_t reg) -> uint16_t {
+        g_spi->beginTransaction(setSlow);
+        digitalWrite(g_cs, LOW);
+        g_spi->transfer16(cmd16(true, true, reg));
+        uint16_t v = g_spi->transfer16(0);
+        digitalWrite(g_cs, HIGH);
+        g_spi->endTransaction();
+        return v;
+    };
+
+    uint32_t t0 = slac_millis();
+    uint16_t sig = 0, buf = 0;
+    do {
+        sig = slowRd16(SPI_REG_SIGNATURE);
+        buf = slowRd16(SPI_REG_WRBUF_SPC_AVA);
+        if (sig == SIG && buf == WRBUF_RST)
+            break;
+        slac_delay(5);
+    } while (slac_millis() - t0 < 200);
+
+    if (sig != SIG || buf != WRBUF_RST) {
+        ESP_LOGE(PLC_TAG, "Reset probe failed (SIG=0x%04X BUF=0x%04X)", sig, buf);
+        return false;
+    }
+    ESP_LOGI(PLC_TAG, "Reset probe OK (SIG=0x%04X)", sig);
+#define ESP_LOGW(tag, fmt, ...)
+
+    t0 = slac_millis();
+    while (!(slowRd16(SPI_REG_INTR_CAUSE) & SPI_INT_CPU_ON) && slac_millis() - t0 < 80)
+        ;
+
+    spiWr16_fast(SPI_REG_INTR_CAUSE, 0xFFFF);
+    return true;
+}
+
+uint16_t qca7000ReadInternalReg(uint8_t r) {
+    return spiRd16_fast(r << 8);
+}
+bool qca7000ReadSignature(uint16_t* s, uint16_t* v) {
+    uint16_t sig = qca7000ReadInternalReg(0x1A), ver = qca7000ReadInternalReg(0x1B);
+    if (s)
+        *s = sig;
+    if (v)
+        *v = ver;
+    return sig == SIG;
+}
+
+#ifdef LIBSLAC_TESTING
+bool txFrame(const uint8_t* eth, size_t ethLen) {
+#else
+static bool txFrame(const uint8_t* eth, size_t ethLen) {
+#endif
+    if (ethLen > 1522)
+        return false;
+    size_t frameLen = ethLen;
+    if (frameLen < 60)
+        frameLen = 60;
+    uint16_t spiLen = TX_HDR + frameLen + FTR_LEN;
+    if (spiRd16_fast(SPI_REG_WRBUF_SPC_AVA) < spiLen)
+        return false;
+
+    spiWr16_fast(SPI_REG_BFR_SIZE, spiLen);
+
+    g_spi->beginTransaction(setFast);
+    digitalWrite(g_cs, LOW);
+    g_spi->transfer16(cmd16(false, false, 0));
+    g_spi->transfer16(SOF_WORD);
+    g_spi->transfer16(SOF_WORD);
+    g_spi->transfer16(htole16(static_cast<uint16_t>(frameLen)));
+    g_spi->transfer16(0);
+    if (ethLen)
+        g_spi->writeBytes(eth, ethLen);
+    if (frameLen > ethLen) {
+        uint8_t pad[60]{};
+        g_spi->writeBytes(pad, frameLen - ethLen);
+    }
+    g_spi->transfer16(EOF_WORD);
+    digitalWrite(g_cs, HIGH);
+    g_spi->endTransaction();
+    return true;
+}
+#ifdef LIBSLAC_TESTING
+void fetchRx() {
+#else
+static void fetchRx() {
+#endif
+    uint16_t avail = spiRd16_fast(SPI_REG_RDBUF_BYTE_AVA);
+    if (avail < RX_HDR + FTR_LEN || avail > V2GTP_BUFFER_SIZE)
+        return;
+
+    uint16_t requested = avail;
+    spiWr16_fast(SPI_REG_BFR_SIZE, requested);
+
+    static uint8_t buf[V2GTP_BUFFER_SIZE + 2];
+    g_spi->beginTransaction(setFast);
+    digitalWrite(g_cs, LOW);
+    g_spi->transfer16(cmd16(true, false, 0));
+    for (uint16_t i = 0; i < avail + 2; ++i)
+        buf[i] = g_spi->transfer(0);
+    digitalWrite(g_cs, HIGH);
+    g_spi->endTransaction();
+
+    const uint8_t* p = buf + 2;
+    uint32_t len = (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+    if (len != requested) {
+        ESP_LOGE(PLC_TAG, "RX len mismatch: req=%u got=%u", requested, len);
+        return;
+    }
+    if (memcmp(p + 4, "\xAA\xAA\xAA\xAA", 4) != 0)
+        return;
+    uint16_t fl = le16toh(static_cast<uint16_t>((p[9] << 8) | p[8]));
+    if (p[RX_HDR + fl] != 0x55 || p[RX_HDR + fl + 1] != 0x55)
+        return;
+    ringPush(p + RX_HDR, fl);
+}
+
+bool spiQCA7000SendEthFrame(const uint8_t* f, size_t l) {
+    bool ok = txFrame(f, l);
+    if (ok && l <= V2GTP_BUFFER_SIZE) {
+        memcpy(myethtransmitbuffer, f, l);
+        myethtransmitlen = l;
+    }
+    return ok;
+}
+size_t spiQCA7000checkForReceivedData(uint8_t* d, size_t m) {
+    fetchRx();
+    const uint8_t* s;
+    size_t l;
+    if (!ringPop(&s, &l))
+        return 0;
+    size_t c = l > m ? m : l;
+    memcpy(d, s, c);
+    size_t store = l > V2GTP_BUFFER_SIZE ? V2GTP_BUFFER_SIZE : l;
+    memcpy(myethreceivebuffer, s, store);
+    myethreceivelen = l;
+    return c;
+}
+
+// Current SLAC handshake state. 0 = idle, 1 = waiting for parameter confirmation,
+// 2 = waiting for match request, 3 = handshake complete, 0xFF = mismatch.
+static uint8_t g_slac = 0;
+static uint8_t g_run_id[slac::defs::RUN_ID_LEN]{};
+static const uint8_t g_src_mac[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+
+// Issue a CM_SLAC_PARM.REQ to start the SLAC matching handshake.
+bool qca7000startSlac() {
+    g_slac = 1; // waiting for CNF
+
+    for (size_t i = 0; i < sizeof(g_run_id); ++i)
+        g_run_id[i] = static_cast<uint8_t>(esp_random() & 0xFF);
+
+    struct __attribute__((packed)) {
+        ether_header eth;
+        struct {
+            uint8_t mmv;
+            uint16_t mmtype;
+        } hp;
+        slac::messages::cm_slac_parm_req req;
+    } msg{};
+
+    memset(&msg, 0, sizeof(msg));
+    memset(msg.eth.ether_dhost, 0xFF, ETH_ALEN);
+    memcpy(msg.eth.ether_shost, g_src_mac, ETH_ALEN);
+    msg.eth.ether_type = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
+    msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
+    msg.hp.mmtype = htole16(slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_REQ);
+    msg.req.application_type = slac::defs::COMMON_APPLICATION_TYPE;
+    msg.req.security_type = slac::defs::COMMON_SECURITY_TYPE;
+    memcpy(msg.req.run_id, g_run_id, sizeof(g_run_id));
+
+    bool ok = txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+    if (!ok)
+        g_slac = 0;
+    return ok;
+}
+
+// Poll for SLAC confirmation frames and update g_slac accordingly.
+uint8_t qca7000getSlacResult() {
+    fetchRx();
+    const uint8_t* d;
+    size_t l;
+    while (ringPop(&d, &l)) {
+        if (l < sizeof(ether_header) + 3)
+            continue;
+        const ether_header* eth = reinterpret_cast<const ether_header*>(d);
+        if (eth->ether_type != htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY))
+            continue;
+        const uint8_t* p = d + sizeof(ether_header);
+        uint8_t mmv = p[0];
+        uint16_t mmtype = le16toh(*reinterpret_cast<const uint16_t*>(p + 1));
+        if (mmv != static_cast<uint8_t>(slac::defs::MMV::AV_1_0))
+            continue;
+        if (mmtype == (slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_CNF)) {
+            const auto* cnf = reinterpret_cast<const slac::messages::cm_slac_parm_cnf*>(p + 3);
+            if (!memcmp(cnf->run_id, g_run_id, sizeof(g_run_id)))
+                g_slac = 2; // waiting for match
+            else
+                g_slac = 0xFF;
+        } else if (mmtype == (slac::defs::MMTYPE_CM_SLAC_MATCH | slac::defs::MMTYPE_MODE_REQ)) {
+            const auto* req = reinterpret_cast<const slac::messages::cm_slac_match_req*>(p + 3);
+            if (!memcmp(req->run_id, g_run_id, sizeof(g_run_id)))
+                g_slac = 3; // success
+            else
+                g_slac = 0xFF;
+        }
+    }
+    return g_slac;
+}
+
+void qca7000Process() {
+    spiWr16_fast(SPI_REG_INTR_ENABLE, 0);
+    uint16_t cause = spiRd16_fast(SPI_REG_INTR_CAUSE);
+    spiWr16_fast(SPI_REG_INTR_CAUSE, cause);
+    spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
+    if (!cause)
+        return;
+    if (cause & SPI_INT_CPU_ON) {
+        hardReset();
+        qca7000setup(g_spi, g_cs, g_rst);
+        return;
+    }
+    if (cause & (SPI_INT_WRBUF_ERR | SPI_INT_RDBUF_ERR)) {
+        hardReset();
+        return;
+    }
+    if (cause & SPI_INT_PKT_AVLBL)
+        fetchRx();
+}
+
+bool qca7000setup(SPIClass* bus, int csPin, int rstPin) {
+    ESP_LOGI(PLC_TAG, "QCA7000 setup: bus=%p CS=%d RST=%d", bus, csPin, rstPin);
+#define ESP_LOGW(tag, fmt, ...)
+    g_spi = bus;
+    g_cs = csPin;
+    g_rst = rstPin;
+    if (g_spi)
+        g_spi->begin();
+    pinMode(g_cs, OUTPUT);
+    digitalWrite(g_cs, HIGH);
+
+    if (!hardReset()) {
+        ESP_LOGE(PLC_TAG, "hardReset failed – modem missing");
+        return false;
+    }
+
+    spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
+    ESP_LOGI(PLC_TAG, "QCA7000 ready");
+#define ESP_LOGW(tag, fmt, ...)
+    return true;
+}
+
+bool qca7000ResetAndCheck() {
+    return hardReset();
+}
+
+#ifdef ESP_PLATFORM
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
+#include <freertos/task.h>
+#include <slac/channel.hpp>
+
+void qca7000_task(void* arg) {
+    auto* ctx = static_cast<Qca7000TaskContext*>(arg);
+    slac::messages::HomeplugMessage msg;
+
+    while (true) {
+        qca7000Process();
+        if (ctx && ctx->channel && ctx->channel->poll(msg)) {
+            if (ctx->queue) {
+                xQueueSend(ctx->queue, &msg, 0);
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(1));
+    }
+}
+#endif
+
+
+// ===== port\esp32s3\qca7000.hpp =====
+#pragma once
+
+#include "../port_common.hpp"
+#ifdef ESP_PLATFORM
+#include "port_config.hpp"
+#endif
+
+#include "ethernet_defs.hpp"
+#ifdef ARDUINO
+#include <Arduino.h>
+#include <SPI.h>
+#endif
+#include <slac/channel.hpp>
+#include <stddef.h>
+#include <stdint.h>
+
+#ifndef V2GTP_BUFFER_SIZE
+#define V2GTP_BUFFER_SIZE 1536
+#endif
+
+// Register and interrupt definitions (see QCA7000 datasheet)
+#ifndef SPI_INT_CPU_ON
+#define SPI_INT_CPU_ON 0x0040
+#endif
+#ifndef SPI_INT_PKT_AVLBL
+#define SPI_INT_PKT_AVLBL 0x0001
+#endif
+#ifndef SPI_INT_RDBUF_ERR
+#define SPI_INT_RDBUF_ERR 0x0002
+#endif
+#ifndef SPI_INT_WRBUF_ERR
+#define SPI_INT_WRBUF_ERR 0x0004
+#endif
+#ifndef SPI_REG_SIGNATURE
+#define SPI_REG_SIGNATURE 0x1A00
+#endif
+#ifndef SPI_REG_WRBUF_SPC_AVA
+#define SPI_REG_WRBUF_SPC_AVA 0x0200
+#endif
+#ifndef SPI_REG_INTR_CAUSE
+#define SPI_REG_INTR_CAUSE 0x0C00
+#endif
+#ifndef SPI_REG_BFR_SIZE
+#define SPI_REG_BFR_SIZE 0x0100
+#endif
+#ifndef SPI_REG_RDBUF_BYTE_AVA
+#define SPI_REG_RDBUF_BYTE_AVA 0x0300
+#endif
+#ifndef SPI_REG_INTR_ENABLE
+#define SPI_REG_INTR_ENABLE 0x0D00
+#endif
+
+#ifndef PLC_SPI_RST_PIN
+#define PLC_SPI_RST_PIN 5
+#endif
+#ifndef PLC_SPI_CS_PIN
+#define PLC_SPI_CS_PIN 17
+#endif
+
+struct qca7000_config {
+    SPIClass* spi;
+    int cs_pin;
+    int rst_pin{PLC_SPI_RST_PIN};
+    const uint8_t* mac_addr{nullptr};
+};
+
+bool qca7000setup(SPIClass* spi, int cs_pin, int rst_pin = PLC_SPI_RST_PIN);
+bool qca7000ResetAndCheck();
+uint16_t qca7000ReadInternalReg(uint8_t reg);
+bool qca7000ReadSignature(uint16_t* sig = nullptr, uint16_t* ver = nullptr);
+size_t spiQCA7000checkForReceivedData(uint8_t* dst, size_t maxLen);
+bool spiQCA7000SendEthFrame(const uint8_t* frame, size_t len);
+bool qca7000startSlac();
+uint8_t qca7000getSlacResult();
+void qca7000Process();
+#ifdef ESP_PLATFORM
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
+
+struct Qca7000TaskContext {
+    slac::Channel* channel;
+    QueueHandle_t queue;
+};
+
+void qca7000_task(void* arg);
+#endif
+
+extern uint8_t myethtransmitbuffer[V2GTP_BUFFER_SIZE];
+extern size_t myethtransmitlen;
+extern uint8_t myethreceivebuffer[V2GTP_BUFFER_SIZE];
+extern size_t myethreceivelen;
+extern const char* PLC_TAG;
+
+
+// ===== port\esp32s3\qca7000_link.cpp =====
+#include "qca7000_link.hpp"
+#include "../port_common.hpp"
+#include "port_config.hpp"
+#include "qca7000.hpp"
+#include <cstring>
+
+namespace slac {
+namespace port {
+
+Qca7000Link::Qca7000Link(const qca7000_config& c) : cfg(c) {
+    memset(mac_addr, 0, sizeof(mac_addr));
+}
+
+bool Qca7000Link::open() {
+    if (initialized)
+        return true;
+    if (initialization_error)
+        return false;
+
+    SPIClass* bus = cfg.spi ? cfg.spi : &SPI;
+    int cs = cfg.cs_pin ? cfg.cs_pin : PLC_SPI_CS_PIN;
+    int rst = cfg.rst_pin ? cfg.rst_pin : PLC_SPI_RST_PIN;
+
+    if (!qca7000setup(bus, cs, rst)) {
+        initialization_error = true;
+        return false;
+    }
+
+    if (cfg.mac_addr)
+        memcpy(mac_addr, cfg.mac_addr, ETH_ALEN);
+    else {
+        const uint8_t def_mac[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+        memcpy(mac_addr, def_mac, ETH_ALEN);
+    }
+    initialized = true;
+    return true;
+}
+
+bool Qca7000Link::write(const uint8_t* b, size_t l, uint32_t) {
+    if (!initialized || initialization_error)
+        return false;
+    return spiQCA7000SendEthFrame(b, l);
+}
+
+bool Qca7000Link::read(uint8_t* b, size_t l, size_t* out, uint32_t timeout_ms) {
+    if (!initialized || initialization_error) {
+        *out = 0;
+        return false;
+    }
+    uint32_t start = slac_millis();
+    do {
+        size_t got = spiQCA7000checkForReceivedData(b, l);
+        if (got) {
+            *out = got;
+            return true;
+        }
+        if (timeout_ms == 0)
+            break;
+        slac_delay(1);
+    } while (slac_millis() - start < timeout_ms);
+    *out = 0;
+    return false;
+}
+
+const uint8_t* Qca7000Link::mac() const {
+    return mac_addr;
+}
+
+} // namespace port
+} // namespace slac
+
+
+// ===== port\esp32s3\qca7000_link.hpp =====
+#ifndef SLAC_QCA7000_LINK_HPP
+#define SLAC_QCA7000_LINK_HPP
+
+#include "../port_common.hpp"
+#ifdef ESP_PLATFORM
+#include "port_config.hpp"
+#endif
+
+#include "ethernet_defs.hpp"
+#include "qca7000.hpp"
+#include <slac/transport.hpp>
+
+namespace slac {
+namespace port {
+
+class Qca7000Link : public transport::Link {
+public:
+    explicit Qca7000Link(const qca7000_config& cfg);
+
+    bool open() override;
+    bool write(const uint8_t* b, size_t l, uint32_t timeout_ms) override;
+    bool read(uint8_t* b, size_t l, size_t* out, uint32_t timeout_ms) override;
+    const uint8_t* mac() const override;
+
+    /**
+     * @brief Returns true if an initialization error has occurred.
+     */
+    bool init_failed() const {
+        return initialization_error;
+    }
+
+    /**
+     * @brief Returns true if the link was successfully opened.
+     */
+    bool is_initialized() const {
+        return initialized;
+    }
+
+private:
+    bool initialized{false};
+    bool initialization_error{false};
+    qca7000_config cfg;
+    uint8_t mac_addr[ETH_ALEN]{};
+};
+
+} // namespace port
+} // namespace slac
+
+#endif // SLAC_QCA7000_LINK_HPP
+
+
+// ===== port\esp32s3\qca7000_uart.cpp =====
+#include "qca7000_uart.hpp"
+#include "port_config.hpp"
+#ifdef ESP_PLATFORM
+#include <esp_log.h>
+#else
+#define ESP_LOGI(tag, fmt, ...)
+#define ESP_LOGW(tag, fmt, ...)
+#define ESP_LOGE(tag, fmt, ...)
+#endif
+#include <string.h>
+
+#ifdef LIBSLAC_TESTING
+static const char* PLC_TAG = "PLC_IF";
+#else
+const char* PLC_TAG = "PLC_IF";
+#endif
+
+#ifdef LIBSLAC_TESTING
+static uint8_t myethtransmitbuffer[V2GTP_BUFFER_SIZE]{};
+static size_t myethtransmitlen = 0;
+static uint8_t myethreceivebuffer[V2GTP_BUFFER_SIZE]{};
+static size_t myethreceivelen = 0;
+#else
+uint8_t myethtransmitbuffer[V2GTP_BUFFER_SIZE]{};
+size_t myethtransmitlen = 0;
+uint8_t myethreceivebuffer[V2GTP_BUFFER_SIZE]{};
+size_t myethreceivelen = 0;
+#endif
+
+
+static constexpr uint16_t SOF_WORD = 0xAAAA;
+static constexpr uint16_t EOF_WORD = 0x5555;
+static constexpr uint16_t TX_HDR = 8;
+static constexpr uint16_t RX_HDR = 8;
+static constexpr uint16_t FTR_LEN = 2;
+
+#ifdef LIBSLAC_TESTING
+HardwareSerial* g_serial = nullptr;
+#else
+static HardwareSerial* g_serial = nullptr;
+#endif
+
+namespace {
+struct RxEntry {
+    size_t len;
+    uint8_t data[V2GTP_BUFFER_SIZE];
+};
+static RxEntry ring[4];
+static volatile uint8_t head = 0, tail = 0;
+inline bool ringEmpty() { return head == tail; }
+inline void ringPush(const uint8_t* d, size_t l) {
+    slac_noInterrupts();
+    if (l > V2GTP_BUFFER_SIZE)
+        l = V2GTP_BUFFER_SIZE;
+    uint8_t next = (head + 1) & 3;
+    if (next == tail) {
+        slac_interrupts();
+        ESP_LOGW(PLC_TAG, "RX ring full - dropping frame");
+        return;
+    }
+    memcpy(ring[head].data, d, l);
+    ring[head].len = l;
+    head = next;
+    slac_interrupts();
+}
+inline bool ringPop(const uint8_t** d, size_t* l) {
+    slac_noInterrupts();
+    if (ringEmpty()) {
+        slac_interrupts();
+        return false;
+    }
+    *d = ring[tail].data;
+    *l = ring[tail].len;
+    tail = (tail + 1) & 3;
+    slac_interrupts();
+    return true;
+}
+
+static enum State { WAIT_SOF, LEN1, LEN2, RSVD1, RSVD2, PAYLOAD, EOF1, EOF2 } state = WAIT_SOF;
+static size_t sof_count = 0;
+static uint16_t rx_len = 0;
+static uint16_t rx_pos = 0;
+static uint8_t rx_buf[V2GTP_BUFFER_SIZE];
+
+inline void processByte(uint8_t b) {
+    switch (state) {
+    case WAIT_SOF:
+        if (b == 0xAA) {
+            if (++sof_count == 4) {
+                sof_count = 0;
+                state = LEN1;
+            }
+        } else {
+            sof_count = 0;
+        }
+        break;
+    case LEN1:
+        rx_len = b;
+        state = LEN2;
+        break;
+    case LEN2:
+        rx_len |= static_cast<uint16_t>(b) << 8;
+        if (rx_len > V2GTP_BUFFER_SIZE) {
+            state = WAIT_SOF;
+            break;
+        }
+        state = RSVD1;
+        break;
+    case RSVD1:
+        state = RSVD2;
+        break;
+    case RSVD2:
+        rx_pos = 0;
+        state = PAYLOAD;
+        break;
+    case PAYLOAD:
+        rx_buf[rx_pos++] = b;
+        if (rx_pos >= rx_len)
+            state = EOF1;
+        break;
+    case EOF1:
+        if (b == 0x55)
+            state = EOF2;
+        else
+            state = WAIT_SOF;
+        break;
+    case EOF2:
+        if (b == 0x55)
+            ringPush(rx_buf, rx_len);
+        state = WAIT_SOF;
+        break;
+    }
+}
+
+inline void pollRx() {
+    while (g_serial && g_serial->available()) {
+        int v = g_serial->read();
+        if (v < 0)
+            break;
+        processByte(static_cast<uint8_t>(v));
+    }
+}
+} // namespace
+
+#ifdef LIBSLAC_TESTING
+bool uartTxFrame(const uint8_t* eth, size_t ethLen) {
+#else
+static bool uartTxFrame(const uint8_t* eth, size_t ethLen) {
+#endif
+    if (!g_serial || ethLen > 1522)
+        return false;
+    size_t frameLen = ethLen;
+    if (frameLen < 60)
+        frameLen = 60;
+    uint8_t hdr[TX_HDR];
+    hdr[0] = hdr[1] = hdr[2] = hdr[3] = 0xAA;
+    hdr[4] = frameLen & 0xFF;
+    hdr[5] = (frameLen >> 8) & 0xFF;
+    hdr[6] = 0;
+    hdr[7] = 0;
+    g_serial->write(hdr, TX_HDR);
+    if (ethLen)
+        g_serial->write(eth, ethLen);
+    if (frameLen > ethLen) {
+        uint8_t pad[60]{};
+        g_serial->write(pad, frameLen - ethLen);
+    }
+    uint8_t eof[2] = {0x55, 0x55};
+    g_serial->write(eof, 2);
+    return true;
+}
+
+#ifdef LIBSLAC_TESTING
+void uartFetchRx() {
+#else
+static void uartFetchRx() {
+#endif
+    pollRx();
+}
+
+bool uartQCA7000SendEthFrame(const uint8_t* f, size_t l) {
+    bool ok = uartTxFrame(f, l);
+    if (ok && l <= V2GTP_BUFFER_SIZE) {
+        memcpy(myethtransmitbuffer, f, l);
+        myethtransmitlen = l;
+    }
+    return ok;
+}
+
+size_t uartQCA7000checkForReceivedData(uint8_t* d, size_t m) {
+    pollRx();
+    const uint8_t* s;
+    size_t l;
+    if (!ringPop(&s, &l))
+        return 0;
+    size_t c = l > m ? m : l;
+    memcpy(d, s, c);
+    size_t store = l > V2GTP_BUFFER_SIZE ? V2GTP_BUFFER_SIZE : l;
+    memcpy(myethreceivebuffer, s, store);
+    myethreceivelen = l;
+    return c;
+}
+
+namespace slac {
+namespace port {
+
+Qca7000UartLink::Qca7000UartLink(const qca7000_uart_config& c) : cfg(c) {
+    memset(mac_addr, 0, sizeof(mac_addr));
+}
+
+bool Qca7000UartLink::open() {
+    if (initialized)
+        return true;
+    if (initialization_error)
+        return false;
+
+    g_serial = cfg.serial ? cfg.serial : &Serial;
+#ifdef ARDUINO
+    if (g_serial)
+        g_serial->begin(cfg.baud ? cfg.baud : 115200);
+#endif
+    if (cfg.mac_addr)
+        memcpy(mac_addr, cfg.mac_addr, ETH_ALEN);
+    else {
+        const uint8_t def_mac[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+        memcpy(mac_addr, def_mac, ETH_ALEN);
+    }
+    initialized = true;
+    return true;
+}
+
+bool Qca7000UartLink::write(const uint8_t* b, size_t l, uint32_t) {
+    if (!initialized || initialization_error)
+        return false;
+    return uartQCA7000SendEthFrame(b, l);
+}
+
+bool Qca7000UartLink::read(uint8_t* b, size_t l, size_t* out, uint32_t timeout_ms) {
+    if (!initialized || initialization_error) {
+        *out = 0;
+        return false;
+    }
+    uint32_t start = slac_millis();
+    do {
+        size_t got = uartQCA7000checkForReceivedData(b, l);
+        if (got) {
+            *out = got;
+            return true;
+        }
+        if (timeout_ms == 0)
+            break;
+        slac_delay(1);
+    } while (slac_millis() - start < timeout_ms);
+    *out = 0;
+    return false;
+}
+
+const uint8_t* Qca7000UartLink::mac() const {
+    return mac_addr;
+}
+
+} // namespace port
+} // namespace slac
+
+
+
+// ===== port\esp32s3\qca7000_uart.hpp =====
+#pragma once
+
+#ifdef ESP_PLATFORM
+#include "port_config.hpp"
+#endif
+
+#include "ethernet_defs.hpp"
+#ifndef V2GTP_BUFFER_SIZE
+#define V2GTP_BUFFER_SIZE 1536
+#endif
+#include <slac/transport.hpp>
+
+#ifdef ARDUINO
+#include <HardwareSerial.h>
+#endif
+
+struct qca7000_uart_config {
+    HardwareSerial* serial;
+    uint32_t baud;
+    const uint8_t* mac_addr{nullptr};
+};
+
+namespace slac {
+namespace port {
+
+class Qca7000UartLink : public transport::Link {
+public:
+    explicit Qca7000UartLink(const qca7000_uart_config& cfg);
+
+    bool open() override;
+    bool write(const uint8_t* b, size_t l, uint32_t timeout_ms) override;
+    bool read(uint8_t* b, size_t l, size_t* out, uint32_t timeout_ms) override;
+    const uint8_t* mac() const override;
+
+    bool init_failed() const { return initialization_error; }
+    bool is_initialized() const { return initialized; }
+
+private:
+    bool initialized{false};
+    bool initialization_error{false};
+    qca7000_uart_config cfg;
+    uint8_t mac_addr[ETH_ALEN]{};
+};
+
+} // namespace port
+} // namespace slac
+
+
+// ===== port\port_common.hpp =====
+#ifndef SLAC_GENERIC_PORT_CONFIG_HPP
+#define SLAC_GENERIC_PORT_CONFIG_HPP
+
+#include <stdint.h>
+
+#ifdef ARDUINO
+#include <Arduino.h>
+#endif
+
+#ifndef slac_millis
+#if defined(ARDUINO) && !defined(ESP_PLATFORM)
+static inline uint32_t slac_millis() { return millis(); }
+#endif
+#endif
+
+#ifndef slac_delay
+#if defined(ARDUINO) && !defined(ESP_PLATFORM)
+static inline void slac_delay(uint32_t ms) { delay(ms); }
+#endif
+#endif
+
+#ifndef slac_noInterrupts
+#if defined(ARDUINO) && !defined(ESP_PLATFORM)
+static inline void slac_noInterrupts() { noInterrupts(); }
+#endif
+#endif
+
+#ifndef slac_interrupts
+#if defined(ARDUINO) && !defined(ESP_PLATFORM)
+static inline void slac_interrupts() { interrupts(); }
+#endif
+#endif
+
+#endif // SLAC_GENERIC_PORT_CONFIG_HPP
+
+
+// ===== src\channel.cpp =====
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024 Joulepoint Private Limited (Author Chinmoy Bhuyan)
+#include <slac/channel.hpp>
+#ifdef ESP_PLATFORM
+#include "port/port_common.hpp"
+#endif
+
+#include <algorithm>
+#include <cassert>
+#include <cstring>
+
+#include <slac/transport.hpp>
+
+namespace slac {
+
+Channel::Channel(transport::Link* l) : link(l) {
+}
+
+bool Channel::open() {
+    did_timeout = false;
+    if (!link)
+        return false;
+
+    if (!link->open())
+        return false;
+
+    memcpy(orig_if_mac, link->mac(), sizeof(orig_if_mac));
+    return true;
+}
+
+Channel::~Channel() = default;
+
+bool Channel::read(slac::messages::HomeplugMessage& msg, int timeout) {
+    did_timeout = false;
+    if (!link)
+        return false;
+
+    size_t out_len = 0;
+    bool ok = link->read(reinterpret_cast<uint8_t*>(msg.get_raw_message_ptr()), sizeof(messages::homeplug_message),
+                         &out_len, timeout);
+    if (!ok) {
+        return false;
+    }
+
+    if (out_len < defs::MME_MIN_LENGTH || out_len > sizeof(messages::homeplug_message)) {
+        return false;
+    }
+
+    msg.set_raw_msg_len(static_cast<int>(out_len));
+    return true;
+}
+
+bool Channel::poll(slac::messages::HomeplugMessage& msg) {
+    did_timeout = false;
+    if (!link)
+        return false;
+
+    size_t out_len = 0;
+    bool ok = link->read(reinterpret_cast<uint8_t*>(msg.get_raw_message_ptr()), sizeof(messages::homeplug_message),
+                         &out_len, 0);
+    if (!ok) {
+        return false;
+    }
+
+    if (out_len < defs::MME_MIN_LENGTH || out_len > sizeof(messages::homeplug_message)) {
+        return false;
+    }
+
+    msg.set_raw_msg_len(static_cast<int>(out_len));
+    return true;
+}
+
+bool Channel::write(slac::messages::HomeplugMessage& msg, int timeout) {
+    assert(("Homeplug message is not valid\n", msg.is_valid()));
+    did_timeout = false;
+
+    if (!link)
+        return false;
+
+    auto raw_msg_ether_shost = msg.get_src_mac();
+    if (!msg.keep_source_mac()) {
+        memcpy(raw_msg_ether_shost, orig_if_mac, sizeof(orig_if_mac));
+    }
+
+    return link->write(reinterpret_cast<const uint8_t*>(msg.get_raw_message_ptr()), msg.get_raw_msg_len(), timeout);
+}
+
+const uint8_t* Channel::get_mac_addr() {
+    return orig_if_mac;
+}
+
+} // namespace slac
+
+
+// ===== src\slac.cpp =====
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024 Joulepoint Private Limited (Author Chinmoy Bhuyan)
+#include <slac/slac.hpp>
+#ifdef ESP_PLATFORM
+#include "port/port_common.hpp"
+#endif
+
+#include <algorithm>
+#include <cassert>
+#include <cstring>
+
+#include <arpa/inet.h>
+#if defined(ESP_PLATFORM) && !defined(__GLIBC__)
+#include "port/esp32s3/endian_compat.hpp"
+#else
+#include <endian.h>
+#endif
+
+#include <hash_library/sha256.h>
+
+namespace slac {
+namespace utils {
+
+// note on byte order:
+//   - sha256 takes the most significant byte first from the lowest
+//     memory address
+//   - for the generation of the aes-128, or NMK-HS, the first octet of
+//     the sha256 output is taken as the zero octet for the NMK-HS
+//   - for the generation of NID, the NMK is fed into sha256, so having
+//     a const char* as input should be the proper byte ordering already
+void generate_nmk_hs(uint8_t nmk_hs[slac::defs::NMK_LEN], const char* plain_password, int password_len) {
+    SHA256 sha256;
+
+    // do pbkdf1 (use sha256 as hashing function, iterate 1000 times,
+    // use salt)
+    sha256.add(plain_password, password_len);
+    sha256.add(slac::defs::NMK_HASH, sizeof(slac::defs::NMK_HASH));
+
+    uint8_t hash[SHA256::HashBytes];
+    sha256.getHash(hash);
+    for (int i = 0; i < 1000 - 1; ++i) {
+        sha256(hash, sizeof(hash));
+        sha256.getHash(hash);
+    }
+
+    memcpy(nmk_hs, hash, slac::defs::NMK_LEN);
+}
+
+void generate_nid_from_nmk(uint8_t nid[slac::defs::NID_LEN], const uint8_t nmk[slac::defs::NMK_LEN]) {
+    SHA256 sha256;
+
+    // msb of least significant octet of NMK should be the leftmost bit
+    // of the input, which corresponds to the usual const char* order
+
+    // do pbkdf1 (use sha256 as hashing function, iterate 5 times, no
+    // salt)
+    uint8_t hash[SHA256::HashBytes];
+    sha256(nmk, slac::defs::NMK_LEN);
+    sha256.getHash(hash);
+    for (int i = 0; i < 5 - 1; ++i) {
+        sha256(hash, sizeof(hash));
+        sha256.getHash(hash);
+    }
+
+    // use leftmost 52 bits of the hash output
+    // left most bit should be bit 7 of the nid
+    memcpy(nid, hash, slac::defs::NID_LEN - 1); // (bits 52 - 5)
+    nid[slac::defs::NID_LEN - 1] =
+        (slac::defs::NID_SECURITY_LEVEL_SIMPLE_CONNECT << slac::defs::NID_SECURITY_LEVEL_OFFSET) |
+        ((static_cast<uint8_t>(hash[6])) >> slac::defs::NID_MOST_SIGNIFANT_BYTE_SHIFT);
+}
+
+} // namespace utils
+
+namespace messages {
+
+static constexpr auto effective_payload_length(const defs::MMV mmv) {
+    if (mmv == defs::MMV::AV_1_0) {
+        return sizeof(homeplug_message::payload);
+    } else {
+        return sizeof(homeplug_message::payload) - sizeof(homeplug_fragmentation_part);
+    }
+}
+
+void HomeplugMessage::setup_payload(void const* payload, int len, uint16_t mmtype, const defs::MMV mmv) {
+    const auto max_len = effective_payload_length(mmv);
+    if (len > max_len) {
+        // mark message invalid and abort payload setup in release builds
+        raw_msg_len = -1;
+        assert(("Homeplug Payload length too long", len <= max_len));
+        return;
+    }
+    raw_msg.homeplug_header.mmv = static_cast<std::underlying_type_t<defs::MMV>>(mmv);
+    raw_msg.homeplug_header.mmtype = htole16(mmtype);
+
+    uint8_t* dst = raw_msg.payload;
+
+    if (mmv != defs::MMV::AV_1_0) {
+        homeplug_fragmentation_part fragmentation_part{};
+        fragmentation_part.fmni = 0; // not implemented
+        fragmentation_part.fmsn = 0; // not implemented
+        memcpy(dst, &fragmentation_part, sizeof(fragmentation_part));
+        dst += sizeof(fragmentation_part); // adjust effective payload start
+    }
+
+    // copy payload into place
+    memcpy(dst, payload, len);
+
+    // get pointer to the end of buffer
+    uint8_t* dst_end = dst + len;
+
+    // calculate raw message length
+    raw_msg_len = dst_end - reinterpret_cast<uint8_t*>(&raw_msg);
+
+    // do padding
+    auto padding_len = defs::MME_MIN_LENGTH - raw_msg_len;
+    if (padding_len > 0) {
+        memset(dst_end, 0x00, padding_len);
+        raw_msg_len = defs::MME_MIN_LENGTH;
+    }
+}
+
+void HomeplugMessage::setup_ethernet_header(const uint8_t dst_mac_addr[ETH_ALEN],
+                                            const uint8_t src_mac_addr[ETH_ALEN]) {
+
+    // ethernet frame byte order is big endian
+    raw_msg.ethernet_header.ether_type = htons(defs::ETH_P_HOMEPLUG_GREENPHY);
+    if (dst_mac_addr) {
+        memcpy(raw_msg.ethernet_header.ether_dhost, dst_mac_addr, ETH_ALEN);
+    }
+
+    if (src_mac_addr) {
+        memcpy(raw_msg.ethernet_header.ether_shost, src_mac_addr, ETH_ALEN);
+        keep_src_mac = true;
+    } else {
+        keep_src_mac = false;
+    }
+}
+
+uint16_t HomeplugMessage::get_mmtype() const {
+    return le16toh(raw_msg.homeplug_header.mmtype);
+}
+
+uint8_t* HomeplugMessage::get_src_mac() {
+    return raw_msg.ethernet_header.ether_shost;
+}
+
+void HomeplugMessage::set_raw_msg_len(int len) {
+    raw_msg_len = len;
+}
+
+bool HomeplugMessage::is_valid() const {
+    return raw_msg_len >= defs::MME_MIN_LENGTH;
+}
+
+} // namespace messages
+} // namespace slac
+
+
