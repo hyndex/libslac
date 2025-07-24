@@ -12,6 +12,18 @@
 #include <arpa/inet.h>
 #if defined(ESP_PLATFORM) && !defined(__GLIBC__)
 #include "port/esp32s3/endian_compat.hpp"
+#elif defined(__has_include)
+#  if __has_include(<endian.h>)
+#    include <endian.h>
+#  elif defined(__APPLE__)
+#    if __has_include(<machine/endian.h>)
+#      include <machine/endian.h>
+#    else
+#      include <libkern/OSByteOrder.h>
+#    endif
+#  elif __has_include(<machine/endian.h>)
+#    include <machine/endian.h>
+#  endif
 #else
 #include <endian.h>
 #endif
