@@ -179,6 +179,7 @@ Tools and Examples
 ------------------
 
 The ``tools`` directory contains small utilities demonstrating how to use ``libslac``. ``tools/evse`` contains a simple state machine for the EVSE side of the SLAC handshake. ``tools/bridge.cpp`` can forward packets between two virtual interfaces on Linux and is disabled on microcontroller builds. See ``docs/BoardExample.md`` for a complete PlatformIO configuration using custom pins.
+See `docs/PlatformIOExample.md` for a detailed tutorial on creating a new PlatformIO project.
 
 Porting to Other Boards
 -----------------------
