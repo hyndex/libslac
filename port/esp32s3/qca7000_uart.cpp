@@ -57,7 +57,7 @@ inline void ringPush(const uint8_t* d, size_t l) {
 }
 inline bool ringPop(const uint8_t** d, size_t* l) {
     auto t = tail.load(std::memory_order_relaxed);
-    if (ringEmpty())
+    if (head.load(std::memory_order_acquire) == t)
         return false;
     *d = ring[t].data;
     *l = ring[t].len;
