@@ -5,6 +5,7 @@
 
 #include "port/port_common.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <utility>
 
@@ -22,21 +23,21 @@ enum class MMV : uint8_t {
     AV_2_0 = 0x2,
 };
 
-const int MME_MIN_LENGTH = 60;
+constexpr std::size_t MME_MIN_LENGTH = 60;
 
-const int STATION_ID_LEN = 17;
-const int NID_LEN = 7;
-const int NID_MOST_SIGNIFANT_BYTE_SHIFT = 4;
+constexpr std::size_t STATION_ID_LEN = 17;
+constexpr std::size_t NID_LEN = 7;
+constexpr std::size_t NID_MOST_SIGNIFANT_BYTE_SHIFT = 4;
 const uint8_t NID_SECURITY_LEVEL_SIMPLE_CONNECT = 0b00;
-const int NID_SECURITY_LEVEL_OFFSET = 4;
+constexpr std::size_t NID_SECURITY_LEVEL_OFFSET = 4;
 
 const uint8_t DAKS_HASH[] = {0x08, 0x85, 0x6d, 0xaf, 0x7c, 0xf5, 0x81, 0x85};
 const uint8_t NMK_HASH[] = {0x08, 0x85, 0x6d, 0xaf, 0x7c, 0xf5, 0x81, 0x86};
 
-const int NMK_LEN = 16;
+constexpr std::size_t NMK_LEN = 16;
 
-const int AAG_LIST_LEN = 58;
-const int RUN_ID_LEN = 16;
+constexpr std::size_t AAG_LIST_LEN = 58;
+constexpr std::size_t RUN_ID_LEN = 16;
 
 const uint16_t MMTYPE_CM_SET_KEY = 0x6008;
 const uint16_t MMTYPE_CM_SLAC_PARAM = 0x6064;
@@ -180,12 +181,12 @@ private:
     bool keep_src_mac{false};
 };
 
-const int M_SOUND_TARGET_LEN = 6;
-const int SENDER_ID_LEN = defs::STATION_ID_LEN;
-const int SOURCE_ID_LEN = defs::STATION_ID_LEN;
-const int RESP_ID_LEN = defs::STATION_ID_LEN;
-const int PEV_ID_LEN = defs::STATION_ID_LEN;
-const int EVSE_ID_LEN = defs::STATION_ID_LEN;
+constexpr std::size_t M_SOUND_TARGET_LEN = 6;
+constexpr std::size_t SENDER_ID_LEN = defs::STATION_ID_LEN;
+constexpr std::size_t SOURCE_ID_LEN = defs::STATION_ID_LEN;
+constexpr std::size_t RESP_ID_LEN = defs::STATION_ID_LEN;
+constexpr std::size_t PEV_ID_LEN = defs::STATION_ID_LEN;
+constexpr std::size_t EVSE_ID_LEN = defs::STATION_ID_LEN;
 
 typedef struct {
     uint8_t application_type;         // fixed to 0x00, indicating 'pev-evse matching'
