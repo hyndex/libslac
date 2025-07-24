@@ -219,12 +219,22 @@ the files to ``src_filter``. A sample STM32 configuration is shown below:
        +<port/stm32/my_link.cpp> +<3rd_party/hash_library/sha256.cpp> \
        +<path/to/main.cpp>
 
+SLAC State Machine
+------------------
+
+``libslac`` vendors the lightweight `libfsm` library for implementing
+state machines.  Include ``<slac/fsm.hpp>`` and derive your states from
+``slac::fsm::states::SimpleStateBase`` or
+``slac::fsm::states::CompoundStateBase``.  The helper classes manage
+state transitions and optionally operate without heap allocations.
+
 Vendored Dependencies
 ---------------------
 
 Small helper libraries are shipped with the source under ``3rd_party``:
 
 - ``hash_library`` provides SHA-256 routines.
+- ``fsm`` offers a minimal finite state machine implementation.
 
 See ``THIRD_PARTY.rst`` for license information.
 
