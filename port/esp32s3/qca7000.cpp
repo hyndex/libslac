@@ -1,7 +1,17 @@
 #include "qca7000.hpp"
 #include "port_config.hpp"
+#ifdef ESP_PLATFORM
 #include <esp_log.h>
 #include <esp_system.h>
+#else
+#include <stdint.h>
+#include <arpa/inet.h>
+#define ESP_LOGE(tag, fmt, ...)
+#define ESP_LOGI(tag, fmt, ...)
+static inline uint32_t esp_random() {
+    return 0x12345678u;
+}
+#endif
 #include <slac/slac.hpp>
 #include <string.h>
 
@@ -23,8 +33,13 @@ static constexpr uint16_t RX_HDR = 12;
 static constexpr uint16_t FTR_LEN = 2;
 static constexpr uint16_t INTR_MASK = SPI_INT_CPU_ON | SPI_INT_PKT_AVLBL | SPI_INT_RDBUF_ERR | SPI_INT_WRBUF_ERR;
 
+#ifdef LIBSLAC_TESTING
+SPIClass* g_spi = nullptr;
+int g_cs = -1;
+#else
 static SPIClass* g_spi = nullptr;
 static int g_cs = -1;
+#endif
 static SPISettings setSlow(SLOW_HZ, MSBFIRST, SPI_MODE3);
 static SPISettings setFast(FAST_HZ, MSBFIRST, SPI_MODE3);
 
@@ -139,7 +154,11 @@ bool qca7000ReadSignature(uint16_t* s, uint16_t* v) {
     return sig == SIG;
 }
 
+#ifdef LIBSLAC_TESTING
+bool txFrame(const uint8_t* eth, size_t ethLen) {
+#else
 static bool txFrame(const uint8_t* eth, size_t ethLen) {
+#endif
     if (ethLen > 1522)
         return false;
     size_t frameLen = ethLen;
@@ -169,8 +188,11 @@ static bool txFrame(const uint8_t* eth, size_t ethLen) {
     g_spi->endTransaction();
     return true;
 }
-
+#ifdef LIBSLAC_TESTING
+void fetchRx() {
+#else
 static void fetchRx() {
+#endif
     uint16_t avail = spiRd16_fast(SPI_REG_RDBUF_BYTE_AVA);
     if (avail < RX_HDR + FTR_LEN || avail > V2GTP_BUFFER_SIZE)
         return;
