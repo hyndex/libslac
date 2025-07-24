@@ -16,6 +16,7 @@
 #endif
 #include <string.h>
 #include <mutex>
+#include <atomic>
 
 
 
@@ -38,13 +39,15 @@ struct RxEntry {
     uint8_t data[V2GTP_BUFFER_SIZE];
 };
 static RxEntry ring[4];
-static volatile uint8_t head = 0, tail = 0;
+static std::atomic<uint8_t> head{0}, tail{0};
 #ifdef ESP_PLATFORM
 static portMUX_TYPE ring_mux = portMUX_INITIALIZER_UNLOCKED;
 #else
 static std::mutex ring_mutex;
 #endif
-inline bool ringEmpty() { return head == tail; }
+inline bool ringEmpty() {
+    return head.load(std::memory_order_acquire) == tail.load(std::memory_order_acquire);
+}
 static uint32_t last_rx_time = 0;
 static uint32_t frame_timeout_ms = 0;
 inline void ringPush(const uint8_t* d, size_t l) {
@@ -55,8 +58,9 @@ inline void ringPush(const uint8_t* d, size_t l) {
 #endif
     if (l > V2GTP_BUFFER_SIZE)
         l = V2GTP_BUFFER_SIZE;
-    uint8_t next = (head + 1) & 3;
-    if (next == tail) {
+    uint8_t cur_head = head.load(std::memory_order_relaxed);
+    uint8_t next = (cur_head + 1) & 3;
+    if (next == tail.load(std::memory_order_acquire)) {
 #ifdef ESP_PLATFORM
         portEXIT_CRITICAL(&ring_mux);
 #else
@@ -65,9 +69,9 @@ inline void ringPush(const uint8_t* d, size_t l) {
         ESP_LOGW(PLC_TAG, "RX ring full - dropping frame");
         return;
     }
-    memcpy(ring[head].data, d, l);
-    ring[head].len = l;
-    head = next;
+    memcpy(ring[cur_head].data, d, l);
+    ring[cur_head].len = l;
+    head.store(next, std::memory_order_release);
 #ifdef ESP_PLATFORM
     portEXIT_CRITICAL(&ring_mux);
 #else
@@ -88,9 +92,10 @@ inline bool ringPop(const uint8_t** d, size_t* l) {
 #endif
         return false;
     }
-    *d = ring[tail].data;
-    *l = ring[tail].len;
-    tail = (tail + 1) & 3;
+    uint8_t cur_tail = tail.load(std::memory_order_relaxed);
+    *d = ring[cur_tail].data;
+    *l = ring[cur_tail].len;
+    tail.store((cur_tail + 1) & 3, std::memory_order_release);
 #ifdef ESP_PLATFORM
     portEXIT_CRITICAL(&ring_mux);
 #else

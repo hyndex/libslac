@@ -6,18 +6,18 @@
 #ifdef ESP_PLATFORM
 #include <stdint.h>
 
-static inline uint16_t le16toh(uint16_t v) {
-    return v;
-}
-static inline uint16_t htole16(uint16_t v) {
-    return v;
-}
-static inline uint32_t le32toh(uint32_t v) {
-    return v;
-}
-static inline uint32_t htole32(uint32_t v) {
-    return v;
-}
+#ifndef le16toh
+static inline uint16_t le16toh(uint16_t v) { return v; }
+#endif
+#ifndef htole16
+static inline uint16_t htole16(uint16_t v) { return v; }
+#endif
+#ifndef le32toh
+static inline uint32_t le32toh(uint32_t v) { return v; }
+#endif
+#ifndef htole32
+static inline uint32_t htole32(uint32_t v) { return v; }
+#endif
 
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
