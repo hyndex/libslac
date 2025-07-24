@@ -17,11 +17,3 @@ The project pulls `libslac` automatically via `lib_deps`.
 Custom chip select and reset pins for the modem can be configured by
 editing `build_flags` in `platformio.ini`.
 
-## Testing
-
-A small unit test is provided under `test/` and can be run on the host
-using:
-
-```bash
-pio test -e native
-```
