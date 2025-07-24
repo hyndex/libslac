@@ -22,6 +22,9 @@ namespace slac {
  * solely on untagged Ethernet frames and assumes that at most one SLAC session
  * is active.  Applications requiring VLAN encapsulation or multiplexing of
  * multiple sessions need to handle those aspects outside of this class.
+ *
+ * \note Thread Safety: Channel instances are \b not thread-safe.  Concurrent
+ * access must be externally synchronized.
  */
 
 class Channel {

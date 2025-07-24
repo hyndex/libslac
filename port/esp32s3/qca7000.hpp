@@ -18,6 +18,9 @@
 #define V2GTP_BUFFER_SIZE 1536
 #endif
 
+static_assert(ETH_FRAME_LEN <= V2GTP_BUFFER_SIZE,
+              "ETH_FRAME_LEN must not exceed V2GTP_BUFFER_SIZE");
+
 // Register and interrupt definitions (see QCA7000 datasheet)
 #ifndef SPI_INT_CPU_ON
 #define SPI_INT_CPU_ON 0x0040
@@ -65,6 +68,7 @@ struct qca7000_config {
 };
 
 bool qca7000setup(SPIClass* spi, int cs_pin, int rst_pin = PLC_SPI_RST_PIN);
+void qca7000teardown();
 bool qca7000ResetAndCheck();
 uint16_t qca7000ReadInternalReg(uint16_t reg);
 bool qca7000ReadSignature(uint16_t* sig = nullptr, uint16_t* ver = nullptr);

@@ -173,6 +173,16 @@ static void uartFetchRx() {
     pollRx();
 }
 
+void uartQca7000Teardown() {
+#ifdef ARDUINO
+    if (g_serial)
+        g_serial->end();
+#endif
+    g_serial = nullptr;
+    head.store(0, std::memory_order_release);
+    tail.store(0, std::memory_order_release);
+}
+
 bool uartQCA7000SendEthFrame(const uint8_t* f, size_t l) {
     bool ok = uartTxFrame(f, l);
     if (ok && l <= V2GTP_BUFFER_SIZE) {
@@ -209,6 +219,10 @@ Qca7000UartLink::Qca7000UartLink(const qca7000_uart_config& c) : cfg(c) {
     memset(mac_addr, 0, sizeof(mac_addr));
 }
 
+Qca7000UartLink::~Qca7000UartLink() {
+    close();
+}
+
 bool Qca7000UartLink::open() {
     if (initialized)
         return true;
@@ -216,6 +230,10 @@ bool Qca7000UartLink::open() {
         return false;
 
     g_serial = cfg.serial ? cfg.serial : &Serial;
+    if (ETH_FRAME_LEN > V2GTP_BUFFER_SIZE) {
+        initialization_error = true;
+        return false;
+    }
 #ifdef ARDUINO
     if (g_serial) {
         uint32_t baud = cfg.baud ? cfg.baud : 115200;
@@ -245,6 +263,13 @@ bool Qca7000UartLink::write(const uint8_t* b, size_t l, uint32_t) {
     if (!initialized || initialization_error)
         return false;
     return uartQCA7000SendEthFrame(b, l);
+}
+
+void Qca7000UartLink::close() {
+    if (!initialized)
+        return;
+    uartQca7000Teardown();
+    initialized = false;
 }
 
 transport::LinkError Qca7000UartLink::read(uint8_t* b, size_t l, size_t* out, uint32_t timeout_ms) {

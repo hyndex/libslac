@@ -13,6 +13,12 @@
 namespace slac {
 namespace port {
 
+/**
+ * @brief Link implementation for the QCA7000 powerline modem.
+ *
+ * \note Thread Safety: Qca7000Link is not thread-safe. The caller must
+ * serialise access when used from multiple threads.
+ */
 class Qca7000Link : public transport::Link {
 public:
     using ErrorCallback = qca7000_error_cb_t;
@@ -26,6 +32,9 @@ public:
     void clear_fatal_error() { fatal_error_flag = false; }
 
     ~Qca7000Link();
+
+    /// Close the underlying bus and reset internal state
+    void close();
 
     bool open() override;
     bool write(const uint8_t* b, size_t l, uint32_t timeout_ms) override;
