@@ -326,23 +326,28 @@ uint8_t qca7000getSlacResult() {
 }
 
 void qca7000Process() {
-    spiWr16_fast(SPI_REG_INTR_ENABLE, 0);
-    uint16_t cause = spiRd16_fast(SPI_REG_INTR_CAUSE);
+    uint16_t cause;
+    do {
+        spiWr16_fast(SPI_REG_INTR_ENABLE, 0);
+        cause = spiRd16_fast(SPI_REG_INTR_CAUSE);
+        spiWr16_fast(SPI_REG_INTR_CAUSE, cause);
+        spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
+
+        if (cause & SPI_INT_CPU_ON) {
+            hardReset();
+            qca7000setup(g_spi, g_cs, g_rst);
+            return;
+        }
+        if (cause & (SPI_INT_WRBUF_ERR | SPI_INT_RDBUF_ERR)) {
+            hardReset();
+            return;
+        }
+        if (cause & SPI_INT_PKT_AVLBL)
+            fetchRx();
+
+        cause = spiRd16_fast(SPI_REG_INTR_CAUSE);
+    } while (cause != 0);
     spiWr16_fast(SPI_REG_INTR_CAUSE, cause);
-    spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
-    if (!cause)
-        return;
-    if (cause & SPI_INT_CPU_ON) {
-        hardReset();
-        qca7000setup(g_spi, g_cs, g_rst);
-        return;
-    }
-    if (cause & (SPI_INT_WRBUF_ERR | SPI_INT_RDBUF_ERR)) {
-        hardReset();
-        return;
-    }
-    if (cause & SPI_INT_PKT_AVLBL)
-        fetchRx();
 }
 
 bool qca7000setup(SPIClass* bus, int csPin, int rstPin) {
