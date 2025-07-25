@@ -21,6 +21,16 @@
 #define QCA7000_SPI_FAST_HZ 8000000
 #define QCA7000_SPI_BURST_LEN 512
 
+#ifndef QCA7000_HARDRESET_LOW_MS
+#define QCA7000_HARDRESET_LOW_MS 20
+#endif
+#ifndef QCA7000_HARDRESET_HIGH_MS
+#define QCA7000_HARDRESET_HIGH_MS 150
+#endif
+#ifndef QCA7000_CPUON_TIMEOUT_MS
+#define QCA7000_CPUON_TIMEOUT_MS 200
+#endif
+
 #ifndef PLC_SPI_CS_PIN
 static_assert(false, "PLC_SPI_CS_PIN undefined");
 #else
