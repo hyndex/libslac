@@ -3,6 +3,9 @@
 #include <slac/slac.hpp>
 #include <port/esp32s3/qca7000_link.hpp>
 #include <port/esp32s3/qca7000.hpp>
+#include "cp_pwm.h"
+#include "cp_monitor.h"
+#include "cp_state_machine.h"
 
 // qca7000ProcessSlice is declared in qca7000.hpp with a default timeout.
 // The extern declaration here must not specify the default again to avoid
@@ -15,15 +18,25 @@ static const uint8_t MY_MAC[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 // Global pointer used by the polling loop
 static slac::Channel* g_channel = nullptr;
 volatile bool plc_irq = false;
+volatile uint8_t g_slac_state = 0;
 
 void IRAM_ATTR plc_isr() { plc_irq = true; }
 // Timestamp for SLAC restart logic
-static uint32_t g_slac_ts = 0;
+uint32_t g_slac_ts = 0;
 
 void setup() {
     Serial.begin(115200);
     delay(4000);
     Serial.println("Starting SLAC modem...");
+    pinMode(LOCK_FB_PIN, INPUT_PULLUP);
+    pinMode(CONTACTOR_FB_PIN, INPUT_PULLUP);
+    pinMode(ISOLATION_OK_PIN, INPUT_PULLUP);
+
+    cpPwmInit();
+    cpMonitorInit();
+    cpLowRateStart(10);
+    evseStateMachineInit();
+    xTaskCreatePinnedToCore(evseStateMachineTask, "evseSM", 4096, nullptr, 5, nullptr, 1);
     SPI.begin(48 /*SCK*/, 21 /*MISO*/, 47 /*MOSI*/, -1);
     Serial.println("Starting SPI");
     pinMode(PLC_INT_PIN, INPUT);
@@ -44,11 +57,6 @@ void setup() {
             delay(1000);
     }
 
-    Serial.println("Starting SLAC FSM");
-    if (!qca7000startSlac())
-        Serial.println("startSlac failed");
-    // Remember when the handshake was (re)started
-    g_slac_ts = millis();
 }
 
 void loop() {
@@ -63,8 +71,8 @@ void loop() {
     }
 
     // Update the SLAC state machine and restart if no progress for 60s
-    uint8_t state = qca7000getSlacResult();
-    if (state != 0 && state != 5) {
+    g_slac_state = qca7000getSlacResult();
+    if (g_slac_state != 0 && g_slac_state != 5) {
         if (millis() - g_slac_ts > 60000) {
             Serial.println("Restarting SLAC handshake");
             if (!qca7000startSlac())
