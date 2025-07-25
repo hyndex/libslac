@@ -92,6 +92,7 @@ uint8_t qca7000getSlacResult();
 // performs qca7000SoftReset(). If that fails the reset pin is toggled
 // via a hard reset.
 void qca7000Process();
+void qca7000ProcessSlice(uint32_t max_us = 500);
 
 enum class Qca7000ErrorStatus { Reset, DriverFatal };
 typedef void (*qca7000_error_cb_t)(Qca7000ErrorStatus, void*);

@@ -2,21 +2,29 @@
 #include <slac/channel.hpp>
 #include <slac/slac.hpp>
 #include <port/esp32s3/qca7000_link.hpp>
+#include <port/esp32s3/qca7000.hpp>
+
+extern void qca7000ProcessSlice(uint32_t max_us = 500);
 
 // Default MAC address for the modem. Adjust as required.
 static const uint8_t MY_MAC[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 
 // Global pointer used by the polling loop
 static slac::Channel* g_channel = nullptr;
+volatile bool plc_irq = false;
+
+void IRAM_ATTR plc_isr() { plc_irq = true; }
 // Timestamp for SLAC restart logic
 static uint32_t g_slac_ts = 0;
 
 void setup() {
     Serial.begin(115200);
-    delay(4000); 
+    delay(4000);
     Serial.println("Starting SLAC modem...");
     SPI.begin(48 /*SCK*/, 21 /*MISO*/, 47 /*MOSI*/, -1);
     Serial.println("Starting SPI");
+    pinMode(PLC_INT_PIN, INPUT);
+    attachInterrupt(PLC_INT_PIN, plc_isr, FALLING);
     qca7000_config cfg{&SPI, PLC_SPI_CS_PIN, PLC_SPI_RST_PIN, MY_MAC};
     Serial.println("Starting QCA7000 Link ");
     static slac::port::Qca7000Link link(cfg);
@@ -42,8 +50,10 @@ void setup() {
 
 void loop() {
     Serial.println("Loop Started");
-    // Poll the modem even when the IRQ line is not connected.
-    qca7000Process();
+    if (plc_irq) {
+        plc_irq = false;
+        qca7000ProcessSlice();
+    }
     Serial.println("Loop Middle");
 
     slac::messages::HomeplugMessage msg;

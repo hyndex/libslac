@@ -19,6 +19,12 @@ static inline void slac_delay(uint32_t ms) { delay(ms); }
 #endif
 #endif
 
+#ifndef slac_micros
+#if defined(ARDUINO) && !defined(ESP_PLATFORM)
+static inline uint32_t slac_micros() { return micros(); }
+#endif
+#endif
+
 #ifndef slac_noInterrupts
 #if defined(ARDUINO) && !defined(ESP_PLATFORM)
 static inline void slac_noInterrupts() { noInterrupts(); }

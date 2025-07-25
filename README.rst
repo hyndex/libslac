@@ -148,17 +148,20 @@ Polling Without IRQ
 -------------------
 
 The QCA7000 driver can be polled instead of relying on an interrupt
-line.  The ``examples/platformio_complete/src/main.cpp`` example calls
-``qca7000Process()`` from the ``loop()`` function and then polls the
-channel for new packets.  When using this approach the IRQ pin on the
-modem may remain unconnected.  Chip select is controlled manually and the
-example initialises the SPI bus with ``SPI.begin`` using ``-1`` for the CS
+line.  Earlier revisions called ``qca7000Process()`` from the ``loop()``
+function and then polled the channel for new packets.  When using this
+approach the IRQ pin on the modem may remain unconnected.  Chip select is
+controlled manually and the example initialises the SPI bus with ``SPI.begin``
+using ``-1`` for the CS
 parameter.
 
 .. code-block:: cpp
 
    void loop() {
-       qca7000Process();
+       if (plc_irq) {
+           plc_irq = false;
+           qca7000ProcessSlice();
+       }
        slac::messages::HomeplugMessage msg;
        if (channel.poll(msg)) {
            // handle message
@@ -168,9 +171,9 @@ parameter.
 Polling Operation
 -----------------
 
-``libslac`` does not require the QCA7000 interrupt pin. Call
-``qca7000Process()`` regularly to poll the modem for new frames. This
-works on boards where the interrupt line is not connected.
+``libslac`` does not require the QCA7000 interrupt pin. Calling
+``qca7000ProcessSlice()`` from an IRQ-driven loop keeps the main thread
+responsive while processing at most 500 µs of modem activity per call.
 
 UART Mode
 ---------
