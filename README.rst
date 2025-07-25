@@ -118,7 +118,8 @@ calls will not attempt to reinitialise the modem.  Call
 Unexpected modem resets are reported through an optional callback or
 error flag. Use ``link.set_error_callback(cb, arg)`` to register a
 callback and periodically check ``link.fatal_error()`` when polling the
-driver.
+driver. Call ``qca7000CheckAlive()`` roughly once per minute to
+confirm that the modem is still responsive.
 
 QCA7000 Configuration
 ---------------------
