@@ -19,6 +19,13 @@
 static_assert(ETH_FRAME_LEN <= V2GTP_BUFFER_SIZE,
               "ETH_FRAME_LEN must not exceed V2GTP_BUFFER_SIZE");
 
+static_assert(PLC_SPI_CS_PIN >= 0, "CS pin unset");
+static_assert(PLC_SPI_RST_PIN >= 0, "RST pin unset");
+static_assert(PLC_SPI_SCK_PIN >= 0, "SCK pin unset");
+static_assert(PLC_SPI_MOSI_PIN >= 0, "MOSI pin unset");
+static_assert(PLC_SPI_MISO_PIN >= 0, "MISO pin unset");
+static_assert(QCA7000_SPI_BURST_LEN <= 512, "Burst length exceeds FIFO");
+
 // Register and interrupt definitions (see QCA7000 datasheet)
 #ifndef SPI_INT_CPU_ON
 #define SPI_INT_CPU_ON 0x0040
