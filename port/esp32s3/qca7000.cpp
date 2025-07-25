@@ -41,6 +41,7 @@ static constexpr uint16_t TX_HDR = 8;
 static constexpr uint16_t RX_HDR = 12;
 static constexpr uint16_t FTR_LEN = 2;
 static constexpr size_t BURST_LEN = QCA7000_SPI_BURST_LEN;
+static_assert(QCA7000_SPI_BURST_LEN <= 512, "Burst length too large");
 static constexpr uint16_t INTR_MASK = SPI_INT_CPU_ON | SPI_INT_PKT_AVLBL | SPI_INT_RDBUF_ERR | SPI_INT_WRBUF_ERR;
 
 using FSMBuffer = slac::fsm::buffer::SwapBuffer<64, 0, 1>;
