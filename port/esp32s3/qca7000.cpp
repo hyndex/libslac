@@ -1,6 +1,7 @@
 #include "qca7000.hpp"
 #include "../port_common.hpp"
 #include "port_config.hpp"
+#include <slac/config.hpp>
 #ifdef ESP_LOGW
 #pragma push_macro("ESP_LOGW")
 #undef ESP_LOGW
@@ -33,14 +34,11 @@ size_t myethreceivelen = 0;
 
 static constexpr uint16_t SIG = 0xAA55;
 static constexpr uint16_t WRBUF_RST = 0x0C5B;
-static constexpr uint32_t FAST_HZ = QCA7000_SPI_FAST_HZ;
-static constexpr uint32_t SLOW_HZ = PLC_SPI_SLOW_HZ;
 static constexpr uint16_t SOF_WORD = 0xAAAA;
 static constexpr uint16_t EOF_WORD = 0x5555;
 static constexpr uint16_t TX_HDR = 8;
 static constexpr uint16_t RX_HDR = 12;
 static constexpr uint16_t FTR_LEN = 2;
-static constexpr size_t BURST_LEN = QCA7000_SPI_BURST_LEN;
 static_assert(QCA7000_SPI_BURST_LEN <= 512, "Burst length too large");
 static constexpr uint16_t INTR_MASK = SPI_INT_CPU_ON | SPI_INT_PKT_AVLBL | SPI_INT_RDBUF_ERR | SPI_INT_WRBUF_ERR;
 
@@ -90,8 +88,12 @@ static int g_cs = -1;
 static int g_rst = PLC_SPI_RST_PIN;
 static int g_pwr = PLC_PWR_EN_PIN;
 #endif
-static SPISettings setSlow(SLOW_HZ, MSBFIRST, SPI_MODE3);
-static SPISettings setFast(FAST_HZ, MSBFIRST, SPI_MODE3);
+static inline SPISettings setSlow() {
+    return SPISettings(slac::spi_slow_hz(), MSBFIRST, SPI_MODE3);
+}
+static inline SPISettings setFast() {
+    return SPISettings(slac::spi_fast_hz(), MSBFIRST, SPI_MODE3);
+}
 
 namespace {
 struct RxEntry {
@@ -140,7 +142,7 @@ static inline uint16_t cmd16(bool rd, bool intr, uint16_t reg) {
 }
 
 static uint16_t spiRd16_fast(uint16_t reg) {
-    g_spi->beginTransaction(setFast);
+    g_spi->beginTransaction(setFast());
     digitalWrite(g_cs, LOW);
     g_spi->transfer16(cmd16(true, true, reg));
     uint16_t v = g_spi->transfer16(0);
@@ -150,7 +152,7 @@ static uint16_t spiRd16_fast(uint16_t reg) {
 }
 
 static uint16_t spiRd16_slow(uint16_t reg) {
-    g_spi->beginTransaction(setSlow);
+    g_spi->beginTransaction(setSlow());
     digitalWrite(g_cs, LOW);
     g_spi->transfer16(cmd16(true, true, reg));
     uint16_t v = g_spi->transfer16(0);
@@ -160,7 +162,7 @@ static uint16_t spiRd16_slow(uint16_t reg) {
 }
 
 static void spiWr16_fast(uint16_t reg, uint16_t val) {
-    g_spi->beginTransaction(setFast);
+    g_spi->beginTransaction(setFast());
     digitalWrite(g_cs, LOW);
     g_spi->transfer16(cmd16(false, true, reg));
     g_spi->transfer16(val);
@@ -169,7 +171,7 @@ static void spiWr16_fast(uint16_t reg, uint16_t val) {
 }
 
 static void spiWr16_slow(uint16_t reg, uint16_t val) {
-    g_spi->beginTransaction(setSlow);
+    g_spi->beginTransaction(setSlow());
     digitalWrite(g_cs, LOW);
     g_spi->transfer16(cmd16(false, true, reg));
     g_spi->transfer16(val);
@@ -180,12 +182,12 @@ static void spiWr16_slow(uint16_t reg, uint16_t val) {
 static bool hardReset() {
     pinMode(g_rst, OUTPUT);
     digitalWrite(g_rst, LOW);
-    slac_delay(QCA7000_HARDRESET_LOW_MS);
+    slac_delay(slac::hardreset_low_ms());
     digitalWrite(g_rst, HIGH);
-    slac_delay(QCA7000_HARDRESET_HIGH_MS);
+    slac_delay(slac::hardreset_high_ms());
 
     auto slowRd16 = [&](uint16_t reg) -> uint16_t {
-        g_spi->beginTransaction(setSlow);
+        g_spi->beginTransaction(setSlow());
         digitalWrite(g_cs, LOW);
         g_spi->transfer16(cmd16(true, true, reg));
         uint16_t v = g_spi->transfer16(0);
@@ -214,7 +216,7 @@ static bool hardReset() {
 
     t0 = slac_millis();
     while (!(slowRd16(SPI_REG_INTR_CAUSE) & SPI_INT_CPU_ON) &&
-           slac_millis() - t0 < QCA7000_CPUON_TIMEOUT_MS)
+           slac_millis() - t0 < slac::cpuon_timeout_ms())
         ;
 
     spiWr16_slow(SPI_REG_INTR_CAUSE, 0xFFFF);
@@ -224,7 +226,7 @@ static bool hardReset() {
 
 static bool softReset() {
     auto slowRd16 = [&](uint16_t reg) -> uint16_t {
-        g_spi->beginTransaction(setSlow);
+        g_spi->beginTransaction(setSlow());
         digitalWrite(g_cs, LOW);
         g_spi->transfer16(cmd16(true, true, reg));
         uint16_t v = g_spi->transfer16(0);
@@ -233,7 +235,7 @@ static bool softReset() {
         return v;
     };
     auto slowWr16 = [&](uint16_t reg, uint16_t val) {
-        g_spi->beginTransaction(setSlow);
+        g_spi->beginTransaction(setSlow());
         digitalWrite(g_cs, LOW);
         g_spi->transfer16(cmd16(false, true, reg));
         g_spi->transfer16(val);
@@ -304,7 +306,7 @@ static bool txFrame(const uint8_t* eth, size_t ethLen) {
 
     spiWr16_slow(SPI_REG_BFR_SIZE, spiLen);
 
-    g_spi->beginTransaction(setFast);
+    g_spi->beginTransaction(setFast());
     digitalWrite(g_cs, LOW);
     g_spi->transfer16(cmd16(false, false, 0));
     g_spi->transfer16(SOF_WORD);
@@ -315,8 +317,8 @@ static bool txFrame(const uint8_t* eth, size_t ethLen) {
         size_t off = 0;
         while (off < ethLen) {
             size_t chunk = ethLen - off;
-            if (chunk > BURST_LEN)
-                chunk = BURST_LEN;
+            if (chunk > slac::spi_burst_len())
+                chunk = slac::spi_burst_len();
             g_spi->writeBytes(eth + off, chunk);
             off += chunk;
         }
@@ -327,8 +329,8 @@ static bool txFrame(const uint8_t* eth, size_t ethLen) {
         size_t off = 0;
         while (off < padLen) {
             size_t chunk = padLen - off;
-            if (chunk > BURST_LEN)
-                chunk = BURST_LEN;
+            if (chunk > slac::spi_burst_len())
+                chunk = slac::spi_burst_len();
             g_spi->writeBytes(pad, chunk);
             off += chunk;
         }
@@ -351,7 +353,7 @@ static void fetchRx() {
     spiWr16_slow(SPI_REG_BFR_SIZE, requested);
 
     static uint8_t buf[V2GTP_BUFFER_SIZE + 2];
-    g_spi->beginTransaction(setFast);
+    g_spi->beginTransaction(setFast());
     digitalWrite(g_cs, LOW);
     g_spi->transfer16(cmd16(true, false, 0));
     for (uint16_t i = 0; i < avail + 2; ++i)
