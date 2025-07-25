@@ -41,6 +41,14 @@
 #define QCA7000_CPUON_TIMEOUT_MS 200
 #endif
 
+#ifndef QCA7000_MAX_RETRIES
+#define QCA7000_MAX_RETRIES 3
+#endif
+
+#ifndef PLC_PWR_EN_PIN
+#define PLC_PWR_EN_PIN -1
+#endif
+
 #ifndef PLC_SPI_CS_PIN
 static_assert(false, "PLC_SPI_CS_PIN undefined");
 #else
