@@ -172,9 +172,9 @@ static void spiWr16_slow(uint16_t reg, uint16_t val) {
 static bool hardReset() {
     pinMode(g_rst, OUTPUT);
     digitalWrite(g_rst, LOW);
-    slac_delay(10);
+    slac_delay(QCA7000_HARDRESET_LOW_MS);
     digitalWrite(g_rst, HIGH);
-    slac_delay(100);
+    slac_delay(QCA7000_HARDRESET_HIGH_MS);
 
     auto slowRd16 = [&](uint16_t reg) -> uint16_t {
         g_spi->beginTransaction(setSlow);
@@ -205,7 +205,8 @@ static bool hardReset() {
     ESP_LOGI(PLC_TAG, "Reset probe OK (SIG=0x%04X)", sig);
 
     t0 = slac_millis();
-    while (!(slowRd16(SPI_REG_INTR_CAUSE) & SPI_INT_CPU_ON) && slac_millis() - t0 < 80)
+    while (!(slowRd16(SPI_REG_INTR_CAUSE) & SPI_INT_CPU_ON) &&
+           slac_millis() - t0 < QCA7000_CPUON_TIMEOUT_MS)
         ;
 
     spiWr16_slow(SPI_REG_INTR_CAUSE, 0xFFFF);
