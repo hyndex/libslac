@@ -67,7 +67,11 @@ static_assert(ETH_FRAME_LEN <= V2GTP_BUFFER_SIZE,
 #endif
 
 #ifndef PLC_SPI_RST_PIN
+#ifdef RST_PIN
+#define PLC_SPI_RST_PIN RST_PIN
+#else
 #define PLC_SPI_RST_PIN 5
+#endif
 #endif
 #ifndef PLC_SPI_CS_PIN
 #define PLC_SPI_CS_PIN 17
