@@ -15,9 +15,9 @@ void setup() {
     // Initialise the SPI bus with custom chip select pin.
     // PLC_SPI_CS_PIN and PLC_SPI_RST_PIN can be overridden via
     // build flags in platformio.ini to match your wiring.
-    // Use default SPI pins for the selected board. Chip select can be
-    // overridden via PLC_SPI_CS_PIN build flag.
-    SPI.begin();
+    // Use custom SPI pins matching the modem wiring. Chip select and reset
+    // are provided via build flags in platformio.ini.
+    SPI.begin(48 /*SCK*/, 21 /*MISO*/, 47 /*MOSI*/, PLC_SPI_CS_PIN);
     qca7000_config cfg{&SPI, PLC_SPI_CS_PIN, PLC_SPI_RST_PIN, MY_MAC};
 
     static slac::port::Qca7000Link link(cfg);
