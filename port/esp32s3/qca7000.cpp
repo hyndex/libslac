@@ -101,7 +101,7 @@ struct RxEntry {
     size_t len;
     uint8_t data[V2GTP_BUFFER_SIZE];
 };
-static constexpr uint8_t RING_SIZE = 4;
+static constexpr uint8_t RING_SIZE = 8;
 static constexpr uint8_t RING_MASK = RING_SIZE - 1;
 static RxEntry ring[RING_SIZE];
 static std::atomic<uint8_t> head{0}, tail{0};
@@ -269,6 +269,20 @@ static bool softReset() {
         ;
     spiWr16_slow(SPI_REG_INTR_CAUSE, 0xFFFF);
     return true;
+}
+
+static void initialSetup() {
+    (void)spiRd16_slow(SPI_REG_SIGNATURE);
+    uint32_t t0 = slac_millis();
+    uint16_t sig = 0;
+    do {
+        sig = spiRd16_slow(SPI_REG_SIGNATURE);
+        if (sig == SIG)
+            break;
+        slac_delay(5);
+    } while (slac_millis() - t0 < 200);
+    spiWr16_slow(SPI_REG_INTR_CAUSE, 0xFFFF);
+    spiWr16_slow(SPI_REG_INTR_ENABLE, INTR_MASK);
 }
 
 uint16_t qca7000ReadInternalReg(uint16_t r) {
@@ -770,34 +784,13 @@ static inline uint32_t get_us() {
 }
 
 static void process_cause(uint16_t cause) {
-    uint16_t clear_mask = 0;
-
     if (cause & SPI_INT_CPU_ON) {
-        clear_mask |= SPI_INT_CPU_ON;
-        if (!qca7000SoftReset()) {
-            if (!hardReset()) {
-                if (++g_crash_count >= 3 && g_pwr >= 0) {
-                    digitalWrite(g_pwr, LOW);
-                    slac_delay(200);
-                    digitalWrite(g_pwr, HIGH);
-                    slac_delay(200);
-                    g_crash_count = 0;
-                }
-            } else {
-                g_crash_count = 0;
-            }
-        } else {
-            g_crash_count = 0;
-        }
-        if (g_err_cb.flag)
-            *g_err_cb.flag = true;
+        initialSetup();
         if (g_err_cb.cb)
             g_err_cb.cb(Qca7000ErrorStatus::Reset, g_err_cb.arg);
-        spiWr16_slow(SPI_REG_INTR_CAUSE, clear_mask);
-        return;
     }
+
     if (cause & (SPI_INT_WRBUF_ERR | SPI_INT_RDBUF_ERR)) {
-        clear_mask |= SPI_INT_WRBUF_ERR | SPI_INT_RDBUF_ERR;
         if (!qca7000SoftReset()) {
             if (!hardReset()) {
                 if (++g_crash_count >= 3 && g_pwr >= 0) {
@@ -821,8 +814,15 @@ static void process_cause(uint16_t cause) {
             g_buferr_count = 1;
         g_buferr_ts = now;
         if (g_buferr_count >= 3) {
+            if (g_pwr >= 0) {
+                digitalWrite(g_pwr, LOW);
+                slac_delay(200);
+                digitalWrite(g_pwr, HIGH);
+                slac_delay(200);
+            }
             g_driver_fatal = true;
             fatal = true;
+            g_buferr_count = 0;
         }
         if (g_err_cb.flag)
             *g_err_cb.flag = fatal || g_driver_fatal;
@@ -830,16 +830,12 @@ static void process_cause(uint16_t cause) {
             g_err_cb.cb(fatal ? Qca7000ErrorStatus::DriverFatal
                               : Qca7000ErrorStatus::Reset,
                         g_err_cb.arg);
-        spiWr16_slow(SPI_REG_INTR_CAUSE, clear_mask);
-        return;
-    }
-    if (cause & SPI_INT_PKT_AVLBL) {
-        fetchRx();
-        clear_mask |= SPI_INT_PKT_AVLBL;
     }
 
-    if (clear_mask)
-        spiWr16_slow(SPI_REG_INTR_CAUSE, clear_mask);
+    if (cause & SPI_INT_PKT_AVLBL)
+        fetchRx();
+
+    spiWr16_slow(SPI_REG_INTR_CAUSE, cause);
 }
 
 void qca7000ProcessSlice(uint32_t max_us) {

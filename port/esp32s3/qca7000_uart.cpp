@@ -22,7 +22,7 @@ struct RxEntry {
     size_t len;
     uint8_t data[V2GTP_BUFFER_SIZE];
 };
-static constexpr uint8_t RING_SIZE = 4;
+static constexpr uint8_t RING_SIZE = 8;
 static constexpr uint8_t RING_MASK = RING_SIZE - 1;
 static RxEntry ring[RING_SIZE];
 static std::atomic<uint8_t> head{0}, tail{0};
