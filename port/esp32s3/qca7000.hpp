@@ -72,6 +72,15 @@ static_assert(ETH_FRAME_LEN <= V2GTP_BUFFER_SIZE,
 #ifndef PLC_SPI_CS_PIN
 #define PLC_SPI_CS_PIN 17
 #endif
+#ifndef PLC_SPI_SCK_PIN
+#define PLC_SPI_SCK_PIN 48
+#endif
+#ifndef PLC_SPI_MISO_PIN
+#define PLC_SPI_MISO_PIN 21
+#endif
+#ifndef PLC_SPI_MOSI_PIN
+#define PLC_SPI_MOSI_PIN 47
+#endif
 
 struct qca7000_config {
     SPIClass* spi;
