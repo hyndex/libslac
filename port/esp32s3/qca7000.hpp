@@ -1,9 +1,7 @@
 #pragma once
 
 #include "../port_common.hpp"
-#ifdef ESP_PLATFORM
 #include "port_config.hpp"
-#endif
 
 #include "ethernet_defs.hpp"
 #ifdef ARDUINO
@@ -59,31 +57,6 @@ static_assert(ETH_FRAME_LEN <= V2GTP_BUFFER_SIZE,
 #define QCASPI_SLAVE_RESET_BIT (1 << 6)
 #endif
 
-#ifndef QCA7000_SPI_FAST_HZ
-#define QCA7000_SPI_FAST_HZ 8000000
-#endif
-#ifndef PLC_SPI_SLOW_HZ
-#define PLC_SPI_SLOW_HZ 1000000
-#endif
-#ifndef QCA7000_SPI_BURST_LEN
-#define QCA7000_SPI_BURST_LEN 512
-#endif
-
-#ifndef PLC_SPI_RST_PIN
-#define PLC_SPI_RST_PIN 5
-#endif
-#ifndef PLC_SPI_CS_PIN
-#define PLC_SPI_CS_PIN 17
-#endif
-#ifndef PLC_SPI_SCK_PIN
-#define PLC_SPI_SCK_PIN 48
-#endif
-#ifndef PLC_SPI_MISO_PIN
-#define PLC_SPI_MISO_PIN 21
-#endif
-#ifndef PLC_SPI_MOSI_PIN
-#define PLC_SPI_MOSI_PIN 47
-#endif
 
 struct qca7000_config {
     SPIClass* spi;
