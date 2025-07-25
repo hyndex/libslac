@@ -23,7 +23,7 @@ build_flags = \
 ```
 
 The SPI bus is initialised by the driver using the pin macros from
-`qca7000.hpp`. Chip select is driven manually, so `SPI.begin()` is
+`port_config.hpp`. Chip select is driven manually, so `SPI.begin()` is
 called with `-1` for the CS pin.
 
 ```cpp
