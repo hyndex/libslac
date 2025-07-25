@@ -94,6 +94,10 @@ size_t spiQCA7000checkForReceivedData(uint8_t* dst, size_t maxLen);
 bool spiQCA7000SendEthFrame(const uint8_t* frame, size_t len);
 bool qca7000startSlac();
 uint8_t qca7000getSlacResult();
+// Poll the modem for events and service the RX ring.
+// When a CPU_ON or buffer error interrupt occurs the driver first
+// performs qca7000SoftReset(). If that fails the reset pin is toggled
+// via a hard reset.
 void qca7000Process();
 
 typedef void (*qca7000_error_cb_t)(void*);
