@@ -4,7 +4,6 @@
 
 SPIClass* spi_used = nullptr;
 int spi_cs = -1;
-int spi_rst = -1;
 
 bool reset_called = false;
 
@@ -14,11 +13,9 @@ uint8_t myethreceivebuffer[V2GTP_BUFFER_SIZE];
 size_t myethreceivelen = 0;
 const char* PLC_TAG = "mock";
 
-bool qca7000setup(SPIClass* spi, int cs, int rst) {
-    spi_used = spi; spi_cs = cs; spi_rst = rst; return true;
+bool qca7000setup(SPIClass* spi, int cs) {
+    spi_used = spi; spi_cs = cs; return true;
 }
-
-void qca7000teardown() { spi_used = nullptr; }
 
 bool qca7000ResetAndCheck() {
     reset_called = true;
@@ -39,4 +36,3 @@ bool spiQCA7000SendEthFrame(const uint8_t* f, size_t l) {
 bool qca7000startSlac() { return true; }
 uint8_t qca7000getSlacResult() { return 0; }
 void qca7000Process() {}
-void qca7000SetErrorCallback(qca7000_error_cb_t, void*, bool*) {}
