@@ -52,12 +52,10 @@ void setup() {
 }
 
 void loop() {
-    Serial.println("Loop Started");
     if (plc_irq) {
         plc_irq = false;
         qca7000ProcessSlice(500);
     }
-    Serial.println("Loop Middle");
 
     slac::messages::HomeplugMessage msg;
     if (g_channel && g_channel->poll(msg)) {
