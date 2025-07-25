@@ -66,12 +66,18 @@ struct ErrorCallbackCtx {
     bool* flag{nullptr};
 };
 static ErrorCallbackCtx g_err_cb;
+static uint8_t g_buferr_count = 0;
+static uint32_t g_buferr_ts = 0;
+static bool g_driver_fatal = false;
 
 void qca7000SetErrorCallback(qca7000_error_cb_t cb, void* arg, bool* flag) {
     g_err_cb.cb = cb;
     g_err_cb.arg = arg;
     g_err_cb.flag = flag;
+    g_driver_fatal = false;
 }
+
+bool qca7000DriverFatal() { return g_driver_fatal; }
 
 #ifdef LIBSLAC_TESTING
 SPIClass* g_spi = nullptr;
@@ -761,7 +767,7 @@ void qca7000Process() {
             if (g_err_cb.flag)
                 *g_err_cb.flag = true;
             if (g_err_cb.cb)
-                g_err_cb.cb(g_err_cb.arg);
+                g_err_cb.cb(Qca7000ErrorStatus::Reset, g_err_cb.arg);
             spiWr16_slow(SPI_REG_INTR_CAUSE, clear_mask);
             spiWr16_slow(SPI_REG_INTR_ENABLE, INTR_MASK);
             return;
@@ -770,10 +776,23 @@ void qca7000Process() {
             clear_mask |= SPI_INT_WRBUF_ERR | SPI_INT_RDBUF_ERR;
             if (!qca7000SoftReset())
                 hardReset();
+            bool fatal = false;
+            uint32_t now = slac_millis();
+            if (now - g_buferr_ts <= 1000)
+                ++g_buferr_count;
+            else
+                g_buferr_count = 1;
+            g_buferr_ts = now;
+            if (g_buferr_count >= 3) {
+                g_driver_fatal = true;
+                fatal = true;
+            }
             if (g_err_cb.flag)
-                *g_err_cb.flag = true;
+                *g_err_cb.flag = fatal || g_driver_fatal;
             if (g_err_cb.cb)
-                g_err_cb.cb(g_err_cb.arg);
+                g_err_cb.cb(fatal ? Qca7000ErrorStatus::DriverFatal
+                                  : Qca7000ErrorStatus::Reset,
+                            g_err_cb.arg);
             spiWr16_slow(SPI_REG_INTR_CAUSE, clear_mask);
             spiWr16_slow(SPI_REG_INTR_ENABLE, INTR_MASK);
             return;
