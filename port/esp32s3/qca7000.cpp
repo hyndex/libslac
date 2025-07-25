@@ -141,8 +141,27 @@ static uint16_t spiRd16_fast(uint16_t reg) {
     return v;
 }
 
+static uint16_t spiRd16_slow(uint16_t reg) {
+    g_spi->beginTransaction(setSlow);
+    digitalWrite(g_cs, LOW);
+    g_spi->transfer16(cmd16(true, true, reg));
+    uint16_t v = g_spi->transfer16(0);
+    digitalWrite(g_cs, HIGH);
+    g_spi->endTransaction();
+    return v;
+}
+
 static void spiWr16_fast(uint16_t reg, uint16_t val) {
     g_spi->beginTransaction(setFast);
+    digitalWrite(g_cs, LOW);
+    g_spi->transfer16(cmd16(false, true, reg));
+    g_spi->transfer16(val);
+    digitalWrite(g_cs, HIGH);
+    g_spi->endTransaction();
+}
+
+static void spiWr16_slow(uint16_t reg, uint16_t val) {
+    g_spi->beginTransaction(setSlow);
     digitalWrite(g_cs, LOW);
     g_spi->transfer16(cmd16(false, true, reg));
     g_spi->transfer16(val);
@@ -189,8 +208,8 @@ static bool hardReset() {
     while (!(slowRd16(SPI_REG_INTR_CAUSE) & SPI_INT_CPU_ON) && slac_millis() - t0 < 80)
         ;
 
-    spiWr16_fast(SPI_REG_INTR_CAUSE, 0xFFFF);
-    spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
+    spiWr16_slow(SPI_REG_INTR_CAUSE, 0xFFFF);
+    spiWr16_slow(SPI_REG_INTR_ENABLE, INTR_MASK);
     return true;
 }
 
@@ -236,12 +255,12 @@ static bool softReset() {
     while (!(slowRd16(SPI_REG_INTR_CAUSE) & SPI_INT_CPU_ON) &&
            slac_millis() - t0 < 80)
         ;
-    spiWr16_fast(SPI_REG_INTR_CAUSE, 0xFFFF);
+    spiWr16_slow(SPI_REG_INTR_CAUSE, 0xFFFF);
     return true;
 }
 
 uint16_t qca7000ReadInternalReg(uint16_t r) {
-    return spiRd16_fast(r);
+    return spiRd16_slow(r);
 }
 bool qca7000ReadSignature(uint16_t* s, uint16_t* v) {
     uint16_t sig = qca7000ReadInternalReg(SPI_REG_SIGNATURE),
@@ -264,10 +283,10 @@ static bool txFrame(const uint8_t* eth, size_t ethLen) {
     if (frameLen < 60)
         frameLen = 60;
     uint16_t spiLen = TX_HDR + frameLen + FTR_LEN;
-    if (spiRd16_fast(SPI_REG_WRBUF_SPC_AVA) < spiLen)
+    if (spiRd16_slow(SPI_REG_WRBUF_SPC_AVA) < spiLen)
         return false;
 
-    spiWr16_fast(SPI_REG_BFR_SIZE, spiLen);
+    spiWr16_slow(SPI_REG_BFR_SIZE, spiLen);
 
     g_spi->beginTransaction(setFast);
     digitalWrite(g_cs, LOW);
@@ -308,12 +327,12 @@ void fetchRx() {
 #else
 static void fetchRx() {
 #endif
-    uint16_t avail = spiRd16_fast(SPI_REG_RDBUF_BYTE_AVA);
+    uint16_t avail = spiRd16_slow(SPI_REG_RDBUF_BYTE_AVA);
     if (avail < RX_HDR + FTR_LEN || avail > V2GTP_BUFFER_SIZE)
         return;
 
     uint16_t requested = avail;
-    spiWr16_fast(SPI_REG_BFR_SIZE, requested);
+    spiWr16_slow(SPI_REG_BFR_SIZE, requested);
 
     static uint8_t buf[V2GTP_BUFFER_SIZE + 2];
     g_spi->beginTransaction(setFast);
@@ -724,9 +743,9 @@ uint8_t qca7000getSlacResult() {
 }
 
 void qca7000Process() {
-    spiWr16_fast(SPI_REG_INTR_ENABLE, 0);
+    spiWr16_slow(SPI_REG_INTR_ENABLE, 0);
     while (true) {
-        uint16_t cause = spiRd16_fast(SPI_REG_INTR_CAUSE);
+        uint16_t cause = spiRd16_slow(SPI_REG_INTR_CAUSE);
         if (!cause)
             break;
 
@@ -740,8 +759,8 @@ void qca7000Process() {
                 *g_err_cb.flag = true;
             if (g_err_cb.cb)
                 g_err_cb.cb(g_err_cb.arg);
-            spiWr16_fast(SPI_REG_INTR_CAUSE, clear_mask);
-            spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
+            spiWr16_slow(SPI_REG_INTR_CAUSE, clear_mask);
+            spiWr16_slow(SPI_REG_INTR_ENABLE, INTR_MASK);
             return;
         }
         if (cause & (SPI_INT_WRBUF_ERR | SPI_INT_RDBUF_ERR)) {
@@ -752,8 +771,8 @@ void qca7000Process() {
                 *g_err_cb.flag = true;
             if (g_err_cb.cb)
                 g_err_cb.cb(g_err_cb.arg);
-            spiWr16_fast(SPI_REG_INTR_CAUSE, clear_mask);
-            spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
+            spiWr16_slow(SPI_REG_INTR_CAUSE, clear_mask);
+            spiWr16_slow(SPI_REG_INTR_ENABLE, INTR_MASK);
             return;
         }
         if (cause & SPI_INT_PKT_AVLBL) {
@@ -762,9 +781,9 @@ void qca7000Process() {
         }
 
         if (clear_mask)
-            spiWr16_fast(SPI_REG_INTR_CAUSE, clear_mask);
+            spiWr16_slow(SPI_REG_INTR_CAUSE, clear_mask);
     }
-    spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
+    spiWr16_slow(SPI_REG_INTR_ENABLE, INTR_MASK);
 }
 
 bool qca7000setup(SPIClass* bus, int csPin, int rstPin) {
