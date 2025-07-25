@@ -1,18 +1,18 @@
 #pragma once
 #include <stdint.h>
 
-#define CP_PWM_OUT_PIN      45
-#define CP_READ_ADC_PIN     14
-#define LOCK_FB_PIN         38
-#define CONTACTOR_FB_PIN    39
-#define VOUT_MON_ADC_PIN    15
-#define ISOLATION_OK_PIN    40
+#define CP_PWM_OUT_PIN      38
+#define CP_READ_ADC_PIN     1
+#define LOCK_FB_PIN         10
+#define CONTACTOR_FB_PIN    13
+#define VOUT_MON_ADC_PIN    9
+#define ISOLATION_OK_PIN    14
 
-#define CP_THR_12V      10500
-#define CP_THR_9V       8500
-#define CP_THR_6V       5500
-#define CP_THR_3V       2500
-#define CP_THR_1V       800
+#define CP_THR_12V      2350
+#define CP_THR_9V       1950
+#define CP_THR_6V       1650
+#define CP_THR_3V       1400
+#define CP_THR_1V       1100
 
 #define CP_PWM_FREQ_HZ      1000
 #define CP_PWM_RES_BITS     12
