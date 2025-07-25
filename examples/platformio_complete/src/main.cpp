@@ -4,7 +4,10 @@
 #include <port/esp32s3/qca7000_link.hpp>
 #include <port/esp32s3/qca7000.hpp>
 
-extern void qca7000ProcessSlice(uint32_t max_us = 500);
+// qca7000ProcessSlice is declared in qca7000.hpp with a default timeout.
+// The extern declaration here must not specify the default again to avoid
+// multiple default argument definitions.
+extern void qca7000ProcessSlice(uint32_t max_us);
 
 // Default MAC address for the modem. Adjust as required.
 static const uint8_t MY_MAC[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
