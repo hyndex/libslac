@@ -189,6 +189,7 @@ static bool hardReset() {
         ;
 
     spiWr16_fast(SPI_REG_INTR_CAUSE, 0xFFFF);
+    spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
     return true;
 }
 
@@ -778,8 +779,6 @@ bool qca7000setup(SPIClass* bus, int csPin, int rstPin) {
         ESP_LOGE(PLC_TAG, "hardReset failed – modem missing");
         return false;
     }
-
-    spiWr16_fast(SPI_REG_INTR_ENABLE, INTR_MASK);
     ESP_LOGI(PLC_TAG, "QCA7000 ready");
     return true;
 }
