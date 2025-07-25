@@ -79,7 +79,7 @@ static slac::Channel* g_channel = nullptr;
 
 void setup() {
     Serial.begin(115200);
-    SPI.begin(48 /*SCK*/, 21 /*MISO*/, 47 /*MOSI*/, PLC_SPI_CS_PIN);
+    Serial.println("Starting SLAC modem...");
     qca7000_config cfg{&SPI, PLC_SPI_CS_PIN, PLC_SPI_RST_PIN, MY_MAC};
     static slac::port::Qca7000Link link(cfg);
     static slac::Channel channel(&link);

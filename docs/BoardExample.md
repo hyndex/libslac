@@ -21,10 +21,10 @@ build_flags = \
     -DPLC_SPI_RST_PIN=40
 ```
 
-The SPI bus is started with the custom pins in `setup()`:
+The SPI bus is initialised by the driver using the pin macros from
+`qca7000.hpp`.
 
 ```cpp
-SPI.begin(48 /*SCK*/, 21 /*MISO*/, 47 /*MOSI*/, 41 /*CS*/);
 qca7000_config cfg{&SPI, 41, 40, my_mac};
 slac::port::Qca7000Link link(cfg);
 while (true) {
