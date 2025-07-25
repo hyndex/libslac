@@ -18,7 +18,6 @@ void setup() {
     // QCA7000setup() will initialise the SPI bus using the pin macros defined
     // in port/esp32s3/qca7000.hpp. Override PLC_SPI_*_PIN in platformio.ini if
     // your wiring differs from the defaults.
-    Serial.println("Starting SLAC modem...");
     // Use custom SPI pins matching the modem wiring. Chip select is handled
     // manually by the driver, therefore SPI.begin is called with -1 for the CS
     // parameter. PLC_SPI_CS_PIN and PLC_SPI_RST_PIN are provided via build
@@ -34,6 +33,7 @@ void setup() {
     }, nullptr);
     static slac::Channel channel(&link);
     g_channel = &channel;
+    Serial.println("Starting SLAC channel");
     if (!channel.open()) {
         Serial.println("Failed to open SLAC channel, aborting");
         g_channel = nullptr;
@@ -41,13 +41,14 @@ void setup() {
             delay(1000);
     }
 
+    Serial.println("Sending SLAC parameter request");
     // send a minimal CM_SLAC_PARM.REQ as an example
     slac::messages::HomeplugMessage msg;
     slac::messages::cm_slac_parm_req req{};
     req.application_type = 0;
     req.security_type = 0;
     memset(req.run_id, 0x00, sizeof(req.run_id));
-
+    Serial.println("Setting up SLAC parameter request payload");
     if (!msg.setup_payload(&req, sizeof(req),
                            slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_REQ,
                            slac::defs::MMV::AV_1_0)) {
@@ -69,5 +70,6 @@ void loop() {
     if (g_channel && g_channel->poll(msg)) {
         // Handle incoming SLAC messages here
     }
+    Serial.println("Polling SLAC channel...");
     delay(1);
 }
