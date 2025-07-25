@@ -20,7 +20,7 @@ void setup() {
     qca7000_config cfg{&SPI, PLC_SPI_CS_PIN, PLC_SPI_RST_PIN, MY_MAC};
     Serial.println("Starting QCA7000 Link ");
     static slac::port::Qca7000Link link(cfg);
-    link.set_error_callback([](void*) {
+    link.set_error_callback([](Qca7000ErrorStatus, void*) {
         Serial.println("[PLC] Fatal error - driver auto-reset");
     }, nullptr);
     static slac::Channel channel(&link);
