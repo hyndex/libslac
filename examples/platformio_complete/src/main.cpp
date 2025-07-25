@@ -11,7 +11,7 @@ static slac::Channel* g_channel = nullptr;
 
 void setup() {
     Serial.begin(115200);
-
+    delay(4000); // Wait for Serial to be ready
     // Initialise the SPI bus with custom chip select pin.
     // PLC_SPI_CS_PIN and PLC_SPI_RST_PIN can be overridden via
     // build flags in platformio.ini to match your wiring.
@@ -19,8 +19,13 @@ void setup() {
     // in port/esp32s3/qca7000.hpp. Override PLC_SPI_*_PIN in platformio.ini if
     // your wiring differs from the defaults.
     Serial.println("Starting SLAC modem...");
+    // Use custom SPI pins matching the modem wiring. Chip select and reset
+    // are provided via build flags in platformio.ini.
+    Serial.println("Starting SLAC modem...");
+    SPI.begin(48 /*SCK*/, 21 /*MISO*/, 47 /*MOSI*/, PLC_SPI_CS_PIN);
+    Serial.println("Starting SPI ");
     qca7000_config cfg{&SPI, PLC_SPI_CS_PIN, PLC_SPI_RST_PIN, MY_MAC};
-
+    Serial.println("Starting QCA7000 Link ");
     static slac::port::Qca7000Link link(cfg);
     static slac::Channel channel(&link);
     g_channel = &channel;
