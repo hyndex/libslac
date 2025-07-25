@@ -78,6 +78,11 @@ bool qca7000ResetAndCheck();
 bool qca7000SoftReset();
 uint16_t qca7000ReadInternalReg(uint16_t reg);
 bool qca7000ReadSignature(uint16_t* sig = nullptr, uint16_t* ver = nullptr);
+// Poll a few internal registers to verify that the modem is responsive.
+// Returns ``true`` when ``SPI_REG_SIGNATURE`` matches 0xAA55 and the
+// ``CPU_ON`` interrupt cause is asserted.  Applications should invoke this
+// check roughly once per minute to detect a stalled device.
+bool qca7000CheckAlive();
 size_t spiQCA7000checkForReceivedData(uint8_t* dst, size_t maxLen);
 bool spiQCA7000SendEthFrame(const uint8_t* frame, size_t len);
 bool qca7000startSlac();

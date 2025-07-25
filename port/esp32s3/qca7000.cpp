@@ -281,6 +281,13 @@ bool qca7000ReadSignature(uint16_t* s, uint16_t* v) {
     return sig == SIG;
 }
 
+bool qca7000CheckAlive() {
+    uint16_t sig = qca7000ReadInternalReg(SPI_REG_SIGNATURE);
+    (void)qca7000ReadInternalReg(SPI_REG_WRBUF_SPC_AVA);
+    uint16_t cause = qca7000ReadInternalReg(SPI_REG_INTR_CAUSE);
+    return sig == SIG && (cause & SPI_INT_CPU_ON);
+}
+
 #ifdef LIBSLAC_TESTING
 bool txFrame(const uint8_t* eth, size_t ethLen) {
 #else
