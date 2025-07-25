@@ -80,6 +80,9 @@ static slac::Channel* g_channel = nullptr;
 void setup() {
     Serial.begin(115200);
     Serial.println("Starting SLAC modem...");
+    // Initialise the SPI bus. Chip select is controlled by the driver so
+    // SPI.begin is called with -1 for the CS pin.
+    SPI.begin(48 /*SCK*/, 21 /*MISO*/, 47 /*MOSI*/, -1);
     qca7000_config cfg{&SPI, PLC_SPI_CS_PIN, PLC_SPI_RST_PIN, MY_MAC};
     static slac::port::Qca7000Link link(cfg);
     static slac::Channel channel(&link);
