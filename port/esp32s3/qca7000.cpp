@@ -67,6 +67,7 @@ static ErrorCallbackCtx g_err_cb;
 static uint8_t g_buferr_count = 0;
 static uint32_t g_buferr_ts = 0;
 static bool g_driver_fatal = false;
+static uint8_t g_crash_count = 0;
 
 void qca7000SetErrorCallback(qca7000_error_cb_t cb, void* arg, bool* flag) {
     g_err_cb.cb = cb;
@@ -760,61 +761,108 @@ uint8_t qca7000getSlacResult() {
     return g_slac_ctx.result;
 }
 
-void qca7000Process() {
+static inline uint32_t get_us() {
+#ifdef ESP_PLATFORM
+    return (uint32_t)esp_timer_get_time();
+#else
+    return micros();
+#endif
+}
+
+static void process_cause(uint16_t cause) {
+    uint16_t clear_mask = 0;
+
+    if (cause & SPI_INT_CPU_ON) {
+        clear_mask |= SPI_INT_CPU_ON;
+        if (!qca7000SoftReset()) {
+            if (!hardReset()) {
+                if (++g_crash_count >= 3 && g_pwr >= 0) {
+                    digitalWrite(g_pwr, LOW);
+                    slac_delay(200);
+                    digitalWrite(g_pwr, HIGH);
+                    slac_delay(200);
+                    g_crash_count = 0;
+                }
+            } else {
+                g_crash_count = 0;
+            }
+        } else {
+            g_crash_count = 0;
+        }
+        if (g_err_cb.flag)
+            *g_err_cb.flag = true;
+        if (g_err_cb.cb)
+            g_err_cb.cb(Qca7000ErrorStatus::Reset, g_err_cb.arg);
+        spiWr16_slow(SPI_REG_INTR_CAUSE, clear_mask);
+        return;
+    }
+    if (cause & (SPI_INT_WRBUF_ERR | SPI_INT_RDBUF_ERR)) {
+        clear_mask |= SPI_INT_WRBUF_ERR | SPI_INT_RDBUF_ERR;
+        if (!qca7000SoftReset()) {
+            if (!hardReset()) {
+                if (++g_crash_count >= 3 && g_pwr >= 0) {
+                    digitalWrite(g_pwr, LOW);
+                    slac_delay(200);
+                    digitalWrite(g_pwr, HIGH);
+                    slac_delay(200);
+                    g_crash_count = 0;
+                }
+            } else {
+                g_crash_count = 0;
+            }
+        } else {
+            g_crash_count = 0;
+        }
+        bool fatal = false;
+        uint32_t now = slac_millis();
+        if (now - g_buferr_ts <= 1000)
+            ++g_buferr_count;
+        else
+            g_buferr_count = 1;
+        g_buferr_ts = now;
+        if (g_buferr_count >= 3) {
+            g_driver_fatal = true;
+            fatal = true;
+        }
+        if (g_err_cb.flag)
+            *g_err_cb.flag = fatal || g_driver_fatal;
+        if (g_err_cb.cb)
+            g_err_cb.cb(fatal ? Qca7000ErrorStatus::DriverFatal
+                              : Qca7000ErrorStatus::Reset,
+                        g_err_cb.arg);
+        spiWr16_slow(SPI_REG_INTR_CAUSE, clear_mask);
+        return;
+    }
+    if (cause & SPI_INT_PKT_AVLBL) {
+        fetchRx();
+        clear_mask |= SPI_INT_PKT_AVLBL;
+    }
+
+    if (clear_mask)
+        spiWr16_slow(SPI_REG_INTR_CAUSE, clear_mask);
+}
+
+void qca7000ProcessSlice(uint32_t max_us) {
+    uint32_t t0 = get_us();
+    uint16_t loops = 0;
+
     spiWr16_slow(SPI_REG_INTR_ENABLE, 0);
     while (true) {
         uint16_t cause = spiRd16_slow(SPI_REG_INTR_CAUSE);
         if (!cause)
             break;
 
-        uint16_t clear_mask = 0;
-
-        if (cause & SPI_INT_CPU_ON) {
-            clear_mask |= SPI_INT_CPU_ON;
-            if (!qca7000SoftReset())
-                hardReset();
-            if (g_err_cb.flag)
-                *g_err_cb.flag = true;
-            if (g_err_cb.cb)
-                g_err_cb.cb(Qca7000ErrorStatus::Reset, g_err_cb.arg);
-            spiWr16_slow(SPI_REG_INTR_CAUSE, clear_mask);
-            spiWr16_slow(SPI_REG_INTR_ENABLE, INTR_MASK);
-            return;
-        }
-        if (cause & (SPI_INT_WRBUF_ERR | SPI_INT_RDBUF_ERR)) {
-            clear_mask |= SPI_INT_WRBUF_ERR | SPI_INT_RDBUF_ERR;
-            if (!qca7000SoftReset())
-                hardReset();
-            bool fatal = false;
-            uint32_t now = slac_millis();
-            if (now - g_buferr_ts <= 1000)
-                ++g_buferr_count;
-            else
-                g_buferr_count = 1;
-            g_buferr_ts = now;
-            if (g_buferr_count >= 3) {
-                g_driver_fatal = true;
-                fatal = true;
-            }
-            if (g_err_cb.flag)
-                *g_err_cb.flag = fatal || g_driver_fatal;
-            if (g_err_cb.cb)
-                g_err_cb.cb(fatal ? Qca7000ErrorStatus::DriverFatal
-                                  : Qca7000ErrorStatus::Reset,
-                            g_err_cb.arg);
-            spiWr16_slow(SPI_REG_INTR_CAUSE, clear_mask);
-            spiWr16_slow(SPI_REG_INTR_ENABLE, INTR_MASK);
-            return;
-        }
-        if (cause & SPI_INT_PKT_AVLBL) {
-            fetchRx();
-            clear_mask |= SPI_INT_PKT_AVLBL;
-        }
-
-        if (clear_mask)
-            spiWr16_slow(SPI_REG_INTR_CAUSE, clear_mask);
+        process_cause(cause);
+        if (++loops > 32)
+            break;
+        if (get_us() - t0 > max_us)
+            break;
     }
     spiWr16_slow(SPI_REG_INTR_ENABLE, INTR_MASK);
+}
+
+void qca7000Process() {
+    qca7000ProcessSlice(500);
 }
 
 bool qca7000setup(SPIClass* bus, int csPin, int rstPin) {

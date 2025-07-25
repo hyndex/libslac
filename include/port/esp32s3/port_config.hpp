@@ -48,6 +48,9 @@
 #ifndef PLC_PWR_EN_PIN
 #define PLC_PWR_EN_PIN -1
 #endif
+#ifndef PLC_INT_PIN
+#define PLC_INT_PIN -1
+#endif
 
 #ifndef PLC_SPI_CS_PIN
 static_assert(false, "PLC_SPI_CS_PIN undefined");
@@ -79,6 +82,9 @@ inline uint32_t htole32(uint32_t v) { return v; }
 #ifdef ESP_PLATFORM
 static inline uint32_t slac_millis() {
     return (uint32_t)(esp_timer_get_time() / 1000ULL);
+}
+static inline uint32_t slac_micros() {
+    return (uint32_t)esp_timer_get_time();
 }
 static inline void slac_delay(uint32_t ms) {
     vTaskDelay(pdMS_TO_TICKS(ms));
