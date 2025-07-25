@@ -77,10 +77,12 @@ void qca7000SetErrorCallback(qca7000_error_cb_t cb, void* arg, bool* flag) {
 SPIClass* g_spi = nullptr;
 int g_cs = -1;
 int g_rst = PLC_SPI_RST_PIN;
+int g_pwr = PLC_PWR_EN_PIN;
 #else
 static SPIClass* g_spi = nullptr;
 static int g_cs = -1;
 static int g_rst = PLC_SPI_RST_PIN;
+static int g_pwr = PLC_PWR_EN_PIN;
 #endif
 static SPISettings setSlow(SLOW_HZ, MSBFIRST, SPI_MODE3);
 static SPISettings setFast(FAST_HZ, MSBFIRST, SPI_MODE3);
@@ -792,17 +794,31 @@ bool qca7000setup(SPIClass* bus, int csPin, int rstPin) {
     g_spi = bus;
     g_cs = csPin;
     g_rst = rstPin;
+    g_pwr = PLC_PWR_EN_PIN;
     if (g_spi)
         g_spi->begin(PLC_SPI_SCK_PIN, PLC_SPI_MISO_PIN, PLC_SPI_MOSI_PIN, -1);
     pinMode(g_cs, OUTPUT);
     digitalWrite(g_cs, HIGH);
-
-    if (!hardReset()) {
-        ESP_LOGE(PLC_TAG, "hardReset failed – modem missing");
-        return false;
+    if (g_pwr >= 0) {
+        pinMode(g_pwr, OUTPUT);
+        digitalWrite(g_pwr, HIGH);
     }
-    ESP_LOGI(PLC_TAG, "QCA7000 ready");
-    return true;
+
+    for (int attempt = 1; attempt <= QCA7000_MAX_RETRIES; ++attempt) {
+        ESP_LOGI(PLC_TAG, "Setup attempt %d", attempt);
+        if (hardReset()) {
+            ESP_LOGI(PLC_TAG, "QCA7000 ready");
+            return true;
+        }
+        ESP_LOGE(PLC_TAG, "hardReset failed – modem missing");
+        if (attempt < QCA7000_MAX_RETRIES && g_pwr >= 0) {
+            digitalWrite(g_pwr, LOW);
+            slac_delay(200);
+            digitalWrite(g_pwr, HIGH);
+            slac_delay(200);
+        }
+    }
+    return false;
 }
 
 void qca7000teardown() {
