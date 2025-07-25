@@ -127,6 +127,8 @@ The SPI pins used to communicate with the QCA7000 modem are defined in
 ``port/esp32s3/qca7000.hpp`` as ``PLC_SPI_CS_PIN`` and ``PLC_SPI_RST_PIN``.
 Override these macros when building to match your hardware wiring or
 specify the pins through ``qca7000_config`` when opening the link.
+``PLC_SPI_RST_PIN`` must be set for your board; compilation fails if the
+default value is left unchanged.
 
 The ``qca7000_config`` struct allows selecting the SPI bus, chip select
 and reset pins as well as the modem's MAC address when creating

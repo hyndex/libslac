@@ -69,6 +69,9 @@ static_assert(ETH_FRAME_LEN <= V2GTP_BUFFER_SIZE,
 #ifndef PLC_SPI_RST_PIN
 #define PLC_SPI_RST_PIN 5
 #endif
+#if PLC_SPI_RST_PIN == 5
+#error "PLC_SPI_RST_PIN must be overridden to match your hardware wiring"
+#endif
 #ifndef PLC_SPI_CS_PIN
 #define PLC_SPI_CS_PIN 17
 #endif

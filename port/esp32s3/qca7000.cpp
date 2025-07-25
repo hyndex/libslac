@@ -771,9 +771,10 @@ bool qca7000setup(SPIClass* bus, int csPin, int rstPin) {
     g_cs = csPin;
     g_rst = rstPin;
     if (g_spi)
-        g_spi->begin(PLC_SPI_SCK_PIN, PLC_SPI_MISO_PIN, PLC_SPI_MOSI_PIN, g_cs);
+        g_spi->begin(PLC_SPI_SCK_PIN, PLC_SPI_MISO_PIN, PLC_SPI_MOSI_PIN, -1);
     pinMode(g_cs, OUTPUT);
     digitalWrite(g_cs, HIGH);
+    ESP_LOGI(PLC_TAG, "Using reset pin %d", g_rst);
 
     if (!hardReset()) {
         ESP_LOGE(PLC_TAG, "hardReset failed – modem missing");
