@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <slac/channel.hpp>
 #include <slac/slac.hpp>
+#include <atomic>
 #include <port/esp32s3/qca7000_link.hpp>
 #include <port/esp32s3/qca7000.hpp>
 #include "cp_pwm.h"
@@ -17,12 +18,13 @@ static const uint8_t MY_MAC[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 
 // Global pointer used by the polling loop
 static slac::Channel* g_channel = nullptr;
-volatile bool plc_irq = false;
-volatile uint8_t g_slac_state = 0;
+static std::atomic<bool> plc_irq{false};
+static std::atomic<uint8_t> g_slac_state{0};
 
-void IRAM_ATTR plc_isr() { plc_irq = true; }
+void IRAM_ATTR plc_isr() { plc_irq.store(true, std::memory_order_relaxed); }
 // Timestamp for SLAC restart logic
-uint32_t g_slac_ts = 0;
+std::atomic<uint32_t> g_slac_ts{0};
+static uint32_t g_log_ts = 0;
 
 void setup() {
     Serial.begin(115200);
@@ -60,8 +62,7 @@ void setup() {
 }
 
 void loop() {
-    if (plc_irq) {
-        plc_irq = false;
+    if (plc_irq.exchange(false)) {
         qca7000ProcessSlice(500);
     }
 
@@ -70,17 +71,25 @@ void loop() {
         // Handle incoming SLAC messages here
     }
 
+    if (millis() - g_log_ts > 1000) {
+        Serial.printf("[MAIN] SLAC=%u EVSE=%d CP=%c\n",
+                     g_slac_state.load(std::memory_order_relaxed),
+                     static_cast<int>(evseGetStage()), cpGetStateLetter());
+        g_log_ts = millis();
+    }
+
     // Update the SLAC state machine and restart if no progress for 60s
-    g_slac_state = qca7000getSlacResult();
-    if (g_slac_state != 0 && g_slac_state != 5) {
-        if (millis() - g_slac_ts > 60000) {
+    g_slac_state.store(qca7000getSlacResult(), std::memory_order_relaxed);
+    if (g_slac_state.load(std::memory_order_relaxed) != 0 &&
+        g_slac_state.load(std::memory_order_relaxed) != 5) {
+        if (millis() - g_slac_ts.load(std::memory_order_relaxed) > 60000) {
             Serial.println("Restarting SLAC handshake");
             if (!qca7000startSlac())
                 Serial.println("startSlac failed");
-            g_slac_ts = millis();
+            g_slac_ts.store(millis(), std::memory_order_relaxed);
         }
     } else {
-        g_slac_ts = millis();
+        g_slac_ts.store(millis(), std::memory_order_relaxed);
     }
 
     delay(1);

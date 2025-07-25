@@ -2,17 +2,24 @@
 #include "cp_pwm.h"
 #include "cp_config.h"
 #include <port/esp32s3/qca7000.hpp>
+#include <atomic>
+#include <Arduino.h>
 
-static EvseStage stage = EVSE_IDLE_A;
-static uint32_t  t_stage = 0;
+static const char* stageStr[] = {
+    "IDLE_A", "INIT_B1", "DIG_REQ_B2", "CABLE_CHECK_C",
+    "PRECHARGE", "ENERGY_TRANSFER", "POWER_DOWN", "UNLOCK_B1"};
+
+static std::atomic<EvseStage> stage{EVSE_IDLE_A};
+static std::atomic<uint32_t>  t_stage{0};
 
 static inline void stageEnter(EvseStage s) {
-    stage = s;
-    t_stage = 0;
+    stage.store(s, std::memory_order_relaxed);
+    t_stage.store(0, std::memory_order_relaxed);
+    Serial.printf("[EVSE] Stage -> %s\n", stageStr[s]);
 }
 
-extern volatile uint8_t g_slac_state;
-extern uint32_t g_slac_ts;
+extern std::atomic<uint8_t> g_slac_state;
+extern std::atomic<uint32_t> g_slac_ts;
 
 static void handleIdleA() {
     if (cpGetSubState() == CP_B1) {
@@ -22,11 +29,11 @@ static void handleIdleA() {
 }
 
 static void handleInitialiseB1() {
-    if (t_stage == 0) {
+    if (t_stage.load(std::memory_order_relaxed) == 0) {
         qca7000startSlac();
-        g_slac_ts = millis();
+        g_slac_ts.store(millis(), std::memory_order_relaxed);
     }
-    if (t_stage > T_CP_B1_FAIL_MS) {
+    if (t_stage.load(std::memory_order_relaxed) > T_CP_B1_FAIL_MS) {
         cpPwmStop();
         stageEnter(EVSE_IDLE_A);
     }
@@ -36,32 +43,34 @@ static void handleInitialiseB1() {
 }
 
 static void handleDigitalReqB2() {
-    if (g_slac_state == 5 && (cpGetSubState() == CP_C || cpGetSubState() == CP_D)) {
+    if (g_slac_state.load(std::memory_order_relaxed) == 5 &&
+        (cpGetSubState() == CP_C || cpGetSubState() == CP_D)) {
         stageEnter(EVSE_CABLE_CHECK_C);
         return;
     }
-    if (t_stage > T_HLC_EST_MS && g_slac_state != 5) {
+    if (t_stage.load(std::memory_order_relaxed) > T_HLC_EST_MS &&
+        g_slac_state.load(std::memory_order_relaxed) != 5) {
         stageEnter(EVSE_INITIALISE_B1);
     }
 }
 
 static void handleCableCheckC() {
-    if (t_stage == 0) {
+    if (t_stage.load(std::memory_order_relaxed) == 0) {
         // Placeholder for lock and isolation checks
     }
     if (digitalRead(ISOLATION_OK_PIN) && digitalRead(LOCK_FB_PIN)) {
         stageEnter(EVSE_PRECHARGE);
-    } else if (t_stage > T_ISO_CPLT_MS) {
+    } else if (t_stage.load(std::memory_order_relaxed) > T_ISO_CPLT_MS) {
         cpPwmStop();
         stageEnter(EVSE_POWER_DOWN);
     }
 }
 
 static void handlePrecharge() {
-    if (t_stage == 0) {
+    if (t_stage.load(std::memory_order_relaxed) == 0) {
         // enable HV pre-charge converter
     }
-    if (t_stage > T_PC_DONE_MS) {
+    if (t_stage.load(std::memory_order_relaxed) > T_PC_DONE_MS) {
         stageEnter(EVSE_POWER_DOWN);
     }
     if (analogReadMilliVolts(VOUT_MON_ADC_PIN) > 380000) {
@@ -76,10 +85,10 @@ static void handleEnergyTransfer() {
 }
 
 static void handlePowerDown() {
-    if (t_stage == 0) {
+    if (t_stage.load(std::memory_order_relaxed) == 0) {
         // ramp current down, open contactor
     }
-    if (t_stage > T_SAFE_MAX_MS) {
+    if (t_stage.load(std::memory_order_relaxed) > T_SAFE_MAX_MS) {
         stageEnter(EVSE_UNLOCK_B1);
     }
 }
@@ -93,12 +102,12 @@ static void handleUnlockB1() {
 
 void evseStateMachineInit() { stageEnter(EVSE_IDLE_A); }
 
-EvseStage evseGetStage() { return stage; }
+EvseStage evseGetStage() { return stage.load(std::memory_order_relaxed); }
 
 void evseStateMachineTask(void*) {
     const TickType_t period = 1;
     while (true) {
-        switch (stage) {
+        switch (stage.load(std::memory_order_relaxed)) {
             case EVSE_IDLE_A:          handleIdleA(); break;
             case EVSE_INITIALISE_B1:   handleInitialiseB1(); break;
             case EVSE_DIGITAL_REQ_B2:  handleDigitalReqB2(); break;
@@ -108,7 +117,7 @@ void evseStateMachineTask(void*) {
             case EVSE_POWER_DOWN:      handlePowerDown(); break;
             case EVSE_UNLOCK_B1:       handleUnlockB1(); break;
         }
-        ++t_stage;
+        t_stage.fetch_add(1, std::memory_order_relaxed);
         vTaskDelay(pdMS_TO_TICKS(period));
     }
 }
