@@ -4,7 +4,7 @@ This short guide covers basic wiring and verification of a QCA7000-based power l
 
 ## Pin Configuration
 
-The ESP32-S3 port defines default SPI pins in `port/esp32s3/qca7000.hpp`:
+The ESP32-S3 port defines default SPI pins in `port/esp32s3/port_config.hpp`:
 
 | Signal        | Macro                | Default Pin |
 |---------------|---------------------|-------------|
