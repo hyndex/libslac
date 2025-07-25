@@ -76,6 +76,7 @@ modem:
 
 static const uint8_t MY_MAC[ETH_ALEN] = {0x02,0x00,0x00,0x00,0x00,0x01};
 static slac::Channel* g_channel = nullptr;
+volatile bool plc_irq = false;
 
 void setup() {
     Serial.begin(115200);
@@ -87,11 +88,16 @@ void setup() {
     static slac::port::Qca7000Link link(cfg);
     static slac::Channel channel(&link);
     g_channel = &channel;
+    pinMode(PLC_INT_PIN, INPUT);
+    attachInterrupt(PLC_INT_PIN, []{ plc_irq = true; }, FALLING);
     channel.open();
 }
 
 void loop() {
-    qca7000Process();
+    if (plc_irq) {
+        plc_irq = false;
+        qca7000ProcessSlice();
+    }
     slac::messages::HomeplugMessage msg;
     if (g_channel && g_channel->poll(msg)) {
         // handle incoming packets
@@ -100,8 +106,9 @@ void loop() {
 }
 ```
 
-This program repeatedly calls `qca7000Process()` to service the modem
-and uses `Channel::poll()` to check for incoming SLAC frames.  It can be
+This program uses `qca7000ProcessSlice()` to service the modem whenever
+the INT pin signals an interrupt. `Channel::poll()` is called to check
+for incoming SLAC frames.  It can be
 extended to implement the full ISO15118‑3 handshake.
 
 ## 6. Build the Firmware
