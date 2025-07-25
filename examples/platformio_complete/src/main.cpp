@@ -41,8 +41,10 @@ void setup() {
 }
 
 void loop() {
+    Serial.println("Loop Started");
     // Poll the modem even when the IRQ line is not connected.
     qca7000Process();
+    Serial.println("Loop Middle");
 
     slac::messages::HomeplugMessage msg;
     if (g_channel && g_channel->poll(msg)) {
