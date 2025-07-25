@@ -6,6 +6,8 @@ SPIClass* spi_used = nullptr;
 int spi_cs = -1;
 int spi_rst = -1;
 
+bool reset_called = false;
+
 uint8_t myethtransmitbuffer[V2GTP_BUFFER_SIZE];
 size_t myethtransmitlen = 0;
 uint8_t myethreceivebuffer[V2GTP_BUFFER_SIZE];
@@ -18,7 +20,10 @@ bool qca7000setup(SPIClass* spi, int cs, int rst) {
 
 void qca7000teardown() { spi_used = nullptr; }
 
-bool qca7000ResetAndCheck() { return true; }
+bool qca7000ResetAndCheck() {
+    reset_called = true;
+    return true;
+}
 uint16_t qca7000ReadInternalReg(uint16_t) { return 0; }
 bool qca7000ReadSignature(uint16_t* sig, uint16_t* ver) { if(sig) *sig = 0xAA55; if(ver) *ver=1; return true; }
 size_t spiQCA7000checkForReceivedData(uint8_t* dst, size_t len) {
