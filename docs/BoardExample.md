@@ -2,7 +2,8 @@
 
 This example demonstrates how to wire the QCA7000 modem to an
 ESP32-S3 board using PlatformIO. The board uses custom SPI pins and
-operates the modem without connecting the optional interrupt line.
+it is recommended to connect the interrupt line (`PLC_INT_PIN`, IO16 by
+default) so the driver can react to modem events.
 
 ## PlatformIO configuration
 
@@ -27,13 +28,22 @@ The SPI bus is initialised by the driver using the pin macros from
 called with `-1` for the CS pin.
 
 ```cpp
+volatile bool plc_irq = false;
+void IRAM_ATTR plc_isr() { plc_irq = true; }
+
 qca7000_config cfg{&SPI, 41, 40, my_mac};
 slac::port::Qca7000Link link(cfg);
+pinMode(PLC_INT_PIN, INPUT);
+attachInterrupt(PLC_INT_PIN, plc_isr, FALLING);
 while (true) {
-    qca7000Process();
+    if (plc_irq) {
+        plc_irq = false;
+        qca7000ProcessSlice();
+    }
     // application tasks
 }
 ```
 
-No interrupt pin is used. The loop above shows how the modem can be
-polled without relying on an external IRQ line.
+The loop above processes incoming modem events whenever the interrupt
+fires, ensuring timely handling while leaving the main thread free for
+other tasks.

@@ -14,7 +14,19 @@ The ESP32-S3 port defines default SPI pins in `port/esp32s3/qca7000.hpp`:
 | Chip Select   | `PLC_SPI_CS_PIN`    | 17          |
 | Reset         | `PLC_SPI_RST_PIN`   | 5           |
 
-Override these macros or pass explicit values to `qca7000_config` if your wiring differs. The optional interrupt line is unused by the provided driver and may remain unconnected.
+Override these macros or pass explicit values to `qca7000_config` if your wiring differs. The interrupt line is defined by `PLC_INT_PIN` (IO16 in the example configuration) and should be connected so an ISR can call `qca7000ProcessSlice()` when the modem signals new data.
+
+```cpp
+volatile bool plc_irq = false;
+void IRAM_ATTR plc_isr() { plc_irq = true; }
+
+void loop() {
+    if (plc_irq) {
+        plc_irq = false;
+        qca7000ProcessSlice();
+    }
+}
+```
 
 ## Typical Serial Log
 
