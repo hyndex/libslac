@@ -1,7 +1,8 @@
 #include "cp_pwm.h"
 #include "cp_monitor.h"
+#include <atomic>
 
-static bool pwmRunning = false;
+static std::atomic<bool> pwmRunning{false};
 static constexpr uint8_t PWM_CHANNEL = 0;
 
 void cpPwmInit() {
@@ -13,11 +14,11 @@ void cpPwmInit() {
 void cpPwmStart(uint16_t duty_raw) {
     ledcWrite(PWM_CHANNEL, duty_raw);
     cpSetLastPwmDuty(duty_raw);
-    pwmRunning = true;
+    pwmRunning.store(true, std::memory_order_relaxed);
 }
 
 void cpPwmSetDuty(uint16_t duty_raw) {
-    if (!pwmRunning)
+    if (!pwmRunning.load(std::memory_order_relaxed))
         cpPwmStart(duty_raw);
     else {
         ledcWrite(PWM_CHANNEL, duty_raw);
@@ -28,5 +29,5 @@ void cpPwmSetDuty(uint16_t duty_raw) {
 void cpPwmStop() {
     ledcWrite(PWM_CHANNEL, 0);
     cpSetLastPwmDuty(0);
-    pwmRunning = false;
+    pwmRunning.store(false, std::memory_order_relaxed);
 }
