@@ -26,6 +26,7 @@ inline SPIClass SPI;
 inline void pinMode(int, int) {}
 inline void digitalWrite(int, int) {}
 inline uint32_t millis() { return 0; }
+inline uint32_t micros() { return 0; }
 inline void delay(unsigned int) {}
 inline void noInterrupts() {}
 inline void interrupts() {}
