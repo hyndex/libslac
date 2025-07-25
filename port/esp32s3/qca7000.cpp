@@ -770,7 +770,7 @@ bool qca7000setup(SPIClass* bus, int csPin, int rstPin) {
     g_cs = csPin;
     g_rst = rstPin;
     if (g_spi)
-        g_spi->begin();
+        g_spi->begin(PLC_SPI_SCK_PIN, PLC_SPI_MISO_PIN, PLC_SPI_MOSI_PIN, g_cs);
     pinMode(g_cs, OUTPUT);
     digitalWrite(g_cs, HIGH);
 
