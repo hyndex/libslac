@@ -11,17 +11,7 @@ static slac::Channel* g_channel = nullptr;
 
 void setup() {
     Serial.begin(115200);
-    delay(4000); // Wait for Serial to be ready
-    // Initialise the SPI bus with custom chip select pin.
-    // PLC_SPI_CS_PIN and PLC_SPI_RST_PIN can be overridden via
-    // build flags in platformio.ini to match your wiring.
-    // QCA7000setup() will initialise the SPI bus using the pin macros defined
-    // in port/esp32s3/qca7000.hpp. Override PLC_SPI_*_PIN in platformio.ini if
-    // your wiring differs from the defaults.
-    // Use custom SPI pins matching the modem wiring. Chip select is handled
-    // manually by the driver, therefore SPI.begin is called with -1 for the CS
-    // parameter. PLC_SPI_CS_PIN and PLC_SPI_RST_PIN are provided via build
-    // flags in platformio.ini.
+    delay(4000); 
     Serial.println("Starting SLAC modem...");
     SPI.begin(48 /*SCK*/, 21 /*MISO*/, 47 /*MOSI*/, -1);
     Serial.println("Starting SPI");
@@ -60,9 +50,12 @@ void setup() {
             Serial.println("Failed to transmit SLAC parameter request");
         }
     }
+    Serial.println("SLAC parameter request sent, waiting for response...");
 }
 
 void loop() {
+    Serial.println("SLAC channel not initialized, skipping loop");
+
     // Poll the modem even when the IRQ line is not connected.
     qca7000Process();
 
