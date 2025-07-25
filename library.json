@@ -20,6 +20,7 @@
         "srcFilter": [
             "+<src/channel.cpp>",
             "+<src/slac.cpp>",
+            "+<src/config.cpp>",
             "+<port/esp32s3/qca7000.cpp>",
             "+<port/esp32s3/qca7000_link.cpp>",
             "+<3rd_party/hash_library/sha256.cpp>"
