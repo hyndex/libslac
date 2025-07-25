@@ -127,6 +127,8 @@ The SPI pins used to communicate with the QCA7000 modem are defined in
 ``port/esp32s3/qca7000.hpp`` as ``PLC_SPI_CS_PIN`` and ``PLC_SPI_RST_PIN``.
 Override these macros when building to match your hardware wiring or
 specify the pins through ``qca7000_config`` when opening the link.
+``PLC_SPI_SLOW_HZ`` controls the bus speed during modem reset and can
+be overridden in ``platformio.ini`` as well.
 Chip select is toggled manually by the driver, therefore ``SPI.begin`` is
 called with ``-1`` as the CS pin and the configured pin is controlled via
 ``digitalWrite``.
