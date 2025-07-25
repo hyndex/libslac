@@ -62,6 +62,9 @@ static_assert(ETH_FRAME_LEN <= V2GTP_BUFFER_SIZE,
 #ifndef QCA7000_SPI_FAST_HZ
 #define QCA7000_SPI_FAST_HZ 8000000
 #endif
+#ifndef PLC_SPI_SLOW_HZ
+#define PLC_SPI_SLOW_HZ 1000000
+#endif
 #ifndef QCA7000_SPI_BURST_LEN
 #define QCA7000_SPI_BURST_LEN 512
 #endif

@@ -18,7 +18,8 @@ board_upload.flash_size = 8MB
 board_build.arduino.memory_type = dio_qspi
 build_flags = \
     -DPLC_SPI_CS_PIN=41 \
-    -DPLC_SPI_RST_PIN=40
+    -DPLC_SPI_RST_PIN=40 \
+    -DPLC_SPI_SLOW_HZ=500000
 ```
 
 The SPI bus is initialised by the driver using the pin macros from
