@@ -7,22 +7,13 @@
 namespace slac {
 namespace port {
 
-Qca7000Link::Qca7000Link(const qca7000_config& c,
-                         ErrorCallback cb,
-                         void* cb_arg)
-    : cfg(c), error_cb(cb), error_arg(cb_arg) {
+Qca7000Link::Qca7000Link(const qca7000_config& c)
+    : cfg(c) {
     memset(mac_addr, 0, sizeof(mac_addr));
 }
 
 Qca7000Link::~Qca7000Link() {
     close();
-    qca7000SetErrorCallback(nullptr, nullptr, nullptr);
-}
-
-void Qca7000Link::set_error_callback(ErrorCallback cb, void* arg) {
-    error_cb = cb;
-    error_arg = arg;
-    qca7000SetErrorCallback(error_cb, error_arg, &fatal_error_flag);
 }
 
 bool Qca7000Link::open() {
@@ -33,18 +24,16 @@ bool Qca7000Link::open() {
 
     SPIClass* bus = cfg.spi ? cfg.spi : &SPI;
     int cs = cfg.cs_pin ? cfg.cs_pin : PLC_SPI_CS_PIN;
-    int rst = cfg.rst_pin ? cfg.rst_pin : PLC_SPI_RST_PIN;
 
     if (ETH_FRAME_LEN > V2GTP_BUFFER_SIZE) {
         initialization_error = true;
         return false;
     }
 
-    if (!qca7000setup(bus, cs, rst)) {
+    if (!qca7000setup(bus, cs)) {
         initialization_error = true;
         return false;
     }
-    qca7000SetErrorCallback(error_cb, error_arg, &fatal_error_flag);
 
     if (cfg.mac_addr)
         memcpy(mac_addr, cfg.mac_addr, ETH_ALEN);
@@ -65,7 +54,6 @@ bool Qca7000Link::write(const uint8_t* b, size_t l, uint32_t) {
 void Qca7000Link::close() {
     if (!initialized)
         return;
-    qca7000teardown();
     initialized = false;
 }
 

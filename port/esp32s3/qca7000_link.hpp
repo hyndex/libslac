@@ -2,13 +2,18 @@
 #define SLAC_QCA7000_LINK_HPP
 
 #include "../port_common.hpp"
-#ifdef ESP_PLATFORM
 #include "port_config.hpp"
-#endif
 
 #include "ethernet_defs.hpp"
 #include "qca7000.hpp"
 #include <slac/transport.hpp>
+
+struct qca7000_config {
+    SPIClass* spi;
+    int cs_pin;
+    int rst_pin{PLC_SPI_RST_PIN};
+    const uint8_t* mac_addr{nullptr};
+};
 
 namespace slac {
 namespace port {
@@ -21,13 +26,8 @@ namespace port {
  */
 class Qca7000Link : public transport::Link {
 public:
-    using ErrorCallback = qca7000_error_cb_t;
+    explicit Qca7000Link(const qca7000_config& cfg);
 
-    explicit Qca7000Link(const qca7000_config& cfg,
-                         ErrorCallback cb = nullptr,
-                         void* cb_arg = nullptr);
-
-    void set_error_callback(ErrorCallback cb, void* arg);
     bool fatal_error() const { return fatal_error_flag; }
     void clear_fatal_error() { fatal_error_flag = false; }
 
@@ -59,8 +59,6 @@ private:
     bool initialized{false};
     bool initialization_error{false};
     bool fatal_error_flag{false};
-    ErrorCallback error_cb{nullptr};
-    void* error_arg{nullptr};
     qca7000_config cfg;
     uint8_t mac_addr[ETH_ALEN]{};
 };
