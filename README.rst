@@ -244,6 +244,26 @@ state machines.  Include ``<slac/fsm.hpp>`` and derive your states from
 ``slac::fsm::states::CompoundStateBase``.  The helper classes manage
 state transitions and optionally operate without heap allocations.
 
+Running Unit Tests
+------------------
+
+The ``run_tests.sh`` script builds and executes the unit tests.  It
+links against the system provided GoogleTest libraries and therefore
+requires the ``libgtest-dev`` package (or an equivalent package provided
+by your distribution).  On Debian/Ubuntu based systems install the
+dependency via ``apt`` before running the script:
+
+.. code-block:: bash
+
+   sudo apt-get install libgtest-dev
+
+Execute the tests with:
+
+.. code-block:: bash
+
+   ./run_tests.sh
+
+
 Vendored Dependencies
 ---------------------
 
