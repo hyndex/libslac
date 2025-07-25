@@ -88,8 +88,10 @@ uint8_t qca7000getSlacResult();
 // reset pin is toggled using a hard reset.
 void qca7000Process();
 
-typedef void (*qca7000_error_cb_t)(void*);
+enum class Qca7000ErrorStatus { Reset, DriverFatal };
+typedef void (*qca7000_error_cb_t)(Qca7000ErrorStatus, void*);
 void qca7000SetErrorCallback(qca7000_error_cb_t cb, void* arg, bool* flag);
+bool qca7000DriverFatal();
 #ifdef ESP_PLATFORM
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>

@@ -39,4 +39,5 @@ bool spiQCA7000SendEthFrame(const uint8_t* f, size_t l) {
 bool qca7000startSlac() { return true; }
 uint8_t qca7000getSlacResult() { return 0; }
 void qca7000Process() {}
+bool qca7000DriverFatal() { return false; }
 void qca7000SetErrorCallback(qca7000_error_cb_t, void*, bool*) {}
