@@ -21,8 +21,16 @@
 #define QCA7000_SPI_FAST_HZ 8000000
 #define QCA7000_SPI_BURST_LEN 512
 
+#ifndef PLC_SPI_CS_PIN
+static_assert(false, "PLC_SPI_CS_PIN undefined");
+#else
 static_assert(PLC_SPI_CS_PIN >= 0, "CS pin unset");
+#endif
+#ifndef PLC_SPI_RST_PIN
+static_assert(false, "PLC_SPI_RST_PIN undefined");
+#else
 static_assert(PLC_SPI_RST_PIN >= 0, "RST pin unset");
+#endif
 static_assert(QCA7000_SPI_BURST_LEN <= 512, "Burst length too large");
 
 namespace slac {
