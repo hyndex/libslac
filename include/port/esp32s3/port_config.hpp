@@ -3,11 +3,21 @@
 
 #include "../port_common.hpp"
 
+#ifndef PLC_SPI_CS_PIN
 #define PLC_SPI_CS_PIN   36
+#endif
+#ifndef PLC_SPI_RST_PIN
 #define PLC_SPI_RST_PIN  40
+#endif
+#ifndef PLC_SPI_SCK_PIN
 #define PLC_SPI_SCK_PIN  48
+#endif
+#ifndef PLC_SPI_MISO_PIN
 #define PLC_SPI_MISO_PIN 21
+#endif
+#ifndef PLC_SPI_MOSI_PIN
 #define PLC_SPI_MOSI_PIN 47
+#endif
 
 #ifdef ESP_PLATFORM
 #include <stdint.h>
@@ -20,6 +30,16 @@
 #define PLC_SPI_SLOW_HZ  1000000
 #define QCA7000_SPI_FAST_HZ 8000000
 #define QCA7000_SPI_BURST_LEN 512
+
+#ifndef QCA7000_HARDRESET_LOW_MS
+#define QCA7000_HARDRESET_LOW_MS 20
+#endif
+#ifndef QCA7000_HARDRESET_HIGH_MS
+#define QCA7000_HARDRESET_HIGH_MS 150
+#endif
+#ifndef QCA7000_CPUON_TIMEOUT_MS
+#define QCA7000_CPUON_TIMEOUT_MS 200
+#endif
 
 #ifndef PLC_SPI_CS_PIN
 static_assert(false, "PLC_SPI_CS_PIN undefined");
