@@ -16,3 +16,4 @@ enum EvseStage : uint8_t {
 void evseStateMachineInit();
 void evseStateMachineTask(void*);
 EvseStage evseGetStage();
+const char* evseStageName(EvseStage);

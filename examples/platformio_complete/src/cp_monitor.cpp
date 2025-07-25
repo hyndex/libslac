@@ -1,9 +1,10 @@
 #include "cp_monitor.h"
+#include <atomic>
 
 static hw_timer_t* adcTimer = nullptr;
-static volatile uint16_t cp_mv = 0;
-static volatile uint16_t cp_duty = 0;
-static volatile CpSubState cp_state = CP_A;
+static std::atomic<uint16_t> cp_mv{0};
+static std::atomic<uint16_t> cp_duty{0};
+static std::atomic<CpSubState> cp_state{CP_A};
 
 static char toLetter(CpSubState s) {
     switch (s) {
@@ -38,15 +39,16 @@ static void IRAM_ATTR onAdc() {
         if (v > vmax)
             vmax = v;
     }
-    cp_mv = vmax;
-    cp_state = mv2state(vmax);
+    cp_mv.store(vmax, std::memory_order_relaxed);
+    cp_state.store(mv2state(vmax), std::memory_order_relaxed);
 }
 
 void cpMonitorInit() {
     analogReadResolution(12);
     analogSetPinAttenuation(CP_READ_ADC_PIN, ADC_11db);
-    cp_mv = analogReadMilliVolts(CP_READ_ADC_PIN);
-    cp_state = mv2state(cp_mv);
+    uint16_t mv = analogReadMilliVolts(CP_READ_ADC_PIN);
+    cp_mv.store(mv, std::memory_order_relaxed);
+    cp_state.store(mv2state(mv), std::memory_order_relaxed);
 }
 
 void cpLowRateStart(uint32_t period_ms) {
@@ -62,10 +64,17 @@ void cpLowRateStop() {
         timerAlarmDisable(adcTimer);
 }
 
-float cpGetVoltageMv() { return static_cast<float>(cp_mv); }
-CpSubState cpGetSubState() { return cp_state; }
-char cpGetStateLetter() { return toLetter(cp_state); }
+float cpGetVoltageMv() { return static_cast<float>(cp_mv.load(std::memory_order_relaxed)); }
+CpSubState cpGetSubState() { return cp_state.load(std::memory_order_relaxed); }
+char cpGetStateLetter() { return toLetter(cp_state.load(std::memory_order_relaxed)); }
 
-void cpSetLastPwmDuty(uint16_t duty) { cp_duty = duty; }
-uint16_t cpGetLastPwmDuty() { return cp_duty; }
-bool cpDigitalCommRequested() { return cp_state == CP_B1 || cp_state == CP_B2; }
+void cpSetLastPwmDuty(uint16_t duty) {
+    cp_duty.store(duty, std::memory_order_relaxed);
+}
+uint16_t cpGetLastPwmDuty() {
+    return cp_duty.load(std::memory_order_relaxed);
+}
+bool cpDigitalCommRequested() {
+    CpSubState s = cp_state.load(std::memory_order_relaxed);
+    return s == CP_B1 || s == CP_B2;
+}

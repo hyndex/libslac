@@ -3,6 +3,7 @@
 #include <slac/slac.hpp>
 #include <port/esp32s3/qca7000_link.hpp>
 #include <port/esp32s3/qca7000.hpp>
+#include <atomic>
 #include "cp_pwm.h"
 #include "cp_monitor.h"
 #include "cp_state_machine.h"
@@ -18,11 +19,23 @@ static const uint8_t MY_MAC[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 // Global pointer used by the polling loop
 static slac::Channel* g_channel = nullptr;
 volatile bool plc_irq = false;
-volatile uint8_t g_slac_state = 0;
+static std::atomic<uint8_t> g_slac_state{0};
 
 void IRAM_ATTR plc_isr() { plc_irq = true; }
 // Timestamp for SLAC restart logic
-uint32_t g_slac_ts = 0;
+static std::atomic<uint32_t> g_slac_ts{0};
+
+static void logTask(void*) {
+    const TickType_t period = pdMS_TO_TICKS(1000);
+    while (true) {
+        Serial.printf("[STAT] CP=%c %.2fV Stage=%s SLAC=%u\n",
+                      cpGetStateLetter(),
+                      cpGetVoltageMv() / 1000.0f,
+                      evseStageName(evseGetStage()),
+                      g_slac_state.load(std::memory_order_relaxed));
+        vTaskDelay(period);
+    }
+}
 
 void setup() {
     Serial.begin(115200);
@@ -37,6 +50,7 @@ void setup() {
     cpLowRateStart(10);
     evseStateMachineInit();
     xTaskCreatePinnedToCore(evseStateMachineTask, "evseSM", 4096, nullptr, 5, nullptr, 1);
+    xTaskCreatePinnedToCore(logTask, "log", 2048, nullptr, 1, nullptr, 1);
     SPI.begin(48 /*SCK*/, 21 /*MISO*/, 47 /*MOSI*/, -1);
     Serial.println("Starting SPI");
     pinMode(PLC_INT_PIN, INPUT);
@@ -71,16 +85,17 @@ void loop() {
     }
 
     // Update the SLAC state machine and restart if no progress for 60s
-    g_slac_state = qca7000getSlacResult();
-    if (g_slac_state != 0 && g_slac_state != 5) {
-        if (millis() - g_slac_ts > 60000) {
+    g_slac_state.store(qca7000getSlacResult(), std::memory_order_relaxed);
+    if (g_slac_state.load(std::memory_order_relaxed) != 0 &&
+        g_slac_state.load(std::memory_order_relaxed) != 5) {
+        if (millis() - g_slac_ts.load(std::memory_order_relaxed) > 60000) {
             Serial.println("Restarting SLAC handshake");
             if (!qca7000startSlac())
                 Serial.println("startSlac failed");
-            g_slac_ts = millis();
+            g_slac_ts.store(millis(), std::memory_order_relaxed);
         }
     } else {
-        g_slac_ts = millis();
+        g_slac_ts.store(millis(), std::memory_order_relaxed);
     }
 
     delay(1);
