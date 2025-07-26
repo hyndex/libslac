@@ -25,15 +25,20 @@ static char toLetter(CpSubState s) {
 }
 
 static CpSubState mv2state(uint16_t mv) {
-    if (mv < CP_THR_1V)      return CP_F;
-    if (mv > CP_THR_12V)     return CP_A;
-    if (mv > CP_THR_9V)      return (cp_duty == 0) ? CP_B1 : CP_B3;
-    if (mv > CP_THR_6V) {
-        uint16_t pct = (cp_duty * 100) >> CP_PWM_RES_BITS;
+    uint16_t duty = cp_duty.load(std::memory_order_relaxed);
+    if (mv < CP_THR_1V_MV)
+        return (mv < CP_THR_NEG_F_MV) ? CP_F : CP_E;
+    if (mv > CP_THR_12V_MV)
+        return CP_A;
+    if (mv > CP_THR_9V_MV)
+        return (duty == 0) ? CP_B1 : CP_B3;
+    if (mv > CP_THR_6V_MV) {
+        uint16_t pct = (duty * 100) >> CP_PWM_RES_BITS;
         if (pct >= 3 && pct <= 7) return CP_B2;
         return CP_C;
     }
-    if (mv > CP_THR_3V)      return CP_D;
+    if (mv > CP_THR_3V_MV)
+        return CP_D;
     return CP_E;
 }
 
@@ -53,6 +58,8 @@ static void IRAM_ATTR sample_isr() {
     uint16_t v = analogReadMilliVolts(CP_READ_ADC_PIN);
     cp_mv.store(v, std::memory_order_relaxed);
     cp_state.store(mv2state(v), std::memory_order_relaxed);
+    if (sampleTimer)
+        timerAlarmDisable(sampleTimer);
 }
 
 static void IRAM_ATTR ledc_isr(void*) {
@@ -92,14 +99,19 @@ void cpFastSampleStart() {
     timerAlarmDisable(sampleTimer);
 
     if (!ledcIsrHandle) {
-        ledc_isr_register(ledc_isr, nullptr, ESP_INTR_FLAG_IRAM, &ledcIsrHandle);
-        LEDC.int_clr.val = LEDC.int_st.val;
+        esp_err_t rc = ledc_isr_register(ledc_isr, nullptr, ESP_INTR_FLAG_IRAM,
+                                         &ledcIsrHandle);
+        if (rc != ESP_OK) {
+            ledcIsrHandle = nullptr;
+        } else {
+            LEDC.int_clr.val = LEDC.int_st.val;
+        }
     }
 }
 
 void cpFastSampleStop() {
     if (ledcIsrHandle) {
-        esp_intr_disable(ledcIsrHandle);
+        esp_intr_free(ledcIsrHandle);
         ledcIsrHandle = nullptr;
     }
     if (sampleTimer)
@@ -118,5 +130,5 @@ uint16_t cpGetLastPwmDuty() {
 }
 bool cpDigitalCommRequested() {
     CpSubState s = cp_state.load(std::memory_order_relaxed);
-    return s == CP_B1 || s == CP_B2;
+    return s == CP_B2 || s == CP_B3;
 }
