@@ -63,6 +63,9 @@ static_assert(QCA7000_SPI_BURST_LEN <= 512, "Burst length exceeds FIFO");
 #ifndef QCASPI_SLAVE_RESET_BIT
 #define QCASPI_SLAVE_RESET_BIT (1 << 6)
 #endif
+#ifndef QCASPI_MULTI_CS_BIT
+#define QCASPI_MULTI_CS_BIT (1 << 1)
+#endif
 
 
 struct qca7000_config {

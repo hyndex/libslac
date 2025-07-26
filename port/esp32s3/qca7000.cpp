@@ -247,6 +247,10 @@ static bool hardReset() {
     while (!(slowRd16(SPI_REG_INTR_CAUSE) & SPI_INT_CPU_ON) && slac_millis() - t0 < slac::cpuon_timeout_ms())
         ;
 
+    uint16_t cfg = slowRd16(SPI_REG_SPI_CONFIG);
+    if (cfg & QCASPI_MULTI_CS_BIT)
+        spiWr16_slow(SPI_REG_SPI_CONFIG, cfg & ~QCASPI_MULTI_CS_BIT);
+
     spiWr16_slow(SPI_REG_INTR_CAUSE, 0xFFFF);
     spiWr16_slow(SPI_REG_INTR_ENABLE, INTR_MASK);
     return true;
@@ -293,6 +297,10 @@ static bool softReset() {
     t0 = slac_millis();
     while (!(slowRd16(SPI_REG_INTR_CAUSE) & SPI_INT_CPU_ON) && slac_millis() - t0 < 80)
         ;
+    cfg = slowRd16(SPI_REG_SPI_CONFIG);
+    if (cfg & QCASPI_MULTI_CS_BIT)
+        slowWr16(SPI_REG_SPI_CONFIG, cfg & ~QCASPI_MULTI_CS_BIT);
+
     spiWr16_slow(SPI_REG_INTR_CAUSE, 0xFFFF);
     return true;
 }
@@ -307,6 +315,9 @@ static void initialSetup() {
             break;
         slac_delay(5);
     } while (slac_millis() - t0 < 200);
+    uint16_t cfg = spiRd16_slow(SPI_REG_SPI_CONFIG);
+    if (cfg & QCASPI_MULTI_CS_BIT)
+        spiWr16_slow(SPI_REG_SPI_CONFIG, cfg & ~QCASPI_MULTI_CS_BIT);
     spiWr16_slow(SPI_REG_INTR_CAUSE, 0xFFFF);
     spiWr16_slow(SPI_REG_INTR_ENABLE, INTR_MASK);
 }
