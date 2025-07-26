@@ -84,7 +84,8 @@ static void handlePrecharge() {
     if (t_stage.load(std::memory_order_relaxed) > T_PC_DONE_MS) {
         stageEnter(EVSE_POWER_DOWN);
     }
-    if (analogReadMilliVolts(VOUT_MON_ADC_PIN) > 380000) {
+    // converter output scaled to ADC range (~3.3V = ~400V)
+    if (analogReadMilliVolts(VOUT_MON_ADC_PIN) > 3300) {
         stageEnter(EVSE_ENERGY_TRANSFER);
     }
 }
@@ -105,7 +106,7 @@ static void handlePowerDown() {
 }
 
 static void handleUnlockB1() {
-    cpPwmStop();
+    cpPwmStart(CP_PWM_DUTY_5PCT); // hold 9V while waiting for unplug
     if (cpGetSubState() == CP_A) {
         stageEnter(EVSE_IDLE_A);
     }
@@ -131,7 +132,7 @@ void evseStateMachineTask(void*) {
             case EVSE_POWER_DOWN:      handlePowerDown(); break;
             case EVSE_UNLOCK_B1:       handleUnlockB1(); break;
         }
-        t_stage.fetch_add(1, std::memory_order_relaxed);
+        t_stage.fetch_add(period, std::memory_order_relaxed);
         vTaskDelay(pdMS_TO_TICKS(period));
     }
 }

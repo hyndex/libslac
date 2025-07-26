@@ -8,16 +8,20 @@
 #define VOUT_MON_ADC_PIN    9
 #define ISOLATION_OK_PIN    14
 
-#define CP_THR_12V      2350
-#define CP_THR_9V       1950
-#define CP_THR_6V       1650
-#define CP_THR_3V       1400
-#define CP_THR_1V       1100
+#define CP_THR_12V_MV   2350
+#define CP_THR_9V_MV    1950
+#define CP_THR_6V_MV    1650
+#define CP_THR_3V_MV    1400
+#define CP_THR_1V_MV    1100
+
+// additional thresholds for detecting negative plateaus
+#define CP_THR_NEG_E_MV   500
+#define CP_THR_NEG_F_MV   300
 
 #define CP_PWM_FREQ_HZ      1000
 #define CP_PWM_RES_BITS     12
-#define CP_PWM_DUTY_5PCT    ((1 << CP_PWM_RES_BITS) * 5 / 100)
-#define CP_IDLE_RELEASE   0   // actively drive CP high when PWM is idle
+#define CP_PWM_DUTY_5PCT    (((1 << CP_PWM_RES_BITS) * 5 + 50) / 100) // round correctly
+#define CP_IDLE_RELEASE     0   // 0=keep pin attached and drive high when idle, 1=release
 #define CP_SAMPLE_OFFSET_US 25
 
 #define T_PLC_INIT_MS       700

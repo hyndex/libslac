@@ -16,6 +16,9 @@ void cpPwmStart(uint16_t duty_raw) {
 #if CP_IDLE_RELEASE
     ledcAttachPin(CP_PWM_OUT_PIN, PWM_CHANNEL);
 #endif
+    const uint16_t max_duty = (1u << CP_PWM_RES_BITS) - 1;
+    if (duty_raw > max_duty)
+        duty_raw = max_duty;
     ledcWrite(PWM_CHANNEL, duty_raw);
     cpSetLastPwmDuty(duty_raw);
     pwmRunning = true;
@@ -25,6 +28,9 @@ void cpPwmSetDuty(uint16_t duty_raw) {
     if (!pwmRunning)
         cpPwmStart(duty_raw);
     else {
+        const uint16_t max_duty = (1u << CP_PWM_RES_BITS) - 1;
+        if (duty_raw > max_duty)
+            duty_raw = max_duty;
         ledcWrite(PWM_CHANNEL, duty_raw);
         cpSetLastPwmDuty(duty_raw);
     }
@@ -34,6 +40,6 @@ void cpPwmStop()
 {
     constexpr uint16_t DUTY_FULL = (1u << CP_PWM_RES_BITS) - 1; // 100% duty
     ledcWrite(PWM_CHANNEL, DUTY_FULL);   // drive CP to +12V rail
-    cpSetLastPwmDuty(0);                 // remember "PWM is OFF"
+    cpSetLastPwmDuty(DUTY_FULL);         // reflect actual pin level
     pwmRunning = false;
 }
