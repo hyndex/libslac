@@ -31,8 +31,6 @@ static inline void stageEnter(EvseStage s) {
     Serial.printf("[EVSE] Stage -> %s\n", stageName(s));
 }
 
-extern std::atomic<uint8_t> g_slac_state;
-extern std::atomic<uint32_t> g_slac_ts;
 
 static void handleIdleA() {
     if (cpGetSubState() == CP_B1) {

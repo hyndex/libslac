@@ -1,5 +1,6 @@
 #pragma once
 #include <Arduino.h>
+#include <atomic>
 #include "cp_monitor.h"
 
 enum EvseStage : uint8_t {
@@ -17,3 +18,6 @@ void evseStateMachineInit();
 void evseStateMachineTask(void*);
 EvseStage evseGetStage();
 const char* evseStageName(EvseStage);
+
+extern std::atomic<uint8_t> g_slac_state;
+extern std::atomic<uint32_t> g_slac_ts;
