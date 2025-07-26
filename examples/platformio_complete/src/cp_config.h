@@ -18,6 +18,7 @@
 #define CP_PWM_RES_BITS     12
 #define CP_PWM_DUTY_5PCT    ((1 << CP_PWM_RES_BITS) * 5 / 100)
 #define CP_IDLE_RELEASE   0   // actively drive CP high when PWM is idle
+#define CP_SAMPLE_OFFSET_US 25
 
 #define T_PLC_INIT_MS       700
 #define T_HLC_EST_MS        2000
