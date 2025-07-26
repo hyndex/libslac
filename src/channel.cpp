@@ -90,17 +90,17 @@ bool Channel::poll(slac::messages::HomeplugMessage& msg) {
     return true;
 }
 
-bool Channel::write(slac::messages::HomeplugMessage& msg, int timeout) {
+transport::LinkError Channel::write(slac::messages::HomeplugMessage& msg, int timeout) {
     did_timeout = false;
 
     if (!link) {
         error = "No transport link";
-        return false;
+        return transport::LinkError::Transport;
     }
 
     if (!msg.is_valid()) {
         error = "Invalid HomeplugMessage";
-        return false;
+        return transport::LinkError::Transport;
     }
 
     auto raw_msg_ether_shost = msg.get_src_mac();
@@ -108,13 +108,23 @@ bool Channel::write(slac::messages::HomeplugMessage& msg, int timeout) {
         memcpy(raw_msg_ether_shost, orig_if_mac, sizeof(orig_if_mac));
     }
 
-    if (!link->write(reinterpret_cast<const uint8_t*>(msg.get_raw_message_ptr()),
-                     msg.get_raw_msg_len(), timeout)) {
-        error = "Write failed";
-        return false;
+    auto res = link->write(reinterpret_cast<const uint8_t*>(msg.get_raw_message_ptr()),
+                           msg.get_raw_msg_len(), timeout);
+    did_timeout = res == transport::LinkError::Timeout;
+    if (res != transport::LinkError::Ok) {
+        switch (res) {
+        case transport::LinkError::Timeout:
+            error = "Timeout";
+            break;
+        case transport::LinkError::Transport:
+        default:
+            error = "Write failed";
+            break;
+        }
+        return res;
     }
 
-    return true;
+    return transport::LinkError::Ok;
 }
 
 const uint8_t* Channel::get_mac_addr() {

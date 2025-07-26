@@ -58,10 +58,12 @@ bool Qca7000Link::open() {
     return true;
 }
 
-bool Qca7000Link::write(const uint8_t* b, size_t l, uint32_t) {
+transport::LinkError Qca7000Link::write(const uint8_t* b, size_t l, uint32_t) {
     if (!initialized || initialization_error)
-        return false;
-    return spiQCA7000SendEthFrame(b, l);
+        return transport::LinkError::Transport;
+    if (!spiQCA7000SendEthFrame(b, l))
+        return transport::LinkError::Transport;
+    return transport::LinkError::Ok;
 }
 
 void Qca7000Link::close() {

@@ -121,6 +121,12 @@ callback and periodically check ``link.fatal_error()`` when polling the
 driver. Call ``qca7000CheckAlive()`` roughly once per minute to
 confirm that the modem is still responsive.
 
+Both ``Channel::read()`` and ``Channel::write()`` return
+``slac::transport::LinkError``. A ``Timeout`` result indicates that no
+frame was received or transmitted in the allotted time while
+``Transport`` signals a lower level failure. Applications can use these
+codes to retry the operation or reset the modem after repeated errors.
+
 QCA7000 Configuration
 ---------------------
 
@@ -204,9 +210,10 @@ provide two pieces:
    optional interrupt helpers.
 
 ``transport::Link`` exposes ``open()``, ``write()``, ``read()`` and ``mac()``.
-``open()`` should initialise the hardware and return ``true`` on success. The
-``write()`` and ``read()`` methods transfer raw frames with millisecond timeouts
-while ``mac()`` returns the local MAC address.
+``open()`` should initialise the hardware and return ``true`` on success.
+``write()`` and ``read()`` transfer raw frames with millisecond timeouts and
+return a :class:`slac::transport::LinkError` to report success, timeouts or
+transport failures. ``mac()`` returns the local MAC address.
 
 ``port_config.hpp`` is included by the library and provides platform specific
 timing helpers. A minimal bare-metal variant might look like:
