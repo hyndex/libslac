@@ -15,13 +15,13 @@
 #define CP_THR_1V_MV    200          // ≈ 1 V after divider
 
 // threshold for the negative plateau (-12 V -> state E/F)
-#define CP_THR_NEG12_MV   80
+#define CP_THR_NEG12      80
 
 #define CP_PWM_FREQ_HZ      1000
 #define CP_PWM_RES_BITS     12
-#define CP_PWM_DUTY_5PCT    ((1u << CP_PWM_RES_BITS) / 20) // exact 5% duty
+#define CP_PWM_DUTY_5PCT    ((1u << CP_PWM_RES_BITS) / 20)
 #define CP_IDLE_DRIVE_HIGH  1   // 1=keep CP driven high when idle, 0=release
-#define CP_SAMPLE_OFFSET_US 25
+#define CP_SAMPLE_OFFSET_US ((1000 / CP_PWM_FREQ_HZ) * CP_PWM_DUTY_5PCT / 2)
 
 #define T_PLC_INIT_MS       700
 #define T_HLC_EST_MS        2000

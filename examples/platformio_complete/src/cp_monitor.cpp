@@ -31,7 +31,7 @@ static char toLetter(CpSubState s) {
 static CpSubState mv2state(uint16_t mv) {
     uint16_t duty = cp_duty.load(std::memory_order_relaxed);
     uint16_t pct  = (duty * 100) >> CP_PWM_RES_BITS;
-    if (mv < CP_THR_NEG12_MV)
+    if (mv < CP_THR_NEG12)
         return CP_E;
     if (mv < CP_THR_1V_MV)
         return CP_F;
