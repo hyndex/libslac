@@ -41,6 +41,8 @@ static inline void stageEnter(EvseStage s) {
 }
 
 static void handleIdleA() {
+    if (t_stage.load(std::memory_order_relaxed) == 0)
+        cpPwmStop();
     CpSubState s = cpGetSubState();
     if (s == CP_B1 || s == CP_B3) {
         cpPwmStart(CP_PWM_DUTY_5PCT);
