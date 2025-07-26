@@ -54,7 +54,6 @@ void setup() {
 
     cpPwmInit();
     cpMonitorInit();
-    cpFastSampleStart();
     evseStateMachineInit();
     xTaskCreatePinnedToCore(evseStateMachineTask, "evseSM", 4096, nullptr, 5, nullptr, 1);
     xTaskCreatePinnedToCore(logTask, "log", 4096, nullptr, 1, nullptr, 1);
