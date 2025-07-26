@@ -19,11 +19,11 @@ static const uint8_t MY_MAC[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 // Global pointer used by the polling loop
 static slac::Channel* g_channel = nullptr;
 volatile bool plc_irq = false;
-static std::atomic<uint8_t> g_slac_state{0};
+std::atomic<uint8_t> g_slac_state{0};
 
 void IRAM_ATTR plc_isr() { plc_irq = true; }
 // Timestamp for SLAC restart logic
-static std::atomic<uint32_t> g_slac_ts{0};
+std::atomic<uint32_t> g_slac_ts{0};
 
 static void logTask(void*) {
     const TickType_t period = pdMS_TO_TICKS(1000);
