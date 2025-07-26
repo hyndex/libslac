@@ -41,7 +41,8 @@ static inline void stageEnter(EvseStage s) {
 }
 
 static void handleIdleA() {
-    if (cpGetSubState() == CP_B1) {
+    CpSubState s = cpGetSubState();
+    if (s == CP_B1 || s == CP_B3) {
         cpPwmStart(CP_PWM_DUTY_5PCT);
         stageEnter(EVSE_INITIALISE_B1);
     }
@@ -49,14 +50,11 @@ static void handleIdleA() {
 
 static void handleInitialiseB1() {
     if (t_stage.load(std::memory_order_relaxed) == 0) {
-        qca7000startSlac();
+        if (!qca7000startSlac()) {
+            stageEnter(EVSE_IDLE_A);
+            return;
+        }
         g_slac_ts.store(millis(), std::memory_order_relaxed);
-    }
-    if (t_stage.load(std::memory_order_relaxed) > T_CP_B1_FAIL_MS) {
-        cpPwmStop();
-        stageEnter(EVSE_IDLE_A);
-    }
-    if (cpGetSubState() == CP_B2) {
         stageEnter(EVSE_DIGITAL_REQ_B2);
     }
 }
