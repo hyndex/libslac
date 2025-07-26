@@ -95,6 +95,19 @@ void qca7000SetIds(const uint8_t pev_id[slac::messages::PEV_ID_LEN],
         memcpy(g_slac_ctx.evse_id, evse_id, sizeof(g_slac_ctx.evse_id));
 }
 
+static uint8_t g_evse_nmk[slac::defs::NMK_LEN]{};
+static uint8_t g_evse_nid[slac::defs::NID_LEN]{};
+
+void qca7000SetNmk(const uint8_t nmk[slac::defs::NMK_LEN]) {
+    if (nmk) {
+        memcpy(g_evse_nmk, nmk, sizeof(g_evse_nmk));
+        slac::utils::generate_nid_from_nmk(g_evse_nid, g_evse_nmk);
+    } else {
+        memset(g_evse_nmk, 0, sizeof(g_evse_nmk));
+        memset(g_evse_nid, 0, sizeof(g_evse_nid));
+    }
+}
+
 #ifdef LIBSLAC_TESTING
 SPIClass* g_spi = nullptr;
 int g_cs = -1;
@@ -623,9 +636,9 @@ static bool send_match_cnf(const SlacContext& ctx) {
     memcpy(msg.cnf.evse_id, ctx.match_req.evse_id, sizeof(msg.cnf.evse_id));
     memcpy(msg.cnf.evse_mac, ctx.match_req.evse_mac, sizeof(msg.cnf.evse_mac));
     memcpy(msg.cnf.run_id, ctx.match_req.run_id, sizeof(msg.cnf.run_id));
-    memset(msg.cnf.nid, 0, sizeof(msg.cnf.nid));
+    memcpy(msg.cnf.nid, g_evse_nid, sizeof(msg.cnf.nid));
     msg.cnf._reserved2 = 0;
-    memset(msg.cnf.nmk, 0, sizeof(msg.cnf.nmk));
+    memcpy(msg.cnf.nmk, g_evse_nmk, sizeof(msg.cnf.nmk));
 
     return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
 }

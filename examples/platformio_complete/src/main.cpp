@@ -15,6 +15,9 @@ extern void qca7000ProcessSlice(uint32_t max_us);
 
 // Default MAC address for the modem. Adjust as required.
 static const uint8_t MY_MAC[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+static const uint8_t EVSE_NMK[slac::defs::NMK_LEN] = {
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+    0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F};
 
 // Global pointer used by the polling loop
 static slac::Channel* g_channel = nullptr;
@@ -74,6 +77,7 @@ void setup() {
         while (true)
             delay(1000);
     }
+    qca7000SetNmk(EVSE_NMK);
 
 }
 
