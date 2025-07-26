@@ -23,6 +23,8 @@ static const uint8_t EVSE_NMK[slac::defs::NMK_LEN] = {
 static slac::Channel* g_channel = nullptr;
 volatile bool plc_irq = false;
 std::atomic<uint8_t> g_slac_state{0};
+static bool g_plc_lost = false;
+static uint32_t g_last_alive = 0;
 
 void IRAM_ATTR plc_isr() { plc_irq = true; }
 // Timestamp for SLAC restart logic
@@ -92,8 +94,23 @@ void loop() {
         // Handle incoming SLAC messages here
     }
 
+    uint32_t now = millis();
+    if (now - g_last_alive > 1000) {
+        g_last_alive = now;
+        if (cpGetLastPwmDuty() > CP_PWM_DUTY_5PCT && !qca7000CheckAlive()) {
+            Serial.println("[PLC] Link lost - restarting SLAC");
+            qca7000SoftReset();
+            qca7000startSlac();
+            g_plc_lost = true;
+        }
+    }
+
     // Update the SLAC state machine and restart if no progress for 60s
     g_slac_state.store(qca7000getSlacResult(), std::memory_order_relaxed);
+    if (g_plc_lost && g_slac_state.load(std::memory_order_relaxed) == 6) {
+        g_plc_lost = false;
+        Serial.println("[PLC] HLC resumed");
+    }
     if (g_slac_state.load(std::memory_order_relaxed) != 0 &&
         g_slac_state.load(std::memory_order_relaxed) != 5) {
         if (millis() - g_slac_ts.load(std::memory_order_relaxed) > 60000) {
