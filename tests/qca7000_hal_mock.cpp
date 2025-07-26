@@ -28,6 +28,7 @@ bool qca7000ResetAndCheck() {
     reset_called = true;
     return true;
 }
+bool qca7000SoftReset() { return true; }
 uint16_t qca7000ReadInternalReg(uint16_t reg) {
     if (reg == SPI_REG_SIGNATURE)
         return mock_signature;

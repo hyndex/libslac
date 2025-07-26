@@ -833,6 +833,7 @@ bool qca7000startSlac() {
 
 // Poll for SLAC confirmation frames and update state accordingly.
 uint8_t qca7000getSlacResult() {
+    const uint8_t prev_result = g_slac_ctx.result;
     fetchRx();
     const uint32_t now = slac_millis();
     const uint8_t* d;
@@ -915,6 +916,26 @@ uint8_t qca7000getSlacResult() {
         g_fsm.handle_event(slac::SlacEvent::Timeout);
     } else if (g_slac_ctx.result == 5 && now - g_slac_ctx.timer > slac::defs::TT_MATCH_JOIN_MS) {
         g_fsm.handle_event(slac::SlacEvent::Timeout);
+    }
+
+    bool need_reset = false;
+    if (qca7000DriverFatal()) {
+        need_reset = true;
+    } else if (prev_result != 0 && prev_result != 6 && g_slac_ctx.result == 0) {
+        need_reset = true;
+    }
+
+    if (need_reset) {
+        bool ok = qca7000SoftReset();
+        if (!ok)
+            ok = qca7000ResetAndCheck();
+        if (!ok)
+            g_driver_fatal = true;
+        if (g_err_cb.flag)
+            *g_err_cb.flag = g_driver_fatal || !ok;
+        if (g_err_cb.cb)
+            g_err_cb.cb(ok ? Qca7000ErrorStatus::Reset : Qca7000ErrorStatus::DriverFatal,
+                        g_err_cb.arg);
     }
 
     return g_slac_ctx.result;
