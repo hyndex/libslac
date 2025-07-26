@@ -53,8 +53,8 @@ struct SlacContext {
     uint8_t validate_count{0};
     slac::messages::cm_slac_match_req match_req{};
     uint8_t match_src_mac[ETH_ALEN]{};
-    uint8_t pev_id[slac::defs::PEV_ID_LEN]{};
-    uint8_t evse_id[slac::defs::EVSE_ID_LEN]{};
+    uint8_t pev_id[slac::messages::PEV_ID_LEN]{};
+    uint8_t evse_id[slac::messages::EVSE_ID_LEN]{};
     uint8_t atten_sum[slac::defs::AAG_LIST_LEN]{};
     uint8_t atten_count{0};
     uint8_t num_groups{0};

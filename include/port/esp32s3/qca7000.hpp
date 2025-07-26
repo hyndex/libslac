@@ -88,16 +88,18 @@ bool spiQCA7000SendEthFrame(const uint8_t* frame, size_t len);
 bool qca7000startSlac();
 uint8_t qca7000getSlacResult();
 // Poll the modem for events and service the RX ring.
-// When a CPU_ON or buffer error interrupt occurs the driver first
-// performs qca7000SoftReset(). If that fails the reset pin is toggled
-// via a hard reset.
+// If a CPU_ON or buffer error interrupt is detected the driver
+// attempts a soft reset via qca7000SoftReset(). Should that fail the
+// reset pin is toggled using a hard reset.
 void qca7000Process();
-void qca7000ProcessSlice(uint32_t max_us = 500);
 
 enum class Qca7000ErrorStatus { Reset, DriverFatal };
 typedef void (*qca7000_error_cb_t)(Qca7000ErrorStatus, void*);
 void qca7000SetErrorCallback(qca7000_error_cb_t cb, void* arg, bool* flag);
 bool qca7000DriverFatal();
+void qca7000SetIds(const uint8_t pev_id[slac::messages::PEV_ID_LEN],
+                   const uint8_t evse_id[slac::messages::EVSE_ID_LEN]);
+void qca7000SetNmk(const uint8_t nmk[slac::defs::NMK_LEN]);
 void qca7000SetMac(const uint8_t mac[ETH_ALEN]);
 const uint8_t* qca7000GetMac();
 #ifdef ESP_PLATFORM
