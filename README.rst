@@ -206,7 +206,7 @@ via ``qca7000_uart_config``:
 Tools and Examples
 ------------------
 
-Refer to the example projects under ``examples`` for usage. See ``docs/BoardExample.md`` for a complete PlatformIO configuration, ``docs/PlatformIOExample.md`` for a detailed tutorial, and ``docs/qca7000-bring-up.md`` for pin wiring, typical logs and logic-analyser traces.
+Refer to the example projects under ``examples`` for usage. See ``docs/BoardExample.md`` for a complete PlatformIO configuration, ``docs/PlatformIOExample.md`` for a detailed tutorial, ``docs/qca7000-bring-up.md`` for pin wiring and typical logs, and ``docs/qca7000-troubleshooting.md`` for a step-by-step checklist when the modem fails to respond.
 
 Porting to Other Boards
 -----------------------
