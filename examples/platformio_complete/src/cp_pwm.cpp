@@ -28,15 +28,10 @@ void cpPwmSetDuty(uint16_t duty_raw) {
     }
 }
 
-void cpPwmStop() {
-#if CP_IDLE_RELEASE
-    ledcDetachPin(CP_PWM_OUT_PIN);
-    pinMode(CP_PWM_OUT_PIN, INPUT);
-    cpSetLastPwmDuty(0);
-#else
-    uint16_t max_count = (1u << CP_PWM_RES_BITS) - 1;
-    ledcWrite(PWM_CHANNEL, max_count);
-    cpSetLastPwmDuty(max_count);
-#endif
+void cpPwmStop()
+{
+    constexpr uint16_t DUTY_FULL = (1u << CP_PWM_RES_BITS) - 1; // 100% duty
+    ledcWrite(PWM_CHANNEL, DUTY_FULL);   // drive CP to +12V rail
+    cpSetLastPwmDuty(0);                 // remember "PWM is OFF"
     pwmRunning = false;
 }

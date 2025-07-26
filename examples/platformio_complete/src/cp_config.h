@@ -17,7 +17,7 @@
 #define CP_PWM_FREQ_HZ      1000
 #define CP_PWM_RES_BITS     12
 #define CP_PWM_DUTY_5PCT    ((1 << CP_PWM_RES_BITS) * 5 / 100)
-#define CP_IDLE_RELEASE   1   // 1=open-drain idle, 0=drive high
+#define CP_IDLE_RELEASE   0   // actively drive CP high when PWM is idle
 
 #define T_PLC_INIT_MS       700
 #define T_HLC_EST_MS        2000
