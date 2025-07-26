@@ -98,6 +98,8 @@ enum class Qca7000ErrorStatus { Reset, DriverFatal };
 typedef void (*qca7000_error_cb_t)(Qca7000ErrorStatus, void*);
 void qca7000SetErrorCallback(qca7000_error_cb_t cb, void* arg, bool* flag);
 bool qca7000DriverFatal();
+void qca7000SetMac(const uint8_t mac[ETH_ALEN]);
+const uint8_t* qca7000GetMac();
 #ifdef ESP_PLATFORM
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
