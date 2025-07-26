@@ -12,6 +12,9 @@ enum class LinkError {
     Ok,
     Timeout,
     Transport,
+    InvalidArgument,
+    InvalidLength,
+    NoLink,
 };
 
 class Link {
