@@ -5,6 +5,7 @@
 #include <atomic>
 extern uint32_t g_mock_millis;
 void qca7000ToggleCpEf();
+bool qca7000CheckBcbToggle();
 #include <cstring>
 
 SPIClass* spi_used = nullptr;
@@ -107,10 +108,42 @@ uint8_t qca7000getSlacResult() {
     }
     return mock_result;
 }
-void qca7000Process() {}
+void qca7000Process() {
+    if (qca7000CheckBcbToggle())
+        qca7000Wake();
+}
 void qca7000ProcessSlice(uint32_t) {}
 bool qca7000DriverFatal() { return false; }
 void qca7000SetErrorCallback(qca7000_error_cb_t, void*, bool*) {}
 void qca7000SetNmk(const uint8_t[slac::defs::NMK_LEN]) {}
 void qca7000SetMac(const uint8_t[ETH_ALEN]) {}
 const uint8_t* qca7000GetMac() { static uint8_t mac[ETH_ALEN] = {}; return mac; }
+static bool sleeping = false;
+bool wake_called = false;
+bool mock_bcb_toggle = false;
+static qca7000_link_ready_cb_t ready_cb = nullptr;
+static void* ready_arg = nullptr;
+void qca7000SetLinkReadyCallback(qca7000_link_ready_cb_t cb, void* arg) {
+    ready_cb = cb;
+    ready_arg = arg;
+}
+bool qca7000Sleep() {
+    sleeping = true;
+    if (ready_cb)
+        ready_cb(false, ready_arg);
+    return true;
+}
+bool qca7000Wake() {
+    wake_called = true;
+    sleeping = false;
+    if (ready_cb)
+        ready_cb(true, ready_arg);
+    return true;
+}
+bool qca7000CheckBcbToggle() {
+    if (mock_bcb_toggle) {
+        mock_bcb_toggle = false;
+        return true;
+    }
+    return false;
+}

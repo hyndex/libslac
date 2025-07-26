@@ -124,3 +124,8 @@ extern size_t myethtransmitlen;
 extern uint8_t myethreceivebuffer[V2GTP_BUFFER_SIZE];
 extern size_t myethreceivelen;
 extern const char* PLC_TAG;
+
+typedef void (*qca7000_link_ready_cb_t)(bool ready, void* arg);
+void qca7000SetLinkReadyCallback(qca7000_link_ready_cb_t cb, void* arg);
+bool qca7000Sleep();
+bool qca7000Wake();

@@ -92,6 +92,20 @@ static bool g_driver_fatal = false;
 static uint8_t g_crash_count = 0;
 
 __attribute__((weak)) void qca7000ToggleCpEf() {}
+__attribute__((weak)) bool qca7000CheckBcbToggle() { return false; }
+
+typedef void (*qca7000_link_ready_cb_t)(bool ready, void* arg);
+static qca7000_link_ready_cb_t g_link_ready_cb = nullptr;
+static void* g_link_ready_arg = nullptr;
+
+struct SavedParams {
+    uint8_t nmk[slac::defs::NMK_LEN]{};
+    uint8_t mac[ETH_ALEN]{};
+    uint8_t pev_id[slac::messages::PEV_ID_LEN]{};
+    uint8_t evse_id[slac::messages::EVSE_ID_LEN]{};
+};
+static SavedParams g_saved_params{};
+static bool g_sleeping = false;
 
 void qca7000SetErrorCallback(qca7000_error_cb_t cb, void* arg, bool* flag) {
     g_err_cb.cb = cb;
@@ -1095,6 +1109,8 @@ void qca7000ProcessSlice(uint32_t max_us) {
 }
 
 void qca7000Process() {
+    if (qca7000CheckBcbToggle())
+        qca7000Wake();
     qca7000ProcessSlice(500);
 }
 
@@ -1156,6 +1172,45 @@ bool qca7000LeaveAvln() {
     // Leaving the logical network is done by issuing a soft reset which
     // clears the modem state without toggling the CP line.
     return qca7000SoftReset();
+}
+
+void qca7000SetLinkReadyCallback(qca7000_link_ready_cb_t cb, void* arg) {
+    g_link_ready_cb = cb;
+    g_link_ready_arg = arg;
+}
+
+bool qca7000Sleep() {
+    if (g_sleeping)
+        return true;
+    memcpy(g_saved_params.nmk, g_evse_nmk, sizeof(g_evse_nmk));
+    memcpy(g_saved_params.mac, g_src_mac, ETH_ALEN);
+    memcpy(g_saved_params.pev_id, g_slac_ctx.pev_id, sizeof(g_saved_params.pev_id));
+    memcpy(g_saved_params.evse_id, g_slac_ctx.evse_id, sizeof(g_saved_params.evse_id));
+    qca7000LeaveAvln();
+    if (g_pwr >= 0)
+        digitalWrite(g_pwr, LOW);
+    g_sleeping = true;
+    if (g_link_ready_cb)
+        g_link_ready_cb(false, g_link_ready_arg);
+    return true;
+}
+
+bool qca7000Wake() {
+    if (!g_sleeping)
+        return true;
+    if (g_pwr >= 0) {
+        digitalWrite(g_pwr, HIGH);
+        slac_delay(200);
+    }
+    if (!hardReset())
+        return false;
+    qca7000SetMac(g_saved_params.mac);
+    qca7000SetIds(g_saved_params.pev_id, g_saved_params.evse_id);
+    qca7000SetNmk(g_saved_params.nmk);
+    g_sleeping = false;
+    if (g_link_ready_cb)
+        g_link_ready_cb(true, g_link_ready_arg);
+    return true;
 }
 
 #ifdef ESP_PLATFORM
