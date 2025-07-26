@@ -28,9 +28,9 @@ std::atomic<uint32_t> g_slac_ts{0};
 static void logTask(void*) {
     const TickType_t period = pdMS_TO_TICKS(1000);
     while (true) {
-        Serial.printf("[STAT] CP=%c %.2fV Stage=%s SLAC=%u\n",
-                      cpGetStateLetter(),
-                      cpGetVoltageMv() / 1000.0f,
+        uint16_t mv = cpGetVoltageMv();
+        Serial.printf("[STAT] CP=%c %u.%03u V Stage=%s SLAC=%u\n",
+                      cpGetStateLetter(), mv / 1000, mv % 1000,
                       evseStageName(evseGetStage()),
                       g_slac_state.load(std::memory_order_relaxed));
         vTaskDelay(period);
@@ -50,7 +50,7 @@ void setup() {
     cpLowRateStart(10);
     evseStateMachineInit();
     xTaskCreatePinnedToCore(evseStateMachineTask, "evseSM", 4096, nullptr, 5, nullptr, 1);
-    xTaskCreatePinnedToCore(logTask, "log", 2048, nullptr, 1, nullptr, 1);
+    xTaskCreatePinnedToCore(logTask, "log", 6144, nullptr, 1, nullptr, 0);
     SPI.begin(48 /*SCK*/, 21 /*MISO*/, 47 /*MOSI*/, -1);
     Serial.println("Starting SPI");
     pinMode(PLC_INT_PIN, INPUT);

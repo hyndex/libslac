@@ -64,7 +64,9 @@ void cpLowRateStop() {
         timerAlarmDisable(adcTimer);
 }
 
-float cpGetVoltageMv() { return static_cast<float>(cp_mv.load(std::memory_order_relaxed)); }
+uint16_t cpGetVoltageMv() {
+    return cp_mv.load(std::memory_order_relaxed);
+}
 CpSubState cpGetSubState() { return cp_state.load(std::memory_order_relaxed); }
 char cpGetStateLetter() { return toLetter(cp_state.load(std::memory_order_relaxed)); }
 
