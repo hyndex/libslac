@@ -61,3 +61,5 @@ void qca7000ProcessSlice(uint32_t) {}
 bool qca7000DriverFatal() { return false; }
 void qca7000SetErrorCallback(qca7000_error_cb_t, void*, bool*) {}
 void qca7000SetNmk(const uint8_t[slac::defs::NMK_LEN]) {}
+void qca7000SetMac(const uint8_t[ETH_ALEN]) {}
+const uint8_t* qca7000GetMac() { static uint8_t mac[ETH_ALEN] = {}; return mac; }

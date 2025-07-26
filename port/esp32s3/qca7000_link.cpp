@@ -12,6 +12,13 @@ Qca7000Link::Qca7000Link(const qca7000_config& c,
                          void* cb_arg)
     : cfg(c), error_cb(cb), error_arg(cb_arg) {
     memset(mac_addr, 0, sizeof(mac_addr));
+    if (cfg.mac_addr)
+        memcpy(mac_addr, cfg.mac_addr, ETH_ALEN);
+    else {
+        const uint8_t def_mac[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+        memcpy(mac_addr, def_mac, ETH_ALEN);
+    }
+    qca7000SetMac(mac_addr);
 }
 
 Qca7000Link::~Qca7000Link() {
@@ -45,13 +52,8 @@ bool Qca7000Link::open() {
         return false;
     }
     qca7000SetErrorCallback(error_cb, error_arg, &fatal_error_flag);
+    qca7000SetMac(mac_addr);
 
-    if (cfg.mac_addr)
-        memcpy(mac_addr, cfg.mac_addr, ETH_ALEN);
-    else {
-        const uint8_t def_mac[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
-        memcpy(mac_addr, def_mac, ETH_ALEN);
-    }
     initialized = true;
     return true;
 }

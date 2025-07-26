@@ -444,7 +444,16 @@ size_t spiQCA7000checkForReceivedData(uint8_t* d, size_t m) {
 }
 
 static uint8_t g_run_id[slac::defs::RUN_ID_LEN]{};
-static const uint8_t g_src_mac[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+static uint8_t g_src_mac[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+
+void qca7000SetMac(const uint8_t mac[ETH_ALEN]) {
+    if (mac)
+        memcpy(g_src_mac, mac, ETH_ALEN);
+}
+
+const uint8_t* qca7000GetMac() {
+    return g_src_mac;
+}
 
 static bool send_start_atten_char(const SlacContext& ctx);
 static bool send_mnbc_sound(const SlacContext& ctx, uint8_t remaining);
@@ -464,7 +473,7 @@ static bool send_start_atten_char(const SlacContext& ctx) {
 
     memset(&msg, 0, sizeof(msg));
     memset(msg.eth.ether_dhost, 0xFF, ETH_ALEN);
-    memcpy(msg.eth.ether_shost, g_src_mac, ETH_ALEN);
+    memcpy(msg.eth.ether_shost, qca7000GetMac(), ETH_ALEN);
     msg.eth.ether_type = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
     msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
     msg.hp.mmtype = slac::htole16(slac::defs::MMTYPE_CM_START_ATTEN_CHAR | slac::defs::MMTYPE_MODE_IND);
@@ -473,7 +482,7 @@ static bool send_start_atten_char(const SlacContext& ctx) {
     msg.ind.num_sounds = slac::defs::C_EV_MATCH_MNBC;
     msg.ind.timeout = slac::defs::TT_EVSE_MATCH_MNBC_MS / 100;
     msg.ind.resp_type = slac::defs::CM_SLAC_PARM_CNF_RESP_TYPE;
-    memcpy(msg.ind.forwarding_sta, g_src_mac, ETH_ALEN);
+    memcpy(msg.ind.forwarding_sta, qca7000GetMac(), ETH_ALEN);
     memcpy(msg.ind.run_id, ctx.run_id, sizeof(ctx.run_id));
     return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
 }
@@ -490,7 +499,7 @@ static bool send_mnbc_sound(const SlacContext& ctx, uint8_t remaining) {
 
     memset(&msg, 0, sizeof(msg));
     memset(msg.eth.ether_dhost, 0xFF, ETH_ALEN);
-    memcpy(msg.eth.ether_shost, g_src_mac, ETH_ALEN);
+    memcpy(msg.eth.ether_shost, qca7000GetMac(), ETH_ALEN);
     msg.eth.ether_type = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
     msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
     msg.hp.mmtype = slac::htole16(slac::defs::MMTYPE_CM_MNBC_SOUND | slac::defs::MMTYPE_MODE_IND);
@@ -517,13 +526,13 @@ static bool send_atten_char_rsp(const SlacContext& ctx, const uint8_t* dst,
 
     memset(&msg, 0, sizeof(msg));
     memcpy(msg.eth.ether_dhost, dst, ETH_ALEN);
-    memcpy(msg.eth.ether_shost, g_src_mac, ETH_ALEN);
+    memcpy(msg.eth.ether_shost, qca7000GetMac(), ETH_ALEN);
     msg.eth.ether_type = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
     msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
     msg.hp.mmtype = slac::htole16(slac::defs::MMTYPE_CM_ATTEN_CHAR | slac::defs::MMTYPE_MODE_RSP);
     msg.rsp.application_type = slac::defs::COMMON_APPLICATION_TYPE;
     msg.rsp.security_type = slac::defs::COMMON_SECURITY_TYPE;
-    memcpy(msg.rsp.source_address, g_src_mac, ETH_ALEN);
+    memcpy(msg.rsp.source_address, qca7000GetMac(), ETH_ALEN);
     memcpy(msg.rsp.run_id, ind->run_id, sizeof(ind->run_id));
     memcpy(msg.rsp.source_id, ind->source_id, sizeof(ind->source_id));
     memcpy(msg.rsp.resp_id, ind->resp_id, sizeof(ind->resp_id));
@@ -543,7 +552,7 @@ static bool send_atten_char_ind(const SlacContext& ctx) {
 
     memset(&msg, 0, sizeof(msg));
     memcpy(msg.eth.ether_dhost, ctx.pev_mac, ETH_ALEN);
-    memcpy(msg.eth.ether_shost, g_src_mac, ETH_ALEN);
+    memcpy(msg.eth.ether_shost, qca7000GetMac(), ETH_ALEN);
     msg.eth.ether_type = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
     msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
     msg.hp.mmtype =
@@ -575,7 +584,7 @@ static bool send_set_key_cnf(const SlacContext& ctx, const uint8_t* dst, const s
 
     memset(&msg, 0, sizeof(msg));
     memcpy(msg.eth.ether_dhost, dst, ETH_ALEN);
-    memcpy(msg.eth.ether_shost, g_src_mac, ETH_ALEN);
+    memcpy(msg.eth.ether_shost, qca7000GetMac(), ETH_ALEN);
     msg.eth.ether_type = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
     msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
     msg.hp.mmtype = slac::htole16(slac::defs::MMTYPE_CM_SET_KEY | slac::defs::MMTYPE_MODE_CNF);
@@ -601,7 +610,7 @@ static bool send_validate_cnf(const uint8_t* dst, const slac::messages::cm_valid
 
     memset(&msg, 0, sizeof(msg));
     memcpy(msg.eth.ether_dhost, dst, ETH_ALEN);
-    memcpy(msg.eth.ether_shost, g_src_mac, ETH_ALEN);
+    memcpy(msg.eth.ether_shost, qca7000GetMac(), ETH_ALEN);
     msg.eth.ether_type = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
     msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
     msg.hp.mmtype = slac::htole16(slac::defs::MMTYPE_CM_VALIDATE | slac::defs::MMTYPE_MODE_CNF);
@@ -624,7 +633,7 @@ static bool send_match_cnf(const SlacContext& ctx) {
 
     memset(&msg, 0, sizeof(msg));
     memcpy(msg.eth.ether_dhost, ctx.match_src_mac, ETH_ALEN);
-    memcpy(msg.eth.ether_shost, g_src_mac, ETH_ALEN);
+    memcpy(msg.eth.ether_shost, qca7000GetMac(), ETH_ALEN);
     msg.eth.ether_type = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
     msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
     msg.hp.mmtype = slac::htole16(slac::defs::MMTYPE_CM_SLAC_MATCH | slac::defs::MMTYPE_MODE_CNF);
@@ -807,7 +816,7 @@ bool qca7000startSlac() {
 
     memset(&msg, 0, sizeof(msg));
     memset(msg.eth.ether_dhost, 0xFF, ETH_ALEN);
-    memcpy(msg.eth.ether_shost, g_src_mac, ETH_ALEN);
+    memcpy(msg.eth.ether_shost, qca7000GetMac(), ETH_ALEN);
     msg.eth.ether_type = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
     msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
     msg.hp.mmtype = slac::htole16(slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_REQ);
