@@ -17,18 +17,28 @@ const char* PLC_TAG = "mock";
 uint16_t mock_signature = 0;
 uint16_t mock_wrbuf = 0;
 uint16_t mock_intr_cause = 0;
+uint16_t mock_spi_config = 0;
 
 bool qca7000setup(SPIClass* spi, int cs, int rst) {
-    spi_used = spi; spi_cs = cs; spi_rst = rst; return true;
+    spi_used = spi;
+    spi_cs = cs;
+    spi_rst = rst;
+    return true;
 }
 
-void qca7000teardown() { spi_used = nullptr; }
+void qca7000teardown() {
+    spi_used = nullptr;
+}
 
 bool qca7000ResetAndCheck() {
     reset_called = true;
+    if (mock_spi_config & QCASPI_MULTI_CS_BIT)
+        mock_spi_config &= ~QCASPI_MULTI_CS_BIT;
     return true;
 }
-bool qca7000SoftReset() { return true; }
+bool qca7000SoftReset() {
+    return true;
+}
 uint16_t qca7000ReadInternalReg(uint16_t reg) {
     if (reg == SPI_REG_SIGNATURE)
         return mock_signature;
@@ -44,7 +54,13 @@ bool qca7000CheckAlive() {
     uint16_t cause = qca7000ReadInternalReg(SPI_REG_INTR_CAUSE);
     return sig == 0xAA55 && (cause & SPI_INT_CPU_ON);
 }
-bool qca7000ReadSignature(uint16_t* sig, uint16_t* ver) { if(sig) *sig = 0xAA55; if(ver) *ver=1; return true; }
+bool qca7000ReadSignature(uint16_t* sig, uint16_t* ver) {
+    if (sig)
+        *sig = 0xAA55;
+    if (ver)
+        *ver = 1;
+    return true;
+}
 size_t spiQCA7000checkForReceivedData(uint8_t* dst, size_t len) {
     size_t c = myethreceivelen > len ? len : myethreceivelen;
     memcpy(dst, myethreceivebuffer, c);
@@ -52,15 +68,32 @@ size_t spiQCA7000checkForReceivedData(uint8_t* dst, size_t len) {
     return c;
 }
 bool spiQCA7000SendEthFrame(const uint8_t* f, size_t l) {
-    if(l>sizeof(myethtransmitbuffer)) l = sizeof(myethtransmitbuffer);
-    memcpy(myethtransmitbuffer, f, l); myethtransmitlen = l; return true;
+    if (l > sizeof(myethtransmitbuffer))
+        l = sizeof(myethtransmitbuffer);
+    memcpy(myethtransmitbuffer, f, l);
+    myethtransmitlen = l;
+    return true;
 }
-bool qca7000startSlac() { return true; }
-uint8_t qca7000getSlacResult() { return 0; }
-void qca7000Process() {}
-void qca7000ProcessSlice(uint32_t) {}
-bool qca7000DriverFatal() { return false; }
-void qca7000SetErrorCallback(qca7000_error_cb_t, void*, bool*) {}
-void qca7000SetNmk(const uint8_t[slac::defs::NMK_LEN]) {}
-void qca7000SetMac(const uint8_t[ETH_ALEN]) {}
-const uint8_t* qca7000GetMac() { static uint8_t mac[ETH_ALEN] = {}; return mac; }
+bool qca7000startSlac() {
+    return true;
+}
+uint8_t qca7000getSlacResult() {
+    return 0;
+}
+void qca7000Process() {
+}
+void qca7000ProcessSlice(uint32_t) {
+}
+bool qca7000DriverFatal() {
+    return false;
+}
+void qca7000SetErrorCallback(qca7000_error_cb_t, void*, bool*) {
+}
+void qca7000SetNmk(const uint8_t[slac::defs::NMK_LEN]) {
+}
+void qca7000SetMac(const uint8_t[ETH_ALEN]) {
+}
+const uint8_t* qca7000GetMac() {
+    static uint8_t mac[ETH_ALEN] = {};
+    return mac;
+}

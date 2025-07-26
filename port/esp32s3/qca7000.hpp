@@ -16,8 +16,7 @@
 #define V2GTP_BUFFER_SIZE 1536
 #endif
 
-static_assert(ETH_FRAME_LEN <= V2GTP_BUFFER_SIZE,
-              "ETH_FRAME_LEN must not exceed V2GTP_BUFFER_SIZE");
+static_assert(ETH_FRAME_LEN <= V2GTP_BUFFER_SIZE, "ETH_FRAME_LEN must not exceed V2GTP_BUFFER_SIZE");
 
 static_assert(PLC_SPI_CS_PIN >= 0, "CS pin unset");
 static_assert(PLC_SPI_RST_PIN >= 0, "RST pin unset");
@@ -63,7 +62,9 @@ static_assert(QCA7000_SPI_BURST_LEN <= 512, "Burst length exceeds FIFO");
 #ifndef QCASPI_SLAVE_RESET_BIT
 #define QCASPI_SLAVE_RESET_BIT (1 << 6)
 #endif
-
+#ifndef QCASPI_MULTI_CS_BIT
+#define QCASPI_MULTI_CS_BIT (1 << 1)
+#endif
 
 struct qca7000_config {
     SPIClass* spi;
@@ -93,7 +94,10 @@ uint8_t qca7000getSlacResult();
 // reset pin is toggled using a hard reset.
 void qca7000Process();
 
-enum class Qca7000ErrorStatus { Reset, DriverFatal };
+enum class Qca7000ErrorStatus {
+    Reset,
+    DriverFatal
+};
 typedef void (*qca7000_error_cb_t)(Qca7000ErrorStatus, void*);
 void qca7000SetErrorCallback(qca7000_error_cb_t cb, void* arg, bool* flag);
 bool qca7000DriverFatal();
