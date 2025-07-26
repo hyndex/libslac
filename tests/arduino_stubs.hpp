@@ -6,6 +6,9 @@
 #define LOW 0
 #define OUTPUT 1
 
+#define MSBFIRST 1
+#define SPI_MODE3 3
+
 struct SPISettings {
     SPISettings(uint32_t, uint8_t, uint8_t) {}
 };
@@ -13,8 +16,10 @@ struct SPISettings {
 class SPIClass {
 public:
     void begin() {}
+    void begin(int, int, int, int) {}
     void beginTransaction(const SPISettings&) {}
     void endTransaction() {}
+    void end() {}
     uint8_t transfer(uint8_t) { return 0; }
     uint16_t transfer16(uint16_t) { return 0; }
     void writeBytes(const uint8_t*, size_t) {}

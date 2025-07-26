@@ -1,3 +1,12 @@
+#include <endian.h>
+#ifdef htole16
+#undef htole16
+#undef le16toh
+#endif
+#ifdef htole32
+#undef htole32
+#undef le32toh
+#endif
 #include "qca7000.hpp"
 #include "../port_common.hpp"
 #include "port_config.hpp"
@@ -60,6 +69,7 @@ struct SlacContext {
     uint8_t atten_count{0};
     uint8_t num_groups{0};
     uint8_t pev_mac[ETH_ALEN]{};
+    uint8_t retries_left{0};
 };
 
 static FSMBuffer g_fsm_buf{};
@@ -469,11 +479,14 @@ const uint8_t* qca7000GetMac() {
     return g_src_mac;
 }
 
+__attribute__((weak)) void qca7000ToggleCpEf() {}
+
 static bool send_start_atten_char(const SlacContext& ctx);
 static bool send_mnbc_sound(const SlacContext& ctx, uint8_t remaining);
 static bool send_atten_char_rsp(const SlacContext& ctx, const uint8_t* dst,
                                 const slac::messages::cm_atten_char_ind* ind);
 static bool send_set_key_cnf(const SlacContext& ctx, const uint8_t* dst, const slac::messages::cm_set_key_req* req);
+static bool send_parm_req(const uint8_t run_id[slac::defs::RUN_ID_LEN]);
 
 static bool send_start_atten_char(const SlacContext& ctx) {
     struct __attribute__((packed)) {
@@ -612,6 +625,30 @@ static bool send_set_key_cnf(const SlacContext& ctx, const uint8_t* dst, const s
     return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
 }
 
+static bool send_parm_req(const uint8_t run_id[slac::defs::RUN_ID_LEN]) {
+    struct __attribute__((packed)) {
+        ether_header eth;
+        struct {
+            uint8_t mmv;
+            uint16_t mmtype;
+        } hp;
+        slac::messages::cm_slac_parm_req req;
+    } msg{};
+
+    memset(&msg, 0, sizeof(msg));
+    memset(msg.eth.ether_dhost, 0xFF, ETH_ALEN);
+    memcpy(msg.eth.ether_shost, qca7000GetMac(), ETH_ALEN);
+    msg.eth.ether_type = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
+    msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
+    msg.hp.mmtype = slac::htole16(slac::defs::MMTYPE_CM_SLAC_PARAM |
+                                  slac::defs::MMTYPE_MODE_REQ);
+    msg.req.application_type = slac::defs::COMMON_APPLICATION_TYPE;
+    msg.req.security_type = slac::defs::COMMON_SECURITY_TYPE;
+    memcpy(msg.req.run_id, run_id, slac::defs::RUN_ID_LEN);
+
+    return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+}
+
 static bool send_validate_cnf(const uint8_t* dst, const slac::messages::cm_validate_req* req) {
     struct __attribute__((packed)) {
         ether_header eth;
@@ -714,6 +751,13 @@ struct WaitParmCnfState : public FSM::SimpleStateType {
             return alloc.create_simple<SoundingState>(ctx);
         }
         if (ev == slac::SlacEvent::Timeout || ev == slac::SlacEvent::Error) {
+            if (ctx.retries_left > 0) {
+                --ctx.retries_left;
+                qca7000ToggleCpEf();
+                send_parm_req(ctx.run_id);
+                ctx.timer = slac_millis();
+                return FSM::StateAllocatorType::HANDLED_INTERNALLY;
+            }
             ctx.result = 0xFF;
             return alloc.create_simple<IdleState>(ctx);
         }
@@ -823,6 +867,7 @@ struct WaitMatchState : public FSM::SimpleStateType {
 bool qca7000startSlac() {
     g_slac_ctx.result = 1;
     g_slac_ctx.timer = slac_millis();
+    g_slac_ctx.retries_left = slac::defs::C_EV_MATCH_RETRY;
     g_slac_ctx.sound_sent = 0;
     g_slac_ctx.validate_count = 0;
     g_slac_ctx.atten_count = 0;
@@ -834,26 +879,7 @@ bool qca7000startSlac() {
     for (size_t i = 0; i < sizeof(g_slac_ctx.run_id); ++i)
         g_slac_ctx.run_id[i] = static_cast<uint8_t>(esp_random() & 0xFF);
 
-    struct __attribute__((packed)) {
-        ether_header eth;
-        struct {
-            uint8_t mmv;
-            uint16_t mmtype;
-        } hp;
-        slac::messages::cm_slac_parm_req req;
-    } msg{};
-
-    memset(&msg, 0, sizeof(msg));
-    memset(msg.eth.ether_dhost, 0xFF, ETH_ALEN);
-    memcpy(msg.eth.ether_shost, qca7000GetMac(), ETH_ALEN);
-    msg.eth.ether_type = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
-    msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
-    msg.hp.mmtype = slac::htole16(slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_REQ);
-    msg.req.application_type = slac::defs::COMMON_APPLICATION_TYPE;
-    msg.req.security_type = slac::defs::COMMON_SECURITY_TYPE;
-    memcpy(msg.req.run_id, g_slac_ctx.run_id, sizeof(g_slac_ctx.run_id));
-
-    bool ok = txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+    bool ok = send_parm_req(g_slac_ctx.run_id);
     if (ok)
         g_fsm.reset<WaitParmCnfState>(g_slac_ctx);
     else
@@ -929,7 +955,10 @@ uint8_t qca7000getSlacResult() {
         }
     }
 
-    if (g_slac_ctx.result == 2) {
+    if (g_slac_ctx.result == 1 &&
+        now - g_slac_ctx.timer > slac::defs::TT_EVSE_SLAC_INIT_MS) {
+        g_fsm.handle_event(slac::SlacEvent::Timeout);
+    } else if (g_slac_ctx.result == 2) {
         if (g_slac_ctx.sound_sent < slac::defs::C_EV_MATCH_MNBC &&
             now - g_slac_ctx.timer >= slac::defs::TP_EV_BATCH_MSG_INTERVAL_MS) {
             g_fsm.handle_event(slac::SlacEvent::SoundIntervalElapsed);
