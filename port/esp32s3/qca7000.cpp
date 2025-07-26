@@ -53,6 +53,12 @@ struct SlacContext {
     uint8_t validate_count{0};
     slac::messages::cm_slac_match_req match_req{};
     uint8_t match_src_mac[ETH_ALEN]{};
+    uint8_t pev_id[slac::defs::PEV_ID_LEN]{};
+    uint8_t evse_id[slac::defs::EVSE_ID_LEN]{};
+    uint8_t atten_sum[slac::defs::AAG_LIST_LEN]{};
+    uint8_t atten_count{0};
+    uint8_t num_groups{0};
+    uint8_t pev_mac[ETH_ALEN]{};
 };
 
 static FSMBuffer g_fsm_buf{};
@@ -79,6 +85,14 @@ void qca7000SetErrorCallback(qca7000_error_cb_t cb, void* arg, bool* flag) {
 
 bool qca7000DriverFatal() {
     return g_driver_fatal;
+}
+
+void qca7000SetIds(const uint8_t pev_id[slac::messages::PEV_ID_LEN],
+                   const uint8_t evse_id[slac::messages::EVSE_ID_LEN]) {
+    if (pev_id)
+        memcpy(g_slac_ctx.pev_id, pev_id, sizeof(g_slac_ctx.pev_id));
+    if (evse_id)
+        memcpy(g_slac_ctx.evse_id, evse_id, sizeof(g_slac_ctx.evse_id));
 }
 
 #ifdef LIBSLAC_TESTING
@@ -504,6 +518,38 @@ static bool send_atten_char_rsp(const SlacContext& ctx, const uint8_t* dst,
     return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
 }
 
+static bool send_atten_char_ind(const SlacContext& ctx) {
+    struct __attribute__((packed)) {
+        ether_header eth;
+        struct {
+            uint8_t mmv;
+            uint16_t mmtype;
+        } hp;
+        slac::messages::cm_atten_char_ind ind;
+    } msg{};
+
+    memset(&msg, 0, sizeof(msg));
+    memcpy(msg.eth.ether_dhost, ctx.pev_mac, ETH_ALEN);
+    memcpy(msg.eth.ether_shost, g_src_mac, ETH_ALEN);
+    msg.eth.ether_type = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
+    msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
+    msg.hp.mmtype =
+        slac::htole16(slac::defs::MMTYPE_CM_ATTEN_CHAR | slac::defs::MMTYPE_MODE_IND);
+    msg.ind.application_type = slac::defs::COMMON_APPLICATION_TYPE;
+    msg.ind.security_type = slac::defs::COMMON_SECURITY_TYPE;
+    memcpy(msg.ind.source_address, ctx.pev_mac, ETH_ALEN);
+    memcpy(msg.ind.run_id, ctx.run_id, sizeof(ctx.run_id));
+    memcpy(msg.ind.source_id, ctx.pev_id, sizeof(ctx.pev_id));
+    memcpy(msg.ind.resp_id, ctx.evse_id, sizeof(ctx.evse_id));
+    msg.ind.num_sounds = slac::defs::C_EV_MATCH_MNBC;
+    msg.ind.attenuation_profile.num_groups = ctx.num_groups;
+    for (uint8_t i = 0; i < ctx.num_groups && i < slac::defs::AAG_LIST_LEN; ++i) {
+        msg.ind.attenuation_profile.aag[i] =
+            ctx.atten_sum[i] / slac::defs::C_EV_MATCH_MNBC;
+    }
+    return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+}
+
 static bool send_set_key_cnf(const SlacContext& ctx, const uint8_t* dst, const slac::messages::cm_set_key_req* req) {
     struct __attribute__((packed)) {
         ether_header eth;
@@ -728,6 +774,9 @@ bool qca7000startSlac() {
     g_slac_ctx.timer = slac_millis();
     g_slac_ctx.sound_sent = 0;
     g_slac_ctx.validate_count = 0;
+    g_slac_ctx.atten_count = 0;
+    memset(g_slac_ctx.atten_sum, 0, sizeof(g_slac_ctx.atten_sum));
+    g_slac_ctx.num_groups = 0;
     memset(&g_slac_ctx.match_req, 0, sizeof(g_slac_ctx.match_req));
     memset(g_slac_ctx.match_src_mac, 0, sizeof(g_slac_ctx.match_src_mac));
 
@@ -785,6 +834,20 @@ uint8_t qca7000getSlacResult() {
                 g_fsm.handle_event(slac::SlacEvent::GotParmCnf);
             } else {
                 g_fsm.handle_event(slac::SlacEvent::Error);
+            }
+        } else if (mmtype == (slac::defs::MMTYPE_CM_ATTEN_PROFILE | slac::defs::MMTYPE_MODE_IND)) {
+            const auto* prof = reinterpret_cast<const slac::messages::cm_atten_profile_ind*>(p + 3);
+            if (g_slac_ctx.atten_count == 0) {
+                memset(g_slac_ctx.atten_sum, 0, sizeof(g_slac_ctx.atten_sum));
+                g_slac_ctx.num_groups = prof->num_groups;
+                memcpy(g_slac_ctx.pev_mac, prof->pev_mac, ETH_ALEN);
+            }
+            for (uint8_t i = 0; i < prof->num_groups && i < slac::defs::AAG_LIST_LEN; ++i) {
+                g_slac_ctx.atten_sum[i] += prof->aag[i];
+            }
+            if (++g_slac_ctx.atten_count >= slac::defs::C_EV_MATCH_MNBC) {
+                send_atten_char_ind(g_slac_ctx);
+                g_slac_ctx.atten_count = 0;
             }
         } else if (mmtype == (slac::defs::MMTYPE_CM_ATTEN_CHAR | slac::defs::MMTYPE_MODE_IND)) {
             const auto* ind = reinterpret_cast<const slac::messages::cm_atten_char_ind*>(p + 3);
