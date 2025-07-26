@@ -646,7 +646,6 @@ static bool send_match_cnf(const SlacContext& ctx) {
     memcpy(msg.cnf.evse_mac, ctx.match_req.evse_mac, sizeof(msg.cnf.evse_mac));
     memcpy(msg.cnf.run_id, ctx.match_req.run_id, sizeof(msg.cnf.run_id));
     memcpy(msg.cnf.nid, g_evse_nid, sizeof(msg.cnf.nid));
-    msg.cnf._reserved2 = 0;
     memcpy(msg.cnf.nmk, g_evse_nmk, sizeof(msg.cnf.nmk));
 
     return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
