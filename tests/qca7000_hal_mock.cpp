@@ -60,3 +60,4 @@ void qca7000Process() {}
 void qca7000ProcessSlice(uint32_t) {}
 bool qca7000DriverFatal() { return false; }
 void qca7000SetErrorCallback(qca7000_error_cb_t, void*, bool*) {}
+void qca7000SetNmk(const uint8_t[slac::defs::NMK_LEN]) {}
