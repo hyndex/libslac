@@ -1,5 +1,6 @@
 #include "arduino_stubs.hpp"
 #include "port/esp32s3/qca7000.hpp"
+#include <slac/iso15118_consts.hpp>
 #include <cstring>
 #include <atomic>
 
@@ -28,6 +29,11 @@ static constexpr uint8_t RING_SIZE = 8;
 static constexpr uint8_t RING_MASK = RING_SIZE - 1;
 static RxEntry ring[RING_SIZE];
 static std::atomic<uint8_t> head{0}, tail{0};
+
+static uint8_t g_result = 0;
+static uint8_t g_retries_left = 0;
+static uint8_t g_toggle_cnt = 0;
+static int g_parm_sent = 0;
 
 inline void ring_reset() {
     head.store(0, std::memory_order_release);
@@ -104,8 +110,31 @@ bool spiQCA7000SendEthFrame(const uint8_t* f, size_t l) {
     if(l>sizeof(myethtransmitbuffer)) l = sizeof(myethtransmitbuffer);
     memcpy(myethtransmitbuffer, f, l); myethtransmitlen = l; return true;
 }
-bool qca7000startSlac() { return true; }
-uint8_t qca7000getSlacResult() { return 0; }
+__attribute__((weak)) void qca7000ToggleCpEf() { ++g_toggle_cnt; }
+
+bool qca7000startSlac() {
+    g_result = 1;
+    g_retries_left = slac::defs::C_EV_MATCH_RETRY;
+    ++g_parm_sent;
+    return true;
+}
+
+uint8_t qca7000getSlacResult() { return g_result; }
+
+extern "C" void mock_trigger_timeout() {
+    if (g_result == 1) {
+        if (g_retries_left > 0) {
+            --g_retries_left;
+            qca7000ToggleCpEf();
+            ++g_parm_sent;
+        } else {
+            g_result = 0xFF;
+        }
+    }
+}
+
+extern "C" uint8_t mock_get_toggle_count() { return g_toggle_cnt; }
+extern "C" int mock_get_parm_req_count() { return g_parm_sent; }
 void qca7000Process() {}
 void qca7000ProcessSlice(uint32_t) {}
 bool qca7000DriverFatal() { return false; }
