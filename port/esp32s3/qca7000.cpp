@@ -26,6 +26,19 @@ static inline uint32_t esp_random() {
 #include <cstdio>
 #include <string.h>
 
+#ifdef htole16
+#undef htole16
+#endif
+#ifdef le16toh
+#undef le16toh
+#endif
+#ifdef htole32
+#undef htole32
+#endif
+#ifdef le32toh
+#undef le32toh
+#endif
+
 const char* PLC_TAG = "PLC_IF";
 
 uint8_t myethtransmitbuffer[V2GTP_BUFFER_SIZE]{};
@@ -60,6 +73,7 @@ struct SlacContext {
     uint8_t atten_count{0};
     uint8_t num_groups{0};
     uint8_t pev_mac[ETH_ALEN]{};
+    uint8_t retry_count{0};
 };
 
 static FSMBuffer g_fsm_buf{};
@@ -76,6 +90,8 @@ static uint8_t g_buferr_count = 0;
 static uint32_t g_buferr_ts = 0;
 static bool g_driver_fatal = false;
 static uint8_t g_crash_count = 0;
+
+__attribute__((weak)) void qca7000ToggleCpEf() {}
 
 void qca7000SetErrorCallback(qca7000_error_cb_t cb, void* arg, bool* flag) {
     g_err_cb.cb = cb;
@@ -165,6 +181,10 @@ inline bool ringPop(const uint8_t** d, size_t* l) {
     tail.store((t + 1) & RING_MASK, std::memory_order_release);
     return true;
 }
+#ifdef LIBSLAC_TESTING
+extern "C" void mock_ring_reset() { head.store(0); tail.store(0); }
+extern "C" void mock_receive_frame(const uint8_t* f, size_t l) { ringPush(f, l); }
+#endif
 } // namespace
 
 static inline uint16_t cmd16(bool rd, bool intr, uint16_t reg) {
@@ -474,6 +494,30 @@ static bool send_mnbc_sound(const SlacContext& ctx, uint8_t remaining);
 static bool send_atten_char_rsp(const SlacContext& ctx, const uint8_t* dst,
                                 const slac::messages::cm_atten_char_ind* ind);
 static bool send_set_key_cnf(const SlacContext& ctx, const uint8_t* dst, const slac::messages::cm_set_key_req* req);
+static bool send_parm_req(const SlacContext& ctx);
+
+static bool send_parm_req(const SlacContext& ctx) {
+    struct __attribute__((packed)) {
+        ether_header eth;
+        struct {
+            uint8_t mmv;
+            uint16_t mmtype;
+        } hp;
+        slac::messages::cm_slac_parm_req req;
+    } msg{};
+
+    memset(&msg, 0, sizeof(msg));
+    memset(msg.eth.ether_dhost, 0xFF, ETH_ALEN);
+    memcpy(msg.eth.ether_shost, qca7000GetMac(), ETH_ALEN);
+    msg.eth.ether_type = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
+    msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
+    msg.hp.mmtype = slac::htole16(slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_REQ);
+    msg.req.application_type = slac::defs::COMMON_APPLICATION_TYPE;
+    msg.req.security_type = slac::defs::COMMON_SECURITY_TYPE;
+    memcpy(msg.req.run_id, ctx.run_id, sizeof(ctx.run_id));
+
+    return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+}
 
 static bool send_start_atten_char(const SlacContext& ctx) {
     struct __attribute__((packed)) {
@@ -714,6 +758,13 @@ struct WaitParmCnfState : public FSM::SimpleStateType {
             return alloc.create_simple<SoundingState>(ctx);
         }
         if (ev == slac::SlacEvent::Timeout || ev == slac::SlacEvent::Error) {
+            if (ctx.retry_count > 0) {
+                --ctx.retry_count;
+                qca7000ToggleCpEf();
+                send_parm_req(ctx);
+                ctx.timer = slac_millis();
+                return FSM::StateAllocatorType::HANDLED_INTERNALLY;
+            }
             ctx.result = 0xFF;
             return alloc.create_simple<IdleState>(ctx);
         }
@@ -823,6 +874,7 @@ struct WaitMatchState : public FSM::SimpleStateType {
 bool qca7000startSlac() {
     g_slac_ctx.result = 1;
     g_slac_ctx.timer = slac_millis();
+    g_slac_ctx.retry_count = slac::defs::C_EV_MATCH_RETRY;
     g_slac_ctx.sound_sent = 0;
     g_slac_ctx.validate_count = 0;
     g_slac_ctx.atten_count = 0;
@@ -834,26 +886,7 @@ bool qca7000startSlac() {
     for (size_t i = 0; i < sizeof(g_slac_ctx.run_id); ++i)
         g_slac_ctx.run_id[i] = static_cast<uint8_t>(esp_random() & 0xFF);
 
-    struct __attribute__((packed)) {
-        ether_header eth;
-        struct {
-            uint8_t mmv;
-            uint16_t mmtype;
-        } hp;
-        slac::messages::cm_slac_parm_req req;
-    } msg{};
-
-    memset(&msg, 0, sizeof(msg));
-    memset(msg.eth.ether_dhost, 0xFF, ETH_ALEN);
-    memcpy(msg.eth.ether_shost, qca7000GetMac(), ETH_ALEN);
-    msg.eth.ether_type = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
-    msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
-    msg.hp.mmtype = slac::htole16(slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_REQ);
-    msg.req.application_type = slac::defs::COMMON_APPLICATION_TYPE;
-    msg.req.security_type = slac::defs::COMMON_SECURITY_TYPE;
-    memcpy(msg.req.run_id, g_slac_ctx.run_id, sizeof(g_slac_ctx.run_id));
-
-    bool ok = txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+    bool ok = send_parm_req(g_slac_ctx);
     if (ok)
         g_fsm.reset<WaitParmCnfState>(g_slac_ctx);
     else
@@ -866,6 +899,8 @@ uint8_t qca7000getSlacResult() {
     const uint8_t prev_result = g_slac_ctx.result;
     fetchRx();
     const uint32_t now = slac_millis();
+    if (g_slac_ctx.result == 1 && now - g_slac_ctx.timer > slac::defs::TT_EVSE_SLAC_INIT_MS)
+        g_fsm.handle_event(slac::SlacEvent::Timeout);
     const uint8_t* d;
     size_t l;
     while (ringPop(&d, &l)) {
@@ -1069,8 +1104,13 @@ bool qca7000setup(SPIClass* bus, int csPin, int rstPin) {
     g_cs = csPin;
     g_rst = rstPin;
     g_pwr = PLC_PWR_EN_PIN;
-    if (g_spi)
+    if (g_spi) {
+#ifdef LIBSLAC_TESTING
+        g_spi->begin();
+#else
         g_spi->begin(PLC_SPI_SCK_PIN, PLC_SPI_MISO_PIN, PLC_SPI_MOSI_PIN, -1);
+#endif
+    }
     pinMode(g_cs, OUTPUT);
     digitalWrite(g_cs, HIGH);
     if (g_pwr >= 0) {
@@ -1097,7 +1137,9 @@ bool qca7000setup(SPIClass* bus, int csPin, int rstPin) {
 
 void qca7000teardown() {
     if (g_spi) {
+#ifndef LIBSLAC_TESTING
         g_spi->end();
+#endif
     }
     g_spi = nullptr;
 }
