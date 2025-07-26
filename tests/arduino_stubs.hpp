@@ -5,6 +5,8 @@
 #define HIGH 1
 #define LOW 0
 #define OUTPUT 1
+#define MSBFIRST 1
+#define SPI_MODE3 3
 
 struct SPISettings {
     SPISettings(uint32_t, uint8_t, uint8_t) {}
@@ -25,8 +27,9 @@ inline SPIClass SPI;
 
 inline void pinMode(int, int) {}
 inline void digitalWrite(int, int) {}
-inline uint32_t millis() { return 0; }
-inline uint32_t micros() { return 0; }
-inline void delay(unsigned int) {}
+extern uint32_t g_mock_millis;
+inline uint32_t millis() { return g_mock_millis; }
+inline uint32_t micros() { return g_mock_millis * 1000; }
+inline void delay(unsigned int ms) { g_mock_millis += ms; }
 inline void noInterrupts() {}
 inline void interrupts() {}

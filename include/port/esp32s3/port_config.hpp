@@ -65,18 +65,22 @@ static_assert(PLC_SPI_RST_PIN >= 0, "RST pin unset");
 static_assert(QCA7000_SPI_BURST_LEN <= 512, "Burst length too large");
 
 namespace slac {
-#ifndef le16toh
+#ifdef le16toh
+#undef le16toh
+#endif
 inline uint16_t le16toh(uint16_t v) { return v; }
+#ifdef htole16
+#undef htole16
 #endif
-#ifndef htole16
 inline uint16_t htole16(uint16_t v) { return v; }
+#ifdef le32toh
+#undef le32toh
 #endif
-#ifndef le32toh
 inline uint32_t le32toh(uint32_t v) { return v; }
+#ifdef htole32
+#undef htole32
 #endif
-#ifndef htole32
 inline uint32_t htole32(uint32_t v) { return v; }
-#endif
 } // namespace slac
 
 #ifdef ESP_PLATFORM

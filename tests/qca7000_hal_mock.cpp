@@ -1,7 +1,11 @@
 #include "arduino_stubs.hpp"
 #include "port/esp32s3/qca7000.hpp"
-#include <cstring>
+#include <slac/iso15118_consts.hpp>
+#include <cstdint>
 #include <atomic>
+extern uint32_t g_mock_millis;
+void qca7000ToggleCpEf();
+#include <cstring>
 
 SPIClass* spi_used = nullptr;
 int spi_cs = -1;
@@ -15,51 +19,29 @@ uint8_t myethreceivebuffer[V2GTP_BUFFER_SIZE];
 size_t myethreceivelen = 0;
 const char* PLC_TAG = "mock";
 
-uint16_t mock_signature = 0;
-uint16_t mock_wrbuf = 0;
-uint16_t mock_intr_cause = 0;
-
 namespace {
-struct RxEntry {
-    size_t len;
-    uint8_t data[V2GTP_BUFFER_SIZE];
-};
+struct RxEntry { size_t len; uint8_t data[V2GTP_BUFFER_SIZE]; };
 static constexpr uint8_t RING_SIZE = 8;
 static constexpr uint8_t RING_MASK = RING_SIZE - 1;
 static RxEntry ring[RING_SIZE];
 static std::atomic<uint8_t> head{0}, tail{0};
-
-inline void ring_reset() {
-    head.store(0, std::memory_order_release);
-    tail.store(0, std::memory_order_release);
 }
 
-inline void ring_push(const uint8_t* d, size_t l) {
-    if (l > V2GTP_BUFFER_SIZE)
-        l = V2GTP_BUFFER_SIZE;
-    uint8_t h = head.load(std::memory_order_acquire);
-    uint8_t t = tail.load(std::memory_order_acquire);
+uint16_t mock_signature = 0;
+uint16_t mock_wrbuf = 0;
+uint16_t mock_intr_cause = 0;
+
+extern "C" void mock_ring_reset() { head.store(0); tail.store(0); }
+extern "C" void mock_receive_frame(const uint8_t* f, size_t l) {
+    if (l > V2GTP_BUFFER_SIZE) l = V2GTP_BUFFER_SIZE;
+    uint8_t h = head.load();
+    uint8_t t = tail.load();
     uint8_t next = (h + 1) & RING_MASK;
-    if (next == t)
-        return;
-    memcpy(ring[h].data, d, l);
+    if (next == t) return;
+    memcpy(ring[h].data, f, l);
     ring[h].len = l;
-    head.store(next, std::memory_order_release);
+    head.store(next);
 }
-
-inline bool ring_pop(const uint8_t** d, size_t* l) {
-    uint8_t t = tail.load(std::memory_order_acquire);
-    if (head.load(std::memory_order_acquire) == t)
-        return false;
-    *d = ring[t].data;
-    *l = ring[t].len;
-    tail.store((t + 1) & RING_MASK, std::memory_order_release);
-    return true;
-}
-} // namespace
-
-extern "C" void mock_ring_reset() { ring_reset(); }
-extern "C" void mock_receive_frame(const uint8_t* f, size_t l) { ring_push(f, l); }
 
 bool qca7000setup(SPIClass* spi, int cs, int rst) {
     spi_used = spi; spi_cs = cs; spi_rst = rst; return true;
@@ -89,23 +71,42 @@ bool qca7000CheckAlive() {
 }
 bool qca7000ReadSignature(uint16_t* sig, uint16_t* ver) { if(sig) *sig = 0xAA55; if(ver) *ver=1; return true; }
 size_t spiQCA7000checkForReceivedData(uint8_t* dst, size_t len) {
-    const uint8_t* s;
-    size_t l;
-    if (!ring_pop(&s, &l))
+    uint8_t t = tail.load();
+    if (head.load() == t)
         return 0;
+    size_t l = ring[t].len;
     size_t c = l > len ? len : l;
-    memcpy(dst, s, c);
-    size_t store = l > V2GTP_BUFFER_SIZE ? V2GTP_BUFFER_SIZE : l;
-    memcpy(myethreceivebuffer, s, store);
-    myethreceivelen = store;
+    memcpy(dst, ring[t].data, c);
+    tail.store((t + 1) & RING_MASK);
     return c;
 }
 bool spiQCA7000SendEthFrame(const uint8_t* f, size_t l) {
     if(l>sizeof(myethtransmitbuffer)) l = sizeof(myethtransmitbuffer);
     memcpy(myethtransmitbuffer, f, l); myethtransmitlen = l; return true;
 }
-bool qca7000startSlac() { return true; }
-uint8_t qca7000getSlacResult() { return 0; }
+static uint8_t mock_retry = 0;
+static uint32_t mock_timer = 0;
+static uint8_t mock_result = 0;
+bool qca7000startSlac() {
+    mock_retry = slac::defs::C_EV_MATCH_RETRY;
+    mock_timer = g_mock_millis;
+    mock_result = 1;
+    return true;
+}
+uint8_t qca7000getSlacResult() {
+    if (mock_result == 1 && g_mock_millis - mock_timer > slac::defs::TT_EVSE_SLAC_INIT_MS) {
+        if (mock_retry > 0) {
+            --mock_retry;
+            mock_timer = g_mock_millis;
+            qca7000ToggleCpEf();
+            if (mock_retry == 0)
+                mock_result = 0xFF;
+        } else {
+            mock_result = 0xFF;
+        }
+    }
+    return mock_result;
+}
 void qca7000Process() {}
 void qca7000ProcessSlice(uint32_t) {}
 bool qca7000DriverFatal() { return false; }
