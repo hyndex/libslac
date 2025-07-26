@@ -21,7 +21,7 @@
 #define CP_PWM_FREQ_HZ      1000
 #define CP_PWM_RES_BITS     12
 #define CP_PWM_DUTY_5PCT    (((1 << CP_PWM_RES_BITS) * 5 + 50) / 100) // round correctly
-#define CP_IDLE_RELEASE     0   // 0=keep pin attached and drive high when idle, 1=release
+#define CP_IDLE_RELEASE     1   // 0=keep pin attached and drive high when idle, 1=release
 #define CP_SAMPLE_OFFSET_US 25
 
 #define T_PLC_INIT_MS       700

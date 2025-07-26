@@ -38,8 +38,15 @@ void cpPwmSetDuty(uint16_t duty_raw) {
 
 void cpPwmStop()
 {
+#if CP_IDLE_RELEASE
+    ledcWrite(PWM_CHANNEL, 0);           // ensure low before detaching
+    cpSetLastPwmDuty(0);                 // duty is effectively 0
+    ledcDetachPin(CP_PWM_OUT_PIN);       // let CP float via pull-up
+    pinMode(CP_PWM_OUT_PIN, INPUT);      // high-Z idle
+#else
     constexpr uint16_t DUTY_FULL = (1u << CP_PWM_RES_BITS) - 1; // 100% duty
     ledcWrite(PWM_CHANNEL, DUTY_FULL);   // drive CP to +12V rail
     cpSetLastPwmDuty(DUTY_FULL);         // reflect actual pin level
+#endif
     pwmRunning = false;
 }
