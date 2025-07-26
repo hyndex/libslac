@@ -4,6 +4,8 @@
 #include "port/esp32s3/qca7000_link.hpp"
 #include "port/esp32s3/qca7000.hpp"
 
+extern "C" void mock_receive_frame(const uint8_t*, size_t);
+
 using slac::port::Qca7000Link;
 
 TEST(Qca7000LinkIntegration, BasicReadWrite) {
@@ -17,8 +19,7 @@ TEST(Qca7000LinkIntegration, BasicReadWrite) {
     uint8_t frame[6] = {1,2,3,4,5,6};
     EXPECT_TRUE(link.write(frame, sizeof(frame), 0));
 
-    memcpy(myethreceivebuffer, frame, sizeof(frame));
-    myethreceivelen = sizeof(frame);
+    mock_receive_frame(frame, sizeof(frame));
 
     uint8_t buf[10];
     size_t out = 0;

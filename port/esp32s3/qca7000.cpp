@@ -1026,8 +1026,16 @@ static void process_cause(uint16_t cause) {
             g_err_cb.cb(fatal ? Qca7000ErrorStatus::DriverFatal : Qca7000ErrorStatus::Reset, g_err_cb.arg);
     }
 
-    if (cause & SPI_INT_PKT_AVLBL)
-        fetchRx();
+    if (cause & SPI_INT_PKT_AVLBL) {
+        size_t loops = 0;
+        while (spiRd16_slow(SPI_REG_RDBUF_BYTE_AVA) > 0) {
+            fetchRx();
+            if (++loops >= slac::spi_burst_len())
+                break;
+            if (spiRd16_slow(SPI_REG_RDBUF_BYTE_AVA) == 0)
+                break;
+        }
+    }
 
     spiWr16_slow(SPI_REG_INTR_CAUSE, cause);
 }
