@@ -15,7 +15,7 @@ TEST(Qca7000LinkIntegration, BasicReadWrite) {
     ASSERT_TRUE(link.open());
 
     uint8_t frame[6] = {1,2,3,4,5,6};
-    EXPECT_TRUE(link.write(frame, sizeof(frame), 0));
+    EXPECT_EQ(link.write(frame, sizeof(frame), 0), slac::transport::LinkError::Ok);
 
     memcpy(myethreceivebuffer, frame, sizeof(frame));
     myethreceivelen = sizeof(frame);

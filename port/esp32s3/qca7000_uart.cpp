@@ -259,10 +259,12 @@ bool Qca7000UartLink::open() {
     return true;
 }
 
-bool Qca7000UartLink::write(const uint8_t* b, size_t l, uint32_t) {
+transport::LinkError Qca7000UartLink::write(const uint8_t* b, size_t l, uint32_t) {
     if (!initialized || initialization_error)
-        return false;
-    return uartQCA7000SendEthFrame(b, l);
+        return transport::LinkError::Transport;
+    if (!uartQCA7000SendEthFrame(b, l))
+        return transport::LinkError::Transport;
+    return transport::LinkError::Ok;
 }
 
 void Qca7000UartLink::close() {

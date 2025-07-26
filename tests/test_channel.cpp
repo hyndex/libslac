@@ -7,10 +7,10 @@
 class MockLink : public slac::transport::Link {
 public:
     bool open() override { return true; }
-    bool write(const uint8_t* b, size_t l, uint32_t) override {
+    slac::transport::LinkError write(const uint8_t* b, size_t l, uint32_t) override {
         tx.assign(b, b + l);
         rx = tx;
-        return true;
+        return slac::transport::LinkError::Ok;
     }
     slac::transport::LinkError read(uint8_t* b, size_t l, size_t* out, uint32_t) override {
         if (rx.empty()) {
@@ -48,7 +48,7 @@ TEST(Channel, RoundTrip) {
     uint8_t dst[ETH_ALEN] = {0xff,0xff,0xff,0xff,0xff,0xff};
     msg.setup_ethernet_header(dst);
 
-    ASSERT_TRUE(channel.write(msg, 100));
+    ASSERT_EQ(channel.write(msg, 100), slac::transport::LinkError::Ok);
 
     slac::messages::HomeplugMessage in;
     auto err = channel.read(in, 100);
@@ -75,7 +75,7 @@ TEST(Channel, WriteAfterSetupFailure) {
     uint8_t dst[ETH_ALEN] = {0xff,0xff,0xff,0xff,0xff,0xff};
     msg.setup_ethernet_header(dst);
 
-    ASSERT_TRUE(channel.write(msg, 100));
+    ASSERT_EQ(channel.write(msg, 100), slac::transport::LinkError::Ok);
 
     const size_t big_len = sizeof(slac::messages::homeplug_message::payload) + 1;
     std::vector<uint8_t> big(big_len, 0);
@@ -84,5 +84,5 @@ TEST(Channel, WriteAfterSetupFailure) {
                                    slac::defs::MMV::AV_1_0));
     EXPECT_FALSE(msg.is_valid());
     msg.setup_ethernet_header(dst);
-    EXPECT_FALSE(channel.write(msg, 100));
+    EXPECT_EQ(channel.write(msg, 100), slac::transport::LinkError::Transport);
 }
