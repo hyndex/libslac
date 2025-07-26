@@ -39,6 +39,14 @@ Install PlatformIO via pip:
 
    pip install platformio
 
+The unit tests rely on the system provided GoogleTest libraries.  Make
+sure ``libgtest-dev`` (or an equivalent package) is installed before
+running ``run_tests.sh``:
+
+.. code-block:: bash
+
+   sudo apt-get install libgtest-dev
+
 Building with PlatformIO
 -----------------------
 
