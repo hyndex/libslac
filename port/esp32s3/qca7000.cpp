@@ -247,6 +247,10 @@ static bool hardReset() {
     while (!(slowRd16(SPI_REG_INTR_CAUSE) & SPI_INT_CPU_ON) && slac_millis() - t0 < slac::cpuon_timeout_ms())
         ;
 
+    uint16_t cfg = slowRd16(SPI_REG_SPI_CONFIG);
+    if (cfg & QCASPI_MULTI_CS_BIT)
+        spiWr16_slow(SPI_REG_SPI_CONFIG, cfg & ~QCASPI_MULTI_CS_BIT);
+
     spiWr16_slow(SPI_REG_INTR_CAUSE, 0xFFFF);
     spiWr16_slow(SPI_REG_INTR_ENABLE, INTR_MASK);
     return true;
@@ -307,6 +311,10 @@ static void initialSetup() {
             break;
         slac_delay(5);
     } while (slac_millis() - t0 < 200);
+
+    uint16_t cfg = spiRd16_slow(SPI_REG_SPI_CONFIG);
+    if (cfg & QCASPI_MULTI_CS_BIT)
+        spiWr16_slow(SPI_REG_SPI_CONFIG, cfg & ~QCASPI_MULTI_CS_BIT);
     spiWr16_slow(SPI_REG_INTR_CAUSE, 0xFFFF);
     spiWr16_slow(SPI_REG_INTR_ENABLE, INTR_MASK);
 }
@@ -555,8 +563,7 @@ static bool send_atten_char_ind(const SlacContext& ctx) {
     memcpy(msg.eth.ether_shost, qca7000GetMac(), ETH_ALEN);
     msg.eth.ether_type = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
     msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
-    msg.hp.mmtype =
-        slac::htole16(slac::defs::MMTYPE_CM_ATTEN_CHAR | slac::defs::MMTYPE_MODE_IND);
+    msg.hp.mmtype = slac::htole16(slac::defs::MMTYPE_CM_ATTEN_CHAR | slac::defs::MMTYPE_MODE_IND);
     msg.ind.application_type = slac::defs::COMMON_APPLICATION_TYPE;
     msg.ind.security_type = slac::defs::COMMON_SECURITY_TYPE;
     memcpy(msg.ind.source_address, ctx.pev_mac, ETH_ALEN);
@@ -566,8 +573,7 @@ static bool send_atten_char_ind(const SlacContext& ctx) {
     msg.ind.num_sounds = slac::defs::C_EV_MATCH_MNBC;
     msg.ind.attenuation_profile.num_groups = ctx.num_groups;
     for (uint8_t i = 0; i < ctx.num_groups && i < slac::defs::AAG_LIST_LEN; ++i) {
-        msg.ind.attenuation_profile.aag[i] =
-            ctx.atten_sum[i] / slac::defs::C_EV_MATCH_MNBC;
+        msg.ind.attenuation_profile.aag[i] = ctx.atten_sum[i] / slac::defs::C_EV_MATCH_MNBC;
     }
     return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
 }
@@ -934,8 +940,7 @@ uint8_t qca7000getSlacResult() {
         if (g_err_cb.flag)
             *g_err_cb.flag = g_driver_fatal || !ok;
         if (g_err_cb.cb)
-            g_err_cb.cb(ok ? Qca7000ErrorStatus::Reset : Qca7000ErrorStatus::DriverFatal,
-                        g_err_cb.arg);
+            g_err_cb.cb(ok ? Qca7000ErrorStatus::Reset : Qca7000ErrorStatus::DriverFatal, g_err_cb.arg);
     }
 
     return g_slac_ctx.result;
