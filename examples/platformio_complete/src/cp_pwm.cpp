@@ -11,6 +11,9 @@ void cpPwmInit() {
 }
 
 void cpPwmStart(uint16_t duty_raw) {
+#if CP_IDLE_RELEASE
+    ledcAttachPin(CP_PWM_OUT_PIN, PWM_CHANNEL);
+#endif
     ledcWrite(PWM_CHANNEL, duty_raw);
     cpSetLastPwmDuty(duty_raw);
     pwmRunning = true;
@@ -26,7 +29,14 @@ void cpPwmSetDuty(uint16_t duty_raw) {
 }
 
 void cpPwmStop() {
-    ledcWrite(PWM_CHANNEL, 0);
+#if CP_IDLE_RELEASE
+    ledcDetachPin(CP_PWM_OUT_PIN);
+    pinMode(CP_PWM_OUT_PIN, INPUT);
     cpSetLastPwmDuty(0);
+#else
+    uint16_t max_count = (1u << CP_PWM_RES_BITS) - 1;
+    ledcWrite(PWM_CHANNEL, max_count);
+    cpSetLastPwmDuty(max_count);
+#endif
     pwmRunning = false;
 }
