@@ -27,7 +27,7 @@ enum class MMV : uint8_t {
 constexpr std::size_t MME_MIN_LENGTH = 60;
 
 constexpr std::size_t STATION_ID_LEN = 17;
-constexpr std::size_t NID_LEN = 7;
+constexpr std::size_t NID_LEN = 8;
 constexpr std::size_t NID_MOST_SIGNIFANT_BYTE_SHIFT = 4;
 const uint8_t NID_SECURITY_LEVEL_SIMPLE_CONNECT = 0b00;
 constexpr std::size_t NID_SECURITY_LEVEL_OFFSET = 4;
@@ -112,7 +112,7 @@ const uint8_t BROADCAST_MAC_ADDRESS[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
 namespace utils {
 void generate_nmk_hs(uint8_t nmk_hs[slac::defs::NMK_LEN], const char* plain_password, int password_len);
-void generate_nid_from_nmk(uint8_t nid[slac::defs::NID_LEN], const uint8_t nmk[slac::defs::NMK_LEN]);
+void generate_nid_from_nmk(uint8_t nid[8], const uint8_t nmk[slac::defs::NMK_LEN]);
 } // namespace utils
 
 namespace messages {
@@ -192,7 +192,7 @@ constexpr std::size_t EVSE_ID_LEN = defs::STATION_ID_LEN;
 typedef struct {
     uint8_t application_type;         // fixed to 0x00, indicating 'pev-evse matching'
     uint8_t security_type;            // fixed to 0x00, indicating 'no security'
-    uint8_t run_id[defs::RUN_ID_LEN]; // indentifier for a matching run
+    uint8_t run_id[16]; // indentifier for a matching run
     // cipher fields are missing, because we restrict to security_type = 0x00
 } __attribute__((packed)) cm_slac_parm_req;
 
@@ -204,7 +204,7 @@ typedef struct {
     uint8_t forwarding_sta[ETH_ALEN];           // ev host mac address
     uint8_t application_type;                   // fixed to 0x00, indicating 'pev-evse matching'
     uint8_t security_type;                      // fixed to 0x00, indicating 'no security'
-    uint8_t run_id[defs::RUN_ID_LEN];           // matching run identifier, corresponding to the request
+    uint8_t run_id[16];           // matching run identifier, corresponding to the request
     // cipher field is missing, because we restrict to security_type = 0x00
 } __attribute__((packed)) cm_slac_parm_cnf;
 
@@ -215,14 +215,14 @@ typedef struct {
     uint8_t timeout;                  // corresponds to TT_EVSE_match_MNBC
     uint8_t resp_type;                // fixed to 0x01, indicating 'other gp station'
     uint8_t forwarding_sta[ETH_ALEN]; // ev host mac address
-    uint8_t run_id[defs::RUN_ID_LEN]; // indentifier for a matching run
+    uint8_t run_id[16]; // indentifier for a matching run
 } __attribute__((packed)) cm_start_atten_char_ind;
 
 typedef struct {
     uint8_t application_type;         // fixed to 0x00, indicating 'pev-evse matching'
     uint8_t security_type;            // fixed to 0x00, indicating 'no security'
     uint8_t source_address[ETH_ALEN]; // mac address of EV host, which initiates matching
-    uint8_t run_id[defs::RUN_ID_LEN]; // indentifier for a matching run
+    uint8_t run_id[16]; // indentifier for a matching run
     uint8_t source_id[SOURCE_ID_LEN]; // unique id of the station, that sent the m-sounds
     uint8_t resp_id[RESP_ID_LEN];     // unique id of the station, that is sending this message
     uint8_t num_sounds;               // number of sounds used for attenuation profile
@@ -236,7 +236,7 @@ typedef struct {
     uint8_t application_type;         // fixed to 0x00, indicating 'pev-evse matching'
     uint8_t security_type;            // fixed to 0x00, indicating 'no security'
     uint8_t source_address[ETH_ALEN]; // mac address of EV host, which initiates matching
-    uint8_t run_id[defs::RUN_ID_LEN]; // indentifier for a matching run
+    uint8_t run_id[16]; // indentifier for a matching run
     uint8_t source_id[SOURCE_ID_LEN]; // unique id of the station, that sent the m-sounds
     uint8_t resp_id[RESP_ID_LEN];     // unique id of the station, that is sending this message
     uint8_t result;                   // fixed to 0x00, indicates successful SLAC process
@@ -247,7 +247,7 @@ typedef struct {
     uint8_t security_type;            // fixed to 0x00, indicating 'no security'
     uint8_t sender_id[SENDER_ID_LEN]; // sender id, if application_type = 0x00, it should be the pev's vin code
     uint8_t remaining_sound_count;    // count of remaining sound messages
-    uint8_t run_id[defs::RUN_ID_LEN]; // identifier for a matching run
+    uint8_t run_id[16]; // identifier for a matching run
     uint8_t random[16];               // random value
 } __attribute__((packed)) cm_mnbc_sound_ind;
 
@@ -255,7 +255,6 @@ typedef struct {
 typedef struct {
     uint8_t pev_mac[ETH_ALEN]; // mac address of the EV host
     uint8_t num_groups;        // number of OFDM carrier groups
-    uint8_t _reserved;
     uint8_t aag[defs::AAG_LIST_LEN]; // list of average attenuation for each group
 } __attribute__((packed)) cm_atten_profile_ind;
 
@@ -267,7 +266,7 @@ typedef struct {
     uint8_t pev_mac[ETH_ALEN];        // mac address of the EV host
     uint8_t evse_id[EVSE_ID_LEN];     // EVSE id
     uint8_t evse_mac[ETH_ALEN];       // mac address of the EVSE
-    uint8_t run_id[defs::RUN_ID_LEN]; // identifier for a matching run
+    uint8_t run_id[16]; // identifier for a matching run
 } __attribute__((packed)) cm_slac_match_req;
 
 typedef struct {
@@ -278,9 +277,8 @@ typedef struct {
     uint8_t pev_mac[ETH_ALEN];        // mac address of the EV host
     uint8_t evse_id[EVSE_ID_LEN];     // EVSE id
     uint8_t evse_mac[ETH_ALEN];       // mac address of the EVSE
-    uint8_t run_id[defs::RUN_ID_LEN]; // identifier for a matching run
-    uint8_t nid[defs::NID_LEN];       // network id derived from the nmk
-    uint8_t _reserved2;               // note: this is to pad the nid, which is defined to be 8 bytes for this message
+    uint8_t run_id[16]; // identifier for a matching run
+    uint8_t nid[8];       // network id derived from the nmk
     uint8_t nmk[defs::NMK_LEN];       // private nmk of the EVSE
 } __attribute__((packed)) cm_slac_match_cnf;
 
@@ -308,7 +306,7 @@ typedef struct {
     uint16_t prn;                   // fixed to 0x0000: encrypted payload not used
     uint8_t pmn;                    // fixed to 0x00: encrypted payload not used
     uint8_t cco_capability;         // CCo capability according to the station role
-    uint8_t nid[defs::NID_LEN];     // 54 LSBs = NID, 2 MSBs = 0b00
+    uint8_t nid[8];     // 54 LSBs = NID, 2 MSBs = 0b00
     uint8_t new_eks;                // fixed to 0x01: NMK
     uint8_t new_key[defs::NMK_LEN]; // new NMK
 } __attribute__((packed)) cm_set_key_req;
