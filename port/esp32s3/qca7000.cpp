@@ -1152,6 +1152,12 @@ bool qca7000SoftReset() {
     return softReset();
 }
 
+bool qca7000LeaveAvln() {
+    // Leaving the logical network is done by issuing a soft reset which
+    // clears the modem state without toggling the CP line.
+    return qca7000SoftReset();
+}
+
 #ifdef ESP_PLATFORM
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>

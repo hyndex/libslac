@@ -27,6 +27,19 @@ std::atomic<uint8_t> g_slac_state{0};
 void IRAM_ATTR plc_isr() { plc_irq = true; }
 // Timestamp for SLAC restart logic
 std::atomic<uint32_t> g_slac_ts{0};
+static bool hlc_running = false;
+
+static void hlc_start() {
+    Serial.println("[HLC] start");
+    hlc_running = true;
+}
+
+static void hlc_stop() {
+    if (hlc_running) {
+        Serial.println("[HLC] stop");
+        hlc_running = false;
+    }
+}
 
 static void logTask(void*) {
     const TickType_t period = pdMS_TO_TICKS(1000);
@@ -92,8 +105,21 @@ void loop() {
         // Handle incoming SLAC messages here
     }
 
+    // Detect PLC link loss while CP duty cycle > 5% (X2)
+    if (cpGetLastPwmDuty() > CP_PWM_DUTY_5PCT && !qca7000CheckAlive()) {
+        Serial.println("[PLC] link lost");
+        hlc_stop();
+        qca7000LeaveAvln();
+        if (qca7000startSlac())
+            g_slac_ts.store(millis(), std::memory_order_relaxed);
+    }
+
     // Update the SLAC state machine and restart if no progress for 60s
     g_slac_state.store(qca7000getSlacResult(), std::memory_order_relaxed);
+    if (!hlc_running && g_slac_state.load(std::memory_order_relaxed) == 6)
+        hlc_start();
+    if (hlc_running && g_slac_state.load(std::memory_order_relaxed) != 6)
+        hlc_stop();
     if (g_slac_state.load(std::memory_order_relaxed) != 0 &&
         g_slac_state.load(std::memory_order_relaxed) != 5) {
         if (millis() - g_slac_ts.load(std::memory_order_relaxed) > 60000) {
