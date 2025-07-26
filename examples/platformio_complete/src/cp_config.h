@@ -12,16 +12,15 @@
 #define CP_THR_9V_MV    1950
 #define CP_THR_6V_MV    1650
 #define CP_THR_3V_MV    1400
-#define CP_THR_1V_MV    1100
+#define CP_THR_1V_MV    200          // ≈ 1 V after divider
 
-// additional thresholds for detecting negative plateaus
-#define CP_THR_NEG_E_MV   500
-#define CP_THR_NEG_F_MV   300
+// threshold for the negative plateau (-12 V -> state E/F)
+#define CP_THR_NEG12_MV   80
 
 #define CP_PWM_FREQ_HZ      1000
 #define CP_PWM_RES_BITS     12
-#define CP_PWM_DUTY_5PCT    (((1 << CP_PWM_RES_BITS) * 5 + 50) / 100) // round correctly
-#define CP_IDLE_RELEASE     0   // 0=keep pin attached and drive high when idle, 1=release
+#define CP_PWM_DUTY_5PCT    ((1u << CP_PWM_RES_BITS) / 20) // exact 5% duty
+#define CP_IDLE_DRIVE_HIGH  1   // 1=keep CP driven high when idle, 0=release
 #define CP_SAMPLE_OFFSET_US 25
 
 #define T_PLC_INIT_MS       700

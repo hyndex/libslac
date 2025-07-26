@@ -12,6 +12,10 @@ static std::atomic<uint16_t> cp_mv{0};
 static std::atomic<uint16_t> cp_duty{0};
 static std::atomic<CpSubState> cp_state{CP_A};
 
+static inline uint16_t adc_oneshot_read_inline() {
+    return analogReadMilliVolts(CP_READ_ADC_PIN);
+}
+
 static char toLetter(CpSubState s) {
     switch (s) {
         case CP_A: return 'A';
@@ -26,14 +30,16 @@ static char toLetter(CpSubState s) {
 
 static CpSubState mv2state(uint16_t mv) {
     uint16_t duty = cp_duty.load(std::memory_order_relaxed);
+    uint16_t pct  = (duty * 100) >> CP_PWM_RES_BITS;
+    if (mv < CP_THR_NEG12_MV)
+        return CP_E;
     if (mv < CP_THR_1V_MV)
-        return (mv < CP_THR_NEG_F_MV) ? CP_F : CP_E;
+        return CP_F;
     if (mv > CP_THR_12V_MV)
         return CP_A;
     if (mv > CP_THR_9V_MV)
         return (duty == 0) ? CP_B1 : CP_B3;
     if (mv > CP_THR_6V_MV) {
-        uint16_t pct = (duty * 100) >> CP_PWM_RES_BITS;
         if (pct >= 3 && pct <= 7) return CP_B2;
         return CP_C;
     }
@@ -55,11 +61,10 @@ static void IRAM_ATTR onAdc() {
 }
 
 static void IRAM_ATTR sample_isr() {
-    uint16_t v = analogReadMilliVolts(CP_READ_ADC_PIN);
+    timerAlarmDisable(sampleTimer);            // one-shot
+    uint16_t v = adc_oneshot_read_inline();    // IRAM-safe helper
     cp_mv.store(v, std::memory_order_relaxed);
     cp_state.store(mv2state(v), std::memory_order_relaxed);
-    if (sampleTimer)
-        timerAlarmDisable(sampleTimer);
 }
 
 static void IRAM_ATTR ledc_isr(void*) {
