@@ -23,6 +23,7 @@ static inline uint32_t esp_random() {
 #include <slac/fsm.hpp>
 #include <slac/iso15118_consts.hpp>
 #include <slac/slac.hpp>
+#include <cstdio>
 #include <string.h>
 
 const char* PLC_TAG = "PLC_IF";
@@ -396,36 +397,38 @@ void fetchRx() {
 #else
 static void fetchRx() {
 #endif
-    uint16_t avail = spiRd16_slow(SPI_REG_RDBUF_BYTE_AVA);
-    if (avail < RX_HDR + FTR_LEN || avail > V2GTP_BUFFER_SIZE)
-        return;
+    while (true) {
+        uint16_t avail = spiRd16_slow(SPI_REG_RDBUF_BYTE_AVA);
+        if (avail < RX_HDR + FTR_LEN || avail > V2GTP_BUFFER_SIZE)
+            break;
 
-    uint16_t requested = avail;
-    spiWr16_slow(SPI_REG_BFR_SIZE, requested);
+        uint16_t requested = avail;
+        spiWr16_slow(SPI_REG_BFR_SIZE, requested);
 
-    static uint8_t buf[V2GTP_BUFFER_SIZE + 2];
-    g_spi->beginTransaction(setFast());
-    digitalWrite(g_cs, LOW);
-    g_spi->transfer16(cmd16(true, false, 0));
-    for (uint16_t i = 0; i < avail + 2; ++i)
-        buf[i] = g_spi->transfer(0);
-    digitalWrite(g_cs, HIGH);
-    g_spi->endTransaction();
+        static uint8_t buf[V2GTP_BUFFER_SIZE + 2];
+        g_spi->beginTransaction(setFast());
+        digitalWrite(g_cs, LOW);
+        g_spi->transfer16(cmd16(true, false, 0));
+        for (uint16_t i = 0; i < avail + 2; ++i)
+            buf[i] = g_spi->transfer(0);
+        digitalWrite(g_cs, HIGH);
+        g_spi->endTransaction();
 
-    const uint8_t* p = buf + 2;
-    uint32_t len = (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
-    if (len != requested) {
-        ESP_LOGE(PLC_TAG, "RX len mismatch: req=%u got=%u", requested, len);
-        return;
+        const uint8_t* p = buf + 2;
+        uint32_t len = (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+        if (len != requested) {
+            ESP_LOGE(PLC_TAG, "RX len mismatch: req=%u got=%u", requested, len);
+            break;
+        }
+        if (memcmp(p + 4, "\xAA\xAA\xAA\xAA", 4) != 0)
+            break;
+        uint16_t fl = slac::le16toh(static_cast<uint16_t>((p[9] << 8) | p[8]));
+        if (fl > avail - RX_HDR - FTR_LEN)
+            break;
+        if (p[RX_HDR + fl] != 0x55 || p[RX_HDR + fl + 1] != 0x55)
+            break;
+        ringPush(p + RX_HDR, fl);
     }
-    if (memcmp(p + 4, "\xAA\xAA\xAA\xAA", 4) != 0)
-        return;
-    uint16_t fl = slac::le16toh(static_cast<uint16_t>((p[9] << 8) | p[8]));
-    if (fl > avail - RX_HDR - FTR_LEN)
-        return;
-    if (p[RX_HDR + fl] != 0x55 || p[RX_HDR + fl + 1] != 0x55)
-        return;
-    ringPush(p + RX_HDR, fl);
 }
 
 bool spiQCA7000SendEthFrame(const uint8_t* f, size_t l) {
@@ -662,6 +665,21 @@ static bool send_match_cnf(const SlacContext& ctx) {
     return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
 }
 
+static void log_match(const SlacContext& ctx) {
+    char mac[18];
+    snprintf(mac, sizeof(mac), "%02X:%02X:%02X:%02X:%02X:%02X",
+             ctx.match_req.pev_mac[0], ctx.match_req.pev_mac[1], ctx.match_req.pev_mac[2],
+             ctx.match_req.pev_mac[3], ctx.match_req.pev_mac[4], ctx.match_req.pev_mac[5]);
+
+    char nid[slac::defs::NID_LEN * 2 + 1];
+    for (size_t i = 0; i < slac::defs::NID_LEN; ++i)
+        sprintf(&nid[i * 2], "%02X", g_evse_nid[i]);
+
+    ESP_LOGI(PLC_TAG, "SLAC MATCH OK");
+    ESP_LOGI(PLC_TAG, "  PEV_MAC: %s", mac);
+    ESP_LOGI(PLC_TAG, "  NID    : %s", nid);
+}
+
 // FSM state implementations
 struct SoundingState;
 struct WaitSetKeyState;
@@ -789,6 +807,7 @@ struct WaitMatchState : public FSM::SimpleStateType {
     fsm::states::HandleEventResult handle_event(FSM::StateAllocatorType& alloc, slac::SlacEvent ev) override {
         if (ev == slac::SlacEvent::GotMatchReq) {
             send_match_cnf(ctx);
+            log_match(ctx);
             ctx.result = 6;
             return alloc.create_simple<IdleState>(ctx);
         }
