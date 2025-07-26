@@ -15,6 +15,7 @@ enum class SlacEvent {
     SoundIntervalElapsed,
     GotAttenCharInd,
     GotSetKeyReq,
+    GotValidateReq,
     GotMatchReq,
     Timeout,
     Error
