@@ -40,6 +40,6 @@ void cpPwmStop()
 {
     constexpr uint16_t DUTY_FULL = (1u << CP_PWM_RES_BITS) - 1; // 100% duty
     ledcWrite(PWM_CHANNEL, DUTY_FULL);   // drive CP to +12V rail
-    cpSetLastPwmDuty(DUTY_FULL);         // reflect actual pin level
+    cpSetLastPwmDuty(0);                 // 0% tells monitor that PWM is off
     pwmRunning = false;
 }

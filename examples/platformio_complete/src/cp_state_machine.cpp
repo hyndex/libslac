@@ -56,7 +56,7 @@ static void handleInitialiseB1() {
         cpPwmStop();
         stageEnter(EVSE_IDLE_A);
     }
-    if (cpGetSubState() == CP_B2) {
+    if (cpDigitalCommRequested()) {
         stageEnter(EVSE_DIGITAL_REQ_B2);
     }
 }

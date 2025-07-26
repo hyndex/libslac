@@ -30,13 +30,17 @@ static CpSubState mv2state(uint16_t mv) {
         return (mv < CP_THR_NEG_F_MV) ? CP_F : CP_E;
     if (mv > CP_THR_12V_MV)
         return CP_A;
-    if (mv > CP_THR_9V_MV)
-        return (duty == 0) ? CP_B1 : CP_B3;
-    if (mv > CP_THR_6V_MV) {
-        uint16_t pct = (duty * 100) >> CP_PWM_RES_BITS;
-        if (pct >= 3 && pct <= 7) return CP_B2;
-        return CP_C;
+    if (mv > CP_THR_9V_MV) {
+        uint16_t pct = (duty * 100) >> CP_PWM_RES_BITS;   // 0-100 %
+        bool no_pwm = (pct == 0 || pct == 100);
+        if (no_pwm)
+            return CP_B1;              // static 9V
+        if (pct >= 3 && pct <= 7)
+            return CP_B2;              // 5% ± tolerance
+        return CP_B3;
     }
+    if (mv > CP_THR_6V_MV)
+        return CP_C;
     if (mv > CP_THR_3V_MV)
         return CP_D;
     return CP_E;
