@@ -1,7 +1,13 @@
 #include "cp_monitor.h"
 #include <atomic>
+#include <driver/ledc.h>
+#include <driver/timer.h>
+#include <esp_intr_alloc.h>
+#include <soc/ledc_struct.h>
 
-static hw_timer_t* adcTimer = nullptr;
+static hw_timer_t* adcTimer = nullptr;   // low rate timer
+static hw_timer_t* sampleTimer = nullptr; // high precision sample timer
+static intr_handle_t ledcIsrHandle = nullptr;
 static std::atomic<uint16_t> cp_mv{0};
 static std::atomic<uint16_t> cp_duty{0};
 static std::atomic<CpSubState> cp_state{CP_A};
@@ -43,6 +49,20 @@ static void IRAM_ATTR onAdc() {
     cp_state.store(mv2state(vmax), std::memory_order_relaxed);
 }
 
+static void IRAM_ATTR sample_isr() {
+    uint16_t v = analogReadMilliVolts(CP_READ_ADC_PIN);
+    cp_mv.store(v, std::memory_order_relaxed);
+    cp_state.store(mv2state(v), std::memory_order_relaxed);
+}
+
+static void IRAM_ATTR ledc_isr(void*) {
+    LEDC.int_clr.lstimer0_ovf = 1;
+    if (sampleTimer) {
+        timerWrite(sampleTimer, 0);
+        timerAlarmEnable(sampleTimer);
+    }
+}
+
 void cpMonitorInit() {
     analogReadResolution(12);
     analogSetPinAttenuation(CP_READ_ADC_PIN, ADC_11db);
@@ -62,6 +82,28 @@ void cpLowRateStart(uint32_t period_ms) {
 void cpLowRateStop() {
     if (adcTimer)
         timerAlarmDisable(adcTimer);
+}
+
+void cpFastSampleStart() {
+    if (!sampleTimer)
+        sampleTimer = timerBegin(1, 80, true);
+    timerAttachInterrupt(sampleTimer, &sample_isr, true);
+    timerAlarmWrite(sampleTimer, CP_SAMPLE_OFFSET_US, false);
+    timerAlarmDisable(sampleTimer);
+
+    if (!ledcIsrHandle) {
+        ledc_isr_register(ledc_isr, nullptr, ESP_INTR_FLAG_IRAM, &ledcIsrHandle);
+        LEDC.int_clr.val = LEDC.int_st.val;
+    }
+}
+
+void cpFastSampleStop() {
+    if (ledcIsrHandle) {
+        esp_intr_disable(ledcIsrHandle);
+        ledcIsrHandle = nullptr;
+    }
+    if (sampleTimer)
+        timerAlarmDisable(sampleTimer);
 }
 
 uint16_t cpGetVoltageMv() { return cp_mv.load(std::memory_order_relaxed); }
