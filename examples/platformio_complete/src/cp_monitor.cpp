@@ -26,17 +26,30 @@ static char toLetter(CpSubState s) {
 
 static CpSubState mv2state(uint16_t mv) {
     uint16_t duty = cp_duty.load(std::memory_order_relaxed);
+    const uint16_t max_duty = (1u << CP_PWM_RES_BITS) - 1;
+    if (duty > max_duty)
+        duty = 0; // sanity check
+
     if (mv < CP_THR_1V_MV)
         return (mv < CP_THR_NEG_F_MV) ? CP_F : CP_E;
+
     if (mv > CP_THR_12V_MV)
         return CP_A;
-    if (mv > CP_THR_9V_MV)
-        return (duty == 0) ? CP_B1 : CP_B3;
-    if (mv > CP_THR_6V_MV) {
-        uint16_t pct = (duty * 100) >> CP_PWM_RES_BITS;
-        if (pct >= 3 && pct <= 7) return CP_B2;
-        return CP_C;
+
+    /* ---------- States B1/B2/B3 (V+ around 9 V) ----------------------- */
+    if (mv > CP_THR_9V_MV) {
+        uint16_t pct = (duty * 100) >> CP_PWM_RES_BITS; // 0-100 %
+        if (pct >= 3 && pct <= 7)
+            return CP_B2;      // digital communication request
+        if (duty == 0)
+            return CP_B1;      // vehicle present, no current request
+        return CP_B3;          // current request (>7 % duty)
     }
+
+    /* ---------- State C ------------------------------------------------ */
+    if (mv > CP_THR_6V_MV)
+        return CP_C;
+
     if (mv > CP_THR_3V_MV)
         return CP_D;
     return CP_E;

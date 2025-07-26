@@ -38,8 +38,16 @@ void cpPwmSetDuty(uint16_t duty_raw) {
 
 void cpPwmStop()
 {
+#if CP_IDLE_RELEASE
+    /* Hi-Z – rely on pull-up resistor to keep CP at +12 V */
+    ledcDetachPin(CP_PWM_OUT_PIN);
+    pinMode(CP_PWM_OUT_PIN, INPUT);
+#else
+    /* Keep the output driven HIGH, but mark that no PWM is active */
     constexpr uint16_t DUTY_FULL = (1u << CP_PWM_RES_BITS) - 1; // 100% duty
-    ledcWrite(PWM_CHANNEL, DUTY_FULL);   // drive CP to +12V rail
-    cpSetLastPwmDuty(DUTY_FULL);         // reflect actual pin level
+    ledcWrite(PWM_CHANNEL, DUTY_FULL);
+#endif
+    /* Tell the monitor that the PWM is off */
+    cpSetLastPwmDuty(0);
     pwmRunning = false;
 }
