@@ -1,0 +1,10 @@
+[submodule "lib/everest-cmake"]
+	path = lib/everest-cmake
+	url = https://github.com/EVerest/everest-cmake
+[submodule "lib/libcbv2g"]
+	path = lib/libcbv2g
+	url = https://github.com/EVerest/libcbv2g
+[submodule "lib/everest-core"]
+	path = lib/everest-core
+	url = https://github.com/EVerest/everest-core.git
+	branch = main
