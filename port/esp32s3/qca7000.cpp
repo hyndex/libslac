@@ -431,6 +431,8 @@ static bool send_atten_char_rsp(const SlacContext& ctx,
 static bool send_set_key_cnf(const SlacContext& ctx,
                              const uint8_t* dst,
                              const slac::messages::cm_set_key_req* req);
+static bool send_validate_cnf(const uint8_t* dst,
+                              const slac::messages::cm_validate_req* req);
 
 static bool send_start_atten_char(const SlacContext& ctx) {
     struct __attribute__((packed)) {
@@ -541,6 +543,30 @@ static bool send_set_key_cnf(const SlacContext& ctx,
     msg.cnf.prn = req->prn;
     msg.cnf.pmn = req->pmn;
     msg.cnf.cco_capability = req->cco_capability;
+    return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+}
+
+static bool send_validate_cnf(const uint8_t* dst,
+                              const slac::messages::cm_validate_req* req) {
+    struct __attribute__((packed)) {
+        ether_header eth;
+        struct {
+            uint8_t mmv;
+            uint16_t mmtype;
+        } hp;
+        slac::messages::cm_validate_cnf cnf;
+    } msg{};
+
+    memset(&msg, 0, sizeof(msg));
+    memcpy(msg.eth.ether_dhost, dst, ETH_ALEN);
+    memcpy(msg.eth.ether_shost, g_src_mac, ETH_ALEN);
+    msg.eth.ether_type = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
+    msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
+    msg.hp.mmtype = slac::htole16(slac::defs::MMTYPE_CM_VALIDATE |
+                                   slac::defs::MMTYPE_MODE_CNF);
+    msg.cnf.signal_type = req->signal_type;
+    msg.cnf.toggle_num = 0;
+    msg.cnf.result = slac::defs::CM_VALIDATE_CNF_NOT_REQUIRED;
     return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
 }
 
@@ -743,6 +769,9 @@ uint8_t qca7000getSlacResult() {
             const auto* req = reinterpret_cast<const slac::messages::cm_set_key_req*>(p + 3);
             send_set_key_cnf(g_slac_ctx, eth->ether_shost, req);
             g_fsm.handle_event(slac::SlacEvent::GotSetKeyReq);
+        } else if (mmtype == (slac::defs::MMTYPE_CM_VALIDATE | slac::defs::MMTYPE_MODE_REQ)) {
+            const auto* req = reinterpret_cast<const slac::messages::cm_validate_req*>(p + 3);
+            send_validate_cnf(eth->ether_shost, req);
         } else if (mmtype == (slac::defs::MMTYPE_CM_SLAC_MATCH | slac::defs::MMTYPE_MODE_REQ)) {
             const auto* req = reinterpret_cast<const slac::messages::cm_slac_match_req*>(p + 3);
             if (!memcmp(req->run_id, g_slac_ctx.run_id, sizeof(g_slac_ctx.run_id))) {
