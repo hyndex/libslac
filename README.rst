@@ -121,6 +121,14 @@ callback and periodically check ``link.fatal_error()`` when polling the
 driver. Call ``qca7000CheckAlive()`` roughly once per minute to
 confirm that the modem is still responsive.
 
+``Channel::read()`` and ``Channel::write()`` return a
+``slac::transport::LinkError`` describing the result.  Besides ``Ok`` and
+``Timeout`` the enumeration includes ``Transport`` for modem-level failures,
+``InvalidArgument`` when an invalid frame is supplied, ``InvalidLength`` for
+malformed packets and ``NoLink`` if the underlying ``Link`` is missing.  A
+``Transport`` or ``NoLink`` error usually indicates that the modem needs a
+reset while ``Timeout`` suggests retrying the operation.
+
 QCA7000 Configuration
 ---------------------
 

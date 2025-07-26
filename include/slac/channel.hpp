@@ -35,7 +35,7 @@ public:
     bool open();
     transport::LinkError read(slac::messages::HomeplugMessage& msg, int timeout);
     bool poll(slac::messages::HomeplugMessage& msg);
-    bool write(slac::messages::HomeplugMessage& msg, int timeout);
+    transport::LinkError write(slac::messages::HomeplugMessage& msg, int timeout);
 
     const std::string& get_error() const {
         return error;

@@ -33,7 +33,7 @@ Channel::~Channel() = default;
 transport::LinkError Channel::read(slac::messages::HomeplugMessage& msg, int timeout) {
     did_timeout = false;
     if (!link)
-        return transport::LinkError::Transport;
+        return transport::LinkError::NoLink;
 
     size_t out_len = 0;
     auto res = link->read(reinterpret_cast<uint8_t*>(msg.get_raw_message_ptr()),
@@ -47,7 +47,7 @@ transport::LinkError Channel::read(slac::messages::HomeplugMessage& msg, int tim
     }
 
     if (out_len < defs::MME_MIN_LENGTH || out_len > sizeof(messages::homeplug_message)) {
-        return transport::LinkError::Transport;
+        return transport::LinkError::InvalidLength;
     }
 
     msg.set_raw_msg_len(static_cast<int>(out_len));
@@ -74,6 +74,15 @@ bool Channel::poll(slac::messages::HomeplugMessage& msg) {
         case transport::LinkError::Transport:
             error = "Transport error";
             break;
+        case transport::LinkError::InvalidLength:
+            error = "Invalid frame length";
+            break;
+        case transport::LinkError::InvalidArgument:
+            error = "Invalid argument";
+            break;
+        case transport::LinkError::NoLink:
+            error = "No transport link";
+            break;
         default:
             error = "Link error";
             break;
@@ -90,17 +99,17 @@ bool Channel::poll(slac::messages::HomeplugMessage& msg) {
     return true;
 }
 
-bool Channel::write(slac::messages::HomeplugMessage& msg, int timeout) {
+transport::LinkError Channel::write(slac::messages::HomeplugMessage& msg, int timeout) {
     did_timeout = false;
 
     if (!link) {
         error = "No transport link";
-        return false;
+        return transport::LinkError::NoLink;
     }
 
     if (!msg.is_valid()) {
         error = "Invalid HomeplugMessage";
-        return false;
+        return transport::LinkError::InvalidArgument;
     }
 
     auto raw_msg_ether_shost = msg.get_src_mac();
@@ -111,10 +120,10 @@ bool Channel::write(slac::messages::HomeplugMessage& msg, int timeout) {
     if (!link->write(reinterpret_cast<const uint8_t*>(msg.get_raw_message_ptr()),
                      msg.get_raw_msg_len(), timeout)) {
         error = "Write failed";
-        return false;
+        return transport::LinkError::Transport;
     }
 
-    return true;
+    return transport::LinkError::Ok;
 }
 
 const uint8_t* Channel::get_mac_addr() {
