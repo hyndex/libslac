@@ -8,7 +8,7 @@ void     cpMonitorInit();
 void     cpLowRateStart(uint32_t period_ms = 5);
 void     cpLowRateStop();
 
-float    cpGetVoltageMv();
+uint16_t cpGetVoltageMv();
 CpSubState cpGetSubState();
 char     cpGetStateLetter();
 
