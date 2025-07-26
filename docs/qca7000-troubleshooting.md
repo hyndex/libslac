@@ -21,6 +21,18 @@ A wrong level on **GPIO2** forces legacy multi-CS mode and typically
 results in the modem returning `0x5555` on the first read. Measure these
 lines right after power-on to confirm the levels.
 
+### Floating GPIO2
+
+Without an external pull-up, the level on GPIO2 is undefined at power-up.
+Whichever weak pull (internal or leakage) wins decides whether the modem
+starts in burst or legacy mode. If the pin reads low and legacy mode is
+selected, every 32‑bit SPI transfer is split internally into two 16‑bit
+chunks. Drivers that keep CS low for 32 bits then read `0x5555` instead of
+the expected `0xAA55` and `hardReset()` fails. Even slight moisture or
+noise can flip the level, so behaviour may change between boards. Always
+strap GPIO2 high with a resistor or implement the legacy‑mode handshake
+as described in Qualcomm AN4 if a floating strap must be supported.
+
 ## 2. Confirm SPI Mode and Timing
 
 * Use **SPI mode 3** (CPOL=1, CPHA=1). A wrong edge yields `0x5555`.
