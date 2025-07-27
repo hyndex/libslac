@@ -137,3 +137,10 @@ bool cpDigitalCommRequested() {
     CpSubState s = cp_state.load(std::memory_order_relaxed);
     return s == CP_B2 || s == CP_B3;
 }
+
+// Provide the runtime CP state for SLAC match logging
+#include <slac/match_log.hpp>
+
+namespace slac {
+char slac_get_cp_state() { return cpGetStateLetter(); }
+}
