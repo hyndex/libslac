@@ -1,6 +1,7 @@
 #include "arduino_stubs.hpp"
 #include "port/esp32s3/qca7000.hpp"
 #include <slac/iso15118_consts.hpp>
+#include <slac/config.hpp>
 #include <cstdint>
 #include <atomic>
 extern uint32_t g_mock_millis;
@@ -147,8 +148,12 @@ static void handle_frame(const uint8_t* d, size_t l) {
             mock_result = 4;
         break;
     case 4:
-        if (mmtype == (slac::defs::MMTYPE_CM_VALIDATE | slac::defs::MMTYPE_MODE_REQ))
-            mock_result = 5;
+        if (mmtype == (slac::defs::MMTYPE_CM_VALIDATE | slac::defs::MMTYPE_MODE_REQ)) {
+            if (slac::validation_disabled() || qca7000CheckBcbToggle())
+                mock_result = 5;
+            else
+                mock_result = 0xFF;
+        }
         break;
     case 5:
         if (mmtype == (slac::defs::MMTYPE_CM_SLAC_MATCH | slac::defs::MMTYPE_MODE_REQ)) {
