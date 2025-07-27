@@ -79,6 +79,8 @@ bool qca7000setup(SPIClass* spi, int cs_pin, int rst_pin = PLC_SPI_RST_PIN);
 void qca7000teardown();
 bool qca7000ResetAndCheck();
 bool qca7000SoftReset();
+// Leave the current AVLN and reset internal state.
+bool qca7000LeaveAvln();
 uint16_t qca7000ReadInternalReg(uint16_t reg);
 bool qca7000ReadSignature(uint16_t* sig = nullptr, uint16_t* ver = nullptr);
 // Poll a few internal registers to verify that the modem is responsive.
