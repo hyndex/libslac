@@ -106,6 +106,13 @@ void qca7000SetIds(const uint8_t pev_id[slac::messages::PEV_ID_LEN],
 void qca7000SetNmk(const uint8_t nmk[slac::defs::NMK_LEN]);
 void qca7000SetMac(const uint8_t mac[ETH_ALEN]);
 const uint8_t* qca7000GetMac();
+
+enum class qca7000_region : uint8_t {
+    EU = 0x00,
+    NA = 0x01,
+};
+
+qca7000_region qca7000GetRegion();
 #ifdef ESP_PLATFORM
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
