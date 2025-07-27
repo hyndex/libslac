@@ -74,6 +74,8 @@ struct SlacContext {
     uint8_t num_groups{0};
     uint8_t pev_mac[ETH_ALEN]{};
     uint8_t retry_count{0};
+    uint8_t matched_mac[ETH_ALEN]{};
+    bool filter_active{false};
 };
 
 static FSMBuffer g_fsm_buf{};
@@ -873,6 +875,8 @@ struct WaitMatchState : public FSM::SimpleStateType {
         if (ev == slac::SlacEvent::GotMatchReq) {
             send_match_cnf(ctx);
             log_match(ctx);
+            memcpy(ctx.matched_mac, ctx.match_src_mac, ETH_ALEN);
+            ctx.filter_active = true;
             ctx.result = 6;
             return alloc.create_simple<IdleState>(ctx);
         }
@@ -896,6 +900,8 @@ bool qca7000startSlac() {
     g_slac_ctx.num_groups = 0;
     memset(&g_slac_ctx.match_req, 0, sizeof(g_slac_ctx.match_req));
     memset(g_slac_ctx.match_src_mac, 0, sizeof(g_slac_ctx.match_src_mac));
+    memset(g_slac_ctx.matched_mac, 0, sizeof(g_slac_ctx.matched_mac));
+    g_slac_ctx.filter_active = false;
 
     for (size_t i = 0; i < sizeof(g_slac_ctx.run_id); ++i)
         g_slac_ctx.run_id[i] = static_cast<uint8_t>(esp_random() & 0xFF);
@@ -922,6 +928,9 @@ uint8_t qca7000getSlacResult() {
             continue;
         const ether_header* eth = reinterpret_cast<const ether_header*>(d);
         if (eth->ether_type != htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY))
+            continue;
+        if (g_slac_ctx.filter_active &&
+            memcmp(eth->ether_shost, g_slac_ctx.matched_mac, ETH_ALEN) != 0)
             continue;
         const uint8_t* p = d + sizeof(ether_header);
         uint8_t mmv = p[0];
@@ -1171,6 +1180,8 @@ bool qca7000SoftReset() {
 bool qca7000LeaveAvln() {
     // Leaving the logical network is done by issuing a soft reset which
     // clears the modem state without toggling the CP line.
+    g_slac_ctx.filter_active = false;
+    memset(g_slac_ctx.matched_mac, 0, sizeof(g_slac_ctx.matched_mac));
     return qca7000SoftReset();
 }
 
