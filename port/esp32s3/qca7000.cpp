@@ -137,7 +137,9 @@ static qca7000_region g_region = qca7000_region::EU;
 void qca7000SetNmk(const uint8_t nmk[slac::defs::NMK_LEN]) {
     if (nmk) {
         memcpy(g_evse_nmk, nmk, sizeof(g_evse_nmk));
-        slac::utils::generate_nid_from_nmk(g_evse_nid, g_evse_nmk);
+        slac::utils::generate_nid_from_nmk(
+            g_evse_nid, g_evse_nmk,
+            slac::defs::NID_SECURITY_LEVEL_SIMPLE_CONNECT);
     } else {
         memset(g_evse_nmk, 0, sizeof(g_evse_nmk));
         memset(g_evse_nid, 0, sizeof(g_evse_nid));

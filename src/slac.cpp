@@ -43,7 +43,8 @@ void generate_nmk_hs(uint8_t nmk_hs[slac::defs::NMK_LEN], const char* plain_pass
     memcpy(nmk_hs, hash, slac::defs::NMK_LEN);
 }
 
-void generate_nid_from_nmk(uint8_t nid[8], const uint8_t nmk[slac::defs::NMK_LEN]) {
+void generate_nid_from_nmk(uint8_t nid[8], const uint8_t nmk[slac::defs::NMK_LEN],
+                           uint8_t level) {
     SHA256 sha256;
 
     // msb of least significant octet of NMK should be the leftmost bit
@@ -62,9 +63,10 @@ void generate_nid_from_nmk(uint8_t nid[8], const uint8_t nmk[slac::defs::NMK_LEN
     // use leftmost 52 bits of the hash output
     // left most bit should be bit 7 of the nid
     memcpy(nid, hash, 6); // (bits 52 - 5)
-    nid[6] = (slac::defs::NID_SECURITY_LEVEL_SIMPLE_CONNECT << slac::defs::NID_SECURITY_LEVEL_OFFSET) |
-             ((static_cast<uint8_t>(hash[6])) >> slac::defs::NID_MOST_SIGNIFANT_BYTE_SHIFT);
-    nid[7] = 0;
+    nid[6] = (level << slac::defs::NID_SECURITY_LEVEL_OFFSET) |
+             ((static_cast<uint8_t>(hash[6]) & 0xF0) >> slac::defs::NID_MOST_SIGNIFANT_BYTE_SHIFT);
+    if (slac::defs::NID_LEN == 8)
+        nid[7] = 0;
 }
 
 } // namespace utils
