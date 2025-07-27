@@ -1,6 +1,6 @@
-#include "qca7000.hpp"
+#include <port/esp32s3/qca7000.hpp>
 #include "../port_common.hpp"
-#include "port_config.hpp"
+#include <port/esp32s3/port_config.hpp>
 #include <slac/config.hpp>
 #ifdef ESP_LOGW
 #pragma push_macro("ESP_LOGW")
@@ -47,6 +47,10 @@ uint8_t myethtransmitbuffer[V2GTP_BUFFER_SIZE]{};
 size_t myethtransmitlen = 0;
 uint8_t myethreceivebuffer[V2GTP_BUFFER_SIZE]{};
 size_t myethreceivelen = 0;
+
+// Forward declarations
+static bool txFrame(const uint8_t* eth, size_t ethLen);
+void qca7000ProcessSlice(uint32_t max_us);
 
 static constexpr uint16_t SIG = 0xAA55;
 static constexpr uint16_t WRBUF_RST = 0x0C5B;
@@ -823,7 +827,7 @@ static bool send_match_cnf(const SlacContext& ctx) {
     info.tone_min = (ctx.num_groups ? min : 0);
     info.tone_max = (ctx.num_groups ? max : 0);
     info.tone_avg = (ctx.num_groups ? (sum / ctx.num_groups) : 0);
-    info.cp_state = slac_get_cp_state();
+    info.cp_state = slac::slac_get_cp_state();
 
     slac::slac_log_match(info);
 
