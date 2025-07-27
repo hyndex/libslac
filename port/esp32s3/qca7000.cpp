@@ -78,6 +78,7 @@ struct SlacContext {
     uint8_t retry_count{0};
     uint8_t matched_mac[ETH_ALEN]{};
     bool filter_active{false};
+    bool validate_success{false};
 };
 
 static FSMBuffer g_fsm_buf{};
@@ -761,6 +762,18 @@ static bool send_validate_cnf(const uint8_t* dst, const slac::messages::cm_valid
     msg.cnf.toggle_num = 0;
     msg.cnf.result = req->result;
 
+    if (g_slac_ctx.validate_count == 1) {
+        if (slac::validation_disabled()) {
+            msg.cnf.result = 0x04;
+            g_slac_ctx.validate_success = true;
+        } else {
+            bool ok = qca7000CheckBcbToggle();
+            msg.cnf.toggle_num = ok ? 1 : 0;
+            msg.cnf.result = ok ? 0x02 : 0x03;
+            g_slac_ctx.validate_success = ok;
+        }
+    }
+
     return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
 }
 
@@ -927,8 +940,12 @@ struct WaitValidateState : public FSM::SimpleStateType {
         if (ev == slac::SlacEvent::GotValidateReq) {
             ctx.timer = slac_millis();
             if (++ctx.validate_count >= 2) {
-                ctx.result = 5;
-                return alloc.create_simple<WaitMatchState>(ctx);
+                if (slac::validation_disabled() || ctx.validate_success) {
+                    ctx.result = 5;
+                    return alloc.create_simple<WaitMatchState>(ctx);
+                }
+                ctx.result = 0xFF;
+                return alloc.create_simple<IdleState>(ctx);
             }
             return FSM::StateAllocatorType::HANDLED_INTERNALLY;
         }
@@ -978,6 +995,7 @@ bool qca7000startSlac() {
     memset(g_slac_ctx.match_src_mac, 0, sizeof(g_slac_ctx.match_src_mac));
     memset(g_slac_ctx.matched_mac, 0, sizeof(g_slac_ctx.matched_mac));
     g_slac_ctx.filter_active = false;
+    g_slac_ctx.validate_success = false;
 
     for (size_t i = 0; i < sizeof(g_slac_ctx.run_id); ++i)
         g_slac_ctx.run_id[i] = static_cast<uint8_t>(esp_random() & 0xFF);
