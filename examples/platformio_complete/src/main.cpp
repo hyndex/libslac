@@ -14,7 +14,8 @@
 extern void qca7000ProcessSlice(uint32_t max_us);
 
 // Default MAC address for the modem. Adjust as required.
-static const uint8_t MY_MAC[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+uint8_t g_mac_addr[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+bool g_use_random_mac = false;
 static const uint8_t EVSE_NMK[slac::defs::NMK_LEN] = {
     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
     0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F};
@@ -41,6 +42,32 @@ static void hlc_stop() {
     }
 }
 
+static void generate_random_mac() {
+#ifdef RANDOM_MAC
+    g_use_random_mac = true;
+#endif
+    if (!g_use_random_mac)
+        return;
+    g_mac_addr[0] = 0x02; // locally administered, unicast
+    for (int i = 1; i < ETH_ALEN; ++i)
+        g_mac_addr[i] = static_cast<uint8_t>(esp_random() & 0xFF);
+}
+
+static void check_serial_flag() {
+    Serial.println("Press 'R' for random MAC");
+    uint32_t start = millis();
+    while (millis() - start < 3000) {
+        if (Serial.available()) {
+            char c = Serial.read();
+            if (c == 'R' || c == 'r')
+                g_use_random_mac = true;
+            break;
+        }
+        delay(10);
+    }
+    generate_random_mac();
+}
+
 static void logTask(void*) {
     const TickType_t period = pdMS_TO_TICKS(1000);
     static char line[128];
@@ -61,6 +88,7 @@ void setup() {
     Serial.begin(115200);
     delay(4000);
     Serial.println("Starting SLAC modem...");
+    check_serial_flag();
     pinMode(LOCK_FB_PIN, INPUT_PULLUP);
     pinMode(CONTACTOR_FB_PIN, INPUT_PULLUP);
     pinMode(ISOLATION_OK_PIN, INPUT_PULLUP);
@@ -75,7 +103,7 @@ void setup() {
     Serial.println("Starting SPI");
     pinMode(PLC_INT_PIN, INPUT);
     attachInterrupt(PLC_INT_PIN, plc_isr, FALLING);
-    qca7000_config cfg{&SPI, PLC_SPI_CS_PIN, PLC_SPI_RST_PIN, MY_MAC};
+    qca7000_config cfg{&SPI, PLC_SPI_CS_PIN, PLC_SPI_RST_PIN, g_mac_addr};
     Serial.println("Starting QCA7000 Link ");
     static slac::port::Qca7000Link link(cfg);
     link.set_error_callback([](Qca7000ErrorStatus, void*) {
@@ -110,6 +138,8 @@ void loop() {
         Serial.println("[PLC] link lost");
         hlc_stop();
         qca7000LeaveAvln();
+        if (g_use_random_mac)
+            qca7000SetMac(g_mac_addr);
         if (qca7000startSlac())
             g_slac_ts.store(millis(), std::memory_order_relaxed);
     }
@@ -124,6 +154,8 @@ void loop() {
         g_slac_state.load(std::memory_order_relaxed) != 5) {
         if (millis() - g_slac_ts.load(std::memory_order_relaxed) > 60000) {
             Serial.println("Restarting SLAC handshake");
+            if (g_use_random_mac)
+                qca7000SetMac(g_mac_addr);
             if (!qca7000startSlac())
                 Serial.println("startSlac failed");
             g_slac_ts.store(millis(), std::memory_order_relaxed);
