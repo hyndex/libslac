@@ -1,7 +1,7 @@
-#include "qca7000_link.hpp"
+#include "../../include/port/esp32s3/qca7000_link.hpp"
 #include "../port_common.hpp"
-#include "port_config.hpp"
-#include "qca7000.hpp"
+#include "../../include/port/esp32s3/port_config.hpp"
+#include "../../include/port/esp32s3/qca7000.hpp"
 #include <cstring>
 
 namespace slac {
