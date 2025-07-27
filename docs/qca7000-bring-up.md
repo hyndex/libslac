@@ -35,10 +35,19 @@ Running `examples/platformio_complete` on an ESP32-S3 yields output similar to:
 ```text
 Starting SLAC modem...
 Starting SPI
-Starting QCA7000 Link 
+Starting QCA7000 Link
 ```
 
 If `channel.open()` fails the example prints `Failed to open SLAC channel, aborting` and stays in an error loop.
+
+## Region Codes
+
+The modem's PIB stores a byte identifying the regulatory region. Common values are:
+
+| Code | Region |
+|-----:|-------|
+| `0x00` | Europe (CE bandplan) |
+| `0x01` | North America (FCC bandplan) |
 
 ## Logic-Analyser Traces
 

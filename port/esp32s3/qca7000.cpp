@@ -131,6 +131,7 @@ void qca7000SetIds(const uint8_t pev_id[slac::messages::PEV_ID_LEN],
 
 static uint8_t g_evse_nmk[slac::defs::NMK_LEN]{};
 static uint8_t g_evse_nid[slac::defs::NID_LEN]{};
+static qca7000_region g_region = qca7000_region::EU;
 
 void qca7000SetNmk(const uint8_t nmk[slac::defs::NMK_LEN]) {
     if (nmk) {
@@ -379,6 +380,59 @@ bool qca7000CheckAlive() {
     return sig == SIG && (cause & SPI_INT_CPU_ON);
 }
 
+static bool read_region_code(qca7000_region* region) {
+    struct __attribute__((packed)) {
+        ether_header eth;
+        struct {
+            uint8_t mmv;
+            uint16_t mmtype;
+        } hp;
+        slac::messages::qualcomm::op_attr_req req;
+    } req_msg{};
+
+    memset(&req_msg, 0, sizeof(req_msg));
+    memset(req_msg.eth.ether_dhost, 0xFF, ETH_ALEN);
+    memcpy(req_msg.eth.ether_shost, qca7000GetMac(), ETH_ALEN);
+    req_msg.eth.ether_type = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
+    req_msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
+    req_msg.hp.mmtype =
+        slac::htole16(slac::defs::qualcomm::MMTYPE_OP_ATTR |
+                      slac::defs::MMTYPE_MODE_REQ);
+
+    if (!txFrame(reinterpret_cast<uint8_t*>(&req_msg), sizeof(req_msg)))
+        return false;
+
+    uint32_t start = slac_millis();
+    uint8_t buf[V2GTP_BUFFER_SIZE];
+    while (slac_millis() - start < 100) {
+        qca7000ProcessSlice(1000);
+        size_t got = spiQCA7000checkForReceivedData(buf, sizeof(buf));
+        if (!got)
+            continue;
+        if (got < sizeof(ether_header) + 3)
+            continue;
+        const ether_header* eth = reinterpret_cast<const ether_header*>(buf);
+        if (eth->ether_type != htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY))
+            continue;
+        const uint8_t* p = buf + sizeof(ether_header);
+        uint8_t mmv = p[0];
+        uint16_t mmtype = slac::le16toh(*reinterpret_cast<const uint16_t*>(p + 1));
+        if (mmv != static_cast<uint8_t>(slac::defs::MMV::AV_1_0))
+            continue;
+        if (mmtype == (slac::defs::qualcomm::MMTYPE_OP_ATTR |
+                        slac::defs::MMTYPE_MODE_CNF)) {
+            const auto* cnf =
+                reinterpret_cast<const slac::messages::qualcomm::op_attr_cnf*>(p + 3);
+            if (cnf->success == 0) {
+                *region = (cnf->line_freq_zc == 0x01) ? qca7000_region::NA
+                                                     : qca7000_region::EU;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 #ifdef LIBSLAC_TESTING
 bool txFrame(const uint8_t* eth, size_t ethLen) {
 #else
@@ -506,6 +560,10 @@ const uint8_t* qca7000GetMac() {
     return g_src_mac;
 }
 
+qca7000_region qca7000GetRegion() {
+    return g_region;
+}
+
 static bool send_start_atten_char(const SlacContext& ctx);
 static bool send_mnbc_sound(const SlacContext& ctx, uint8_t remaining);
 static bool send_atten_char_rsp(const SlacContext& ctx, const uint8_t* dst,
@@ -529,7 +587,10 @@ static bool send_parm_req(const SlacContext& ctx) {
     msg.eth.ether_type = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
     msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
     msg.hp.mmtype = slac::htole16(slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_REQ);
-    msg.req.application_type = slac::defs::COMMON_APPLICATION_TYPE;
+    if (g_region == qca7000_region::NA)
+        msg.req.application_type = 0x01;
+    else
+        msg.req.application_type = 0x00;
     msg.req.security_type = slac::defs::COMMON_SECURITY_TYPE;
     memcpy(msg.req.run_id, ctx.run_id, sizeof(ctx.run_id));
 
@@ -1154,7 +1215,8 @@ bool qca7000setup(SPIClass* bus, int csPin, int rstPin) {
     for (int attempt = 1; attempt <= QCA7000_MAX_RETRIES; ++attempt) {
         ESP_LOGI(PLC_TAG, "Setup attempt %d", attempt);
         if (hardReset()) {
-            ESP_LOGI(PLC_TAG, "QCA7000 ready");
+            read_region_code(&g_region);
+            ESP_LOGI(PLC_TAG, "QCA7000 ready (region %u)", static_cast<unsigned>(g_region));
             return true;
         }
         ESP_LOGE(PLC_TAG, "hardReset failed – modem missing");
