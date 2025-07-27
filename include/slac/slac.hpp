@@ -112,7 +112,8 @@ const uint8_t BROADCAST_MAC_ADDRESS[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
 namespace utils {
 void generate_nmk_hs(uint8_t nmk_hs[slac::defs::NMK_LEN], const char* plain_password, int password_len);
-void generate_nid_from_nmk(uint8_t nid[8], const uint8_t nmk[slac::defs::NMK_LEN]);
+void generate_nid_from_nmk(uint8_t nid[8], const uint8_t nmk[slac::defs::NMK_LEN],
+                           uint8_t level = defs::NID_SECURITY_LEVEL_SIMPLE_CONNECT);
 } // namespace utils
 
 namespace messages {
