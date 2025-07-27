@@ -39,9 +39,10 @@ Install PlatformIO via pip:
 
    pip install platformio
 
-The unit tests rely on the system provided GoogleTest libraries.  Make
-sure ``libgtest-dev`` (or an equivalent package) is installed before
-running ``run_tests.sh``:
+The unit tests rely on the system provided GoogleTest libraries.  When
+missing, ``run_tests.sh`` attempts to install ``libgtest-dev`` using
+``apt``.  If ``apt`` is not available install the package manually
+before running ``run_tests.sh``:
 
 .. code-block:: bash
 
@@ -264,10 +265,10 @@ Running Unit Tests
 ------------------
 
 The ``run_tests.sh`` script builds and executes the unit tests.  It
-links against the system provided GoogleTest libraries and therefore
-requires the ``libgtest-dev`` package (or an equivalent package provided
-by your distribution).  On Debian/Ubuntu based systems install the
-dependency via ``apt`` before running the script:
+links against the system provided GoogleTest libraries.  When the
+headers are missing, the script attempts to install the
+``libgtest-dev`` package via ``apt``.  If ``apt`` is unavailable,
+install the dependency manually before running the script.  For example:
 
 .. code-block:: bash
 

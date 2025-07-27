@@ -5,8 +5,13 @@ set -e
 # the system provided gtest development package (e.g. ``libgtest-dev`` on
 # Debian/Ubuntu).
 if [ ! -f /usr/include/gtest/gtest.h ] && [ ! -f /usr/local/include/gtest/gtest.h ]; then
-    echo "GoogleTest headers not found. Please install libgtest-dev before running tests." >&2
-    exit 1
+    echo "GoogleTest headers not found. Attempting to install libgtest-dev..." >&2
+    if command -v apt-get >/dev/null 2>&1; then
+        sudo apt-get update && sudo apt-get install -y libgtest-dev
+    else
+        echo "apt-get not available. Please install libgtest-dev manually." >&2
+        exit 1
+    fi
 fi
 
 CXXFLAGS="-std=c++17 -DNDEBUG -DLIBSLAC_TESTING -DARDUINO -Iinclude -I3rd_party -I3rd_party/fsm -Iport/esp32s3 -Iport -Itests -I. -Wduplicated-cond -Wduplicated-branches"
