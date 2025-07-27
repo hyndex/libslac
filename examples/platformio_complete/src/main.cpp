@@ -133,8 +133,10 @@ void loop() {
         // Handle incoming SLAC messages here
     }
 
-    // Detect PLC link loss while CP duty cycle > 5% (X2)
-    if (cpGetLastPwmDuty() > CP_PWM_DUTY_5PCT && !qca7000CheckAlive()) {
+    // Detect PLC link loss only when digital comms are active
+    if (cpPwmIsRunning() &&
+        cpDigitalCommRequested() &&
+        !qca7000CheckAlive()) {
         Serial.println("[PLC] link lost");
         hlc_stop();
         qca7000LeaveAvln();
