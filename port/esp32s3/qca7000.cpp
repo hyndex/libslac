@@ -26,6 +26,7 @@ static inline uint32_t esp_random() {
 #include <slac/match_log.hpp>
 #include <cstdio>
 #include <string.h>
+#include <new>
 
 #ifdef htole16
 #undef htole16
@@ -166,9 +167,9 @@ struct RxEntry {
     size_t len;
     uint8_t data[V2GTP_BUFFER_SIZE];
 };
-static constexpr uint8_t RING_SIZE = 8;
+static constexpr uint8_t RING_SIZE = CONFIG_RX_RING_SIZE;
 static constexpr uint8_t RING_MASK = RING_SIZE - 1;
-static RxEntry ring[RING_SIZE];
+static RxEntry* ring = nullptr;
 static std::atomic<uint8_t> head{0}, tail{0};
 
 inline bool ringEmpty() {
@@ -176,6 +177,8 @@ inline bool ringEmpty() {
 }
 
 inline void ringPush(const uint8_t* d, size_t l) {
+    if (!ring)
+        return;
     if (l > V2GTP_BUFFER_SIZE)
         l = V2GTP_BUFFER_SIZE;
     auto h = head.load(std::memory_order_acquire);
@@ -191,6 +194,8 @@ inline void ringPush(const uint8_t* d, size_t l) {
 }
 
 inline bool ringPop(const uint8_t** d, size_t* l) {
+    if (!ring)
+        return false;
     auto t = tail.load(std::memory_order_acquire);
     if (head.load(std::memory_order_acquire) == t)
         return false;
@@ -1194,6 +1199,11 @@ void qca7000Process() {
 
 bool qca7000setup(SPIClass* bus, int csPin, int rstPin) {
     ESP_LOGI(PLC_TAG, "QCA7000 setup: bus=%p CS=%d RST=%d", bus, csPin, rstPin);
+    if (!ring) {
+        ring = new (std::nothrow) RxEntry[RING_SIZE];
+        head.store(0, std::memory_order_relaxed);
+        tail.store(0, std::memory_order_relaxed);
+    }
     g_spi = bus;
     g_cs = csPin;
     g_rst = rstPin;
@@ -1236,6 +1246,10 @@ void qca7000teardown() {
         g_spi->end();
 #endif
     }
+    delete[] ring;
+    ring = nullptr;
+    head.store(0, std::memory_order_relaxed);
+    tail.store(0, std::memory_order_relaxed);
     g_spi = nullptr;
 }
 
