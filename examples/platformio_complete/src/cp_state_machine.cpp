@@ -4,6 +4,9 @@
 #include <atomic>
 #include <port/esp32s3/qca7000.hpp>
 
+extern bool g_use_random_mac;
+extern uint8_t g_mac_addr[ETH_ALEN];
+
 static std::atomic<EvseStage> stage{EVSE_IDLE_A};
 static std::atomic<uint32_t> t_stage{0};
 
@@ -52,6 +55,8 @@ static void handleIdleA() {
 
 static void handleInitialiseB1() {
     if (t_stage.load(std::memory_order_relaxed) == 0) {
+        if (g_use_random_mac)
+            qca7000SetMac(g_mac_addr);
         if (!qca7000startSlac()) {
             stageEnter(EVSE_IDLE_A);
             return;

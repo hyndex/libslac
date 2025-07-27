@@ -1,6 +1,7 @@
 #pragma once
 #include <Arduino.h>
 #include <atomic>
+#include <port/esp32s3/ethernet_defs.hpp>
 #include "cp_monitor.h"
 
 enum EvseStage : uint8_t {
@@ -21,3 +22,5 @@ const char* evseStageName(EvseStage);
 
 extern std::atomic<uint8_t> g_slac_state;
 extern std::atomic<uint32_t> g_slac_ts;
+extern bool g_use_random_mac;
+extern uint8_t g_mac_addr[ETH_ALEN];
