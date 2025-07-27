@@ -5,6 +5,8 @@
 static bool pwmRunning = false;
 static constexpr uint8_t PWM_CHANNEL = 0;
 
+bool cpPwmIsRunning() { return pwmRunning; }
+
 void cpPwmInit() {
     ledcSetup(PWM_CHANNEL, CP_PWM_FREQ_HZ, CP_PWM_RES_BITS);
     ledcAttachPin(CP_PWM_OUT_PIN, PWM_CHANNEL);
