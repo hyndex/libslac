@@ -23,6 +23,7 @@ static inline uint32_t esp_random() {
 #include <slac/fsm.hpp>
 #include <slac/iso15118_consts.hpp>
 #include <slac/slac.hpp>
+#include <slac/match_log.hpp>
 #include <cstdio>
 #include <string.h>
 
@@ -722,22 +723,30 @@ static bool send_match_cnf(const SlacContext& ctx) {
     memcpy(msg.cnf.nid, g_evse_nid, sizeof(msg.cnf.nid));
     memcpy(msg.cnf.nmk, g_evse_nmk, sizeof(msg.cnf.nmk));
 
-    return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
-}
+    bool ok = txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
 
-static void log_match(const SlacContext& ctx) {
-    char mac[18];
-    snprintf(mac, sizeof(mac), "%02X:%02X:%02X:%02X:%02X:%02X",
-             ctx.match_req.pev_mac[0], ctx.match_req.pev_mac[1], ctx.match_req.pev_mac[2],
-             ctx.match_req.pev_mac[3], ctx.match_req.pev_mac[4], ctx.match_req.pev_mac[5]);
+    slac::MatchLogInfo info{};
+    memcpy(info.pev_mac, ctx.match_req.pev_mac, ETH_ALEN);
+    memcpy(info.evse_mac, ctx.match_req.evse_mac, ETH_ALEN);
+    memcpy(info.nmk, g_evse_nmk, sizeof(info.nmk));
 
-    char nid[slac::defs::NID_LEN * 2 + 1];
-    for (size_t i = 0; i < slac::defs::NID_LEN; ++i)
-        sprintf(&nid[i * 2], "%02X", g_evse_nid[i]);
+    uint8_t min = 0xFF, max = 0, sum = 0;
+    for (uint8_t i = 0; i < ctx.num_groups && i < slac::defs::AAG_LIST_LEN; ++i) {
+        uint8_t v = ctx.atten_sum[i] / slac::defs::C_EV_MATCH_MNBC;
+        if (v < min)
+            min = v;
+        if (v > max)
+            max = v;
+        sum += v;
+    }
+    info.tone_min = (ctx.num_groups ? min : 0);
+    info.tone_max = (ctx.num_groups ? max : 0);
+    info.tone_avg = (ctx.num_groups ? (sum / ctx.num_groups) : 0);
+    info.cp_state = slac_get_cp_state();
 
-    ESP_LOGI(PLC_TAG, "SLAC MATCH OK");
-    ESP_LOGI(PLC_TAG, "  PEV_MAC: %s", mac);
-    ESP_LOGI(PLC_TAG, "  NID    : %s", nid);
+    slac::slac_log_match(info);
+
+    return ok;
 }
 
 // FSM state implementations
@@ -874,7 +883,6 @@ struct WaitMatchState : public FSM::SimpleStateType {
     fsm::states::HandleEventResult handle_event(FSM::StateAllocatorType& alloc, slac::SlacEvent ev) override {
         if (ev == slac::SlacEvent::GotMatchReq) {
             send_match_cnf(ctx);
-            log_match(ctx);
             memcpy(ctx.matched_mac, ctx.match_src_mac, ETH_ALEN);
             ctx.filter_active = true;
             ctx.result = 6;
