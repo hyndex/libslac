@@ -518,15 +518,24 @@ static void fetchRx() {
         g_spi->endTransaction();
 
         const uint8_t* p = buf + 2;
-        uint32_t len = (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+        uint32_t len = (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
+                        ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
         if (len != requested) {
-            ESP_LOGE(PLC_TAG, "RX len mismatch: req=%u got=%u", requested, len);
-            break;
+            /* Some QCA7000 firmware versions report LEN without counting the
+             * 4-byte field itself (see QCA7000 SPI guide). Accept this case by
+             * adjusting the payload length. */
+            if (len + 4 == requested)
+                len = requested;
+            else {
+                ESP_LOGE(PLC_TAG, "RX len mismatch: req=%u got=%u", requested,
+                         len);
+                break;
+            }
         }
         if (memcmp(p + 4, "\xAA\xAA\xAA\xAA", 4) != 0)
             break;
         uint16_t fl = slac::le16toh(static_cast<uint16_t>((p[9] << 8) | p[8]));
-        if (fl > avail - RX_HDR - FTR_LEN)
+        if (fl > len - RX_HDR - FTR_LEN)
             break;
         if (p[RX_HDR + fl] != 0x55 || p[RX_HDR + fl + 1] != 0x55)
             break;
