@@ -100,3 +100,19 @@ the analogue front-end may be shorted or wired incorrectly.
 
 Following this checklist usually resolves bring-up problems and lets you
 open the SLAC channel successfully.
+
+## 8. RX len mismatch Errors
+
+Persistent "RX len mismatch" errors in the log indicate that the modem
+and host no longer agree on the SPI framing. Noise or missing bytes can
+break the length field so subsequent reads return garbage. The driver
+resets the QCA7000 via `qca7000ResetAndCheck()` and then checks the
+`MULTI_CS` bit in `SPI_REG_SPI_CONFIG` to confirm burst mode.
+
+```cpp
+qca7000ResetAndCheck();
+uint16_t cfg = qca7000ReadInternalReg(SPI_REG_SPI_CONFIG);
+if (cfg & QCASPI_MULTI_CS_BIT) {
+    // device started in legacy mode – verify GPIO2 strap
+}
+```
