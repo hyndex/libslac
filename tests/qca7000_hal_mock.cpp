@@ -116,13 +116,24 @@ void fetchRx() {
 
     uint32_t len = (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
                     ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
-    if (len != avail || memcmp(p + 4, "\xAA\xAA\xAA\xAA", 4) != 0) {
+    bool len_excludes_hdr = false;
+    if (len != avail) {
+        if (len + 4 == avail) {
+            len_excludes_hdr = true;
+        } else {
+            qca7000SoftReset();
+            spi_read_len = 0;
+            return;
+        }
+    }
+    if (memcmp(p + 4, "\xAA\xAA\xAA\xAA", 4) != 0) {
         qca7000SoftReset();
         spi_read_len = 0;
         return;
     }
 
-    uint16_t fl = slac::le16toh(static_cast<uint16_t>((p[9] << 8) | p[8]));
+    uint16_t fl = len_excludes_hdr ? static_cast<uint16_t>(len - 10)
+                                   : slac::le16toh(static_cast<uint16_t>((p[9] << 8) | p[8]));
     if (fl > avail - RX_HDR - FTR_LEN) {
         qca7000SoftReset();
         spi_read_len = 0;

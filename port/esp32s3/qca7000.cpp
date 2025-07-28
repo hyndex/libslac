@@ -540,17 +540,24 @@ static void fetchRx() {
         g_spi->endTransaction();
 
         const uint8_t* p = buf;
-        uint32_t len = (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+        uint32_t len = (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
+                        ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+        bool len_excludes_hdr = false;
         if (len != requested) {
-            ESP_LOGE(PLC_TAG, "RX len mismatch: req=%u got=%u", requested, len);
-            handleRxError("length mismatch");
-            break;
+            if (len + 4 == requested) {
+                len_excludes_hdr = true;
+            } else {
+                ESP_LOGE(PLC_TAG, "RX len mismatch: req=%u got=%u", requested, len);
+                handleRxError("length mismatch");
+                break;
+            }
         }
         if (memcmp(p + 4, "\xAA\xAA\xAA\xAA", 4) != 0) {
             handleRxError("bad SOF");
             break;
         }
-        uint16_t fl = slac::le16toh(static_cast<uint16_t>((p[9] << 8) | p[8]));
+        uint16_t fl = len_excludes_hdr ? static_cast<uint16_t>(len - 10)
+                                       : slac::le16toh(static_cast<uint16_t>((p[9] << 8) | p[8]));
         if (fl > avail - RX_HDR - FTR_LEN) {
             handleRxError("invalid FL");
             break;
