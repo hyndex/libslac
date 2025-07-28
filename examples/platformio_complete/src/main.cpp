@@ -93,16 +93,8 @@ void setup() {
     pinMode(CONTACTOR_FB_PIN, INPUT_PULLUP);
     pinMode(ISOLATION_OK_PIN, INPUT_PULLUP);
 
-    cpPwmInit();
-    cpMonitorInit();
-    cpLowRateStart();
-    evseStateMachineInit();
-    xTaskCreatePinnedToCore(evseStateMachineTask, "evseSM", 4096, nullptr, 5, nullptr, 1);
-    xTaskCreatePinnedToCore(logTask, "log", 4096, nullptr, 1, nullptr, 1);
     SPI.begin(48 /*SCK*/, 21 /*MISO*/, 47 /*MOSI*/, -1);
     Serial.println("Starting SPI");
-    pinMode(PLC_INT_PIN, INPUT);
-    attachInterrupt(PLC_INT_PIN, plc_isr, FALLING);
     qca7000_config cfg{&SPI, PLC_SPI_CS_PIN, PLC_SPI_RST_PIN, g_mac_addr};
     Serial.println("Starting QCA7000 Link ");
     static slac::port::Qca7000Link link(cfg);
@@ -118,7 +110,16 @@ void setup() {
         while (true)
             delay(1000);
     }
+    pinMode(PLC_INT_PIN, INPUT);
+    attachInterrupt(PLC_INT_PIN, plc_isr, FALLING);
     qca7000SetNmk(EVSE_NMK);
+
+    cpPwmInit();
+    cpMonitorInit();
+    cpLowRateStart();
+    evseStateMachineInit();
+    xTaskCreatePinnedToCore(evseStateMachineTask, "evseSM", 4096, nullptr, 5, nullptr, 1);
+    xTaskCreatePinnedToCore(logTask, "log", 4096, nullptr, 1, nullptr, 1);
 
 }
 

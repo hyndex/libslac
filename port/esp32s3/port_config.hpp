@@ -46,8 +46,15 @@
 #define QCA7000_MAX_RETRIES 3
 #endif
 
+#ifndef CONFIG_RX_RING_SIZE
+#define CONFIG_RX_RING_SIZE 8
+#endif
+
 #ifndef PLC_PWR_EN_PIN
 #define PLC_PWR_EN_PIN -1
+#endif
+#ifndef PLC_INT_PIN
+#define PLC_INT_PIN -1
 #endif
 
 #ifndef PLC_SPI_CS_PIN
