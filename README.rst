@@ -68,6 +68,24 @@ to verify a working setup.  The configuration is provided under the
 
    pio run -e esp32s3
 
+Control Pilot Monitoring
+-----------------------
+
+The example firmware samples the Control Pilot voltage with the built‑in
+ADC.  By default a timer triggers a one‑shot conversion once per PWM
+cycle.  The timer is configured as one‑shot and fires
+``CP_SAMPLE_OFFSET_US`` microseconds after the rising edge of the PWM
+signal.  This captures the peak of the positive plateau and updates the
+library's Control Pilot state.
+
+For higher accuracy a DMA based peak detection mode is available.  Set
+``CP_USE_DMA_ADC=1`` in ``cp_config.h`` to enable the continuous ADC
+driver.  A timer interrupt then reads a small ring buffer and selects the
+maximum sample.
+
+After changing any of these options run ``platformio run`` to verify that
+the project still builds correctly.
+
 Platform Limitations
 --------------------
 
