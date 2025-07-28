@@ -1226,6 +1226,8 @@ static void process_cause(uint16_t cause) {
 }
 
 void qca7000ProcessSlice(uint32_t max_us) {
+    if (g_sleeping)
+        return;
     uint32_t t0 = get_us();
     uint16_t loops = 0;
 
@@ -1245,6 +1247,8 @@ void qca7000ProcessSlice(uint32_t max_us) {
 }
 
 void qca7000Process() {
+    if (g_sleeping)
+        return;
     if (qca7000CheckBcbToggle())
         qca7000Wake();
     qca7000ProcessSlice(500);
