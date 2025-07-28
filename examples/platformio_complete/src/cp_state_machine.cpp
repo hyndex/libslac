@@ -125,7 +125,6 @@ static void handlePowerDown() {
 static void handleUnlockB1() {
     cpPwmStart(CP_PWM_DUTY_5PCT); // hold 9V while waiting for unplug
     if (cpGetSubState() == CP_A) {
-        qca7000Sleep();
         stageEnter(EVSE_IDLE_A);
     }
 }
