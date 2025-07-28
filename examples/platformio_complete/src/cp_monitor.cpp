@@ -1,5 +1,6 @@
 #include "cp_monitor.h"
 #include <atomic>
+#include <algorithm>
 #include <driver/ledc.h>
 #include <driver/timer.h>
 #include <esp_intr_alloc.h>
@@ -14,9 +15,28 @@
 static hw_timer_t* adcTimer = nullptr;   // low rate timer
 static hw_timer_t* sampleTimer = nullptr; // high precision sample timer
 static intr_handle_t ledcIsrHandle = nullptr;
+
+static void IRAM_ATTR updateSampleOffset(uint16_t duty_raw)
+{
+    if (!sampleTimer)
+        return;
+    uint32_t high_us = (1000000UL / CP_PWM_FREQ_HZ) *
+                       duty_raw / (1UL << CP_PWM_RES_BITS);
+    timerAlarmWrite(sampleTimer, high_us / 2, false);
+}
 static std::atomic<uint16_t> cp_mv{0};
 static std::atomic<uint16_t> cp_duty{0};
 static std::atomic<CpSubState> cp_state{CP_A};
+static CpSubState prev_state1 = CP_A;
+static CpSubState prev_state2 = CP_A;
+
+static inline void IRAM_ATTR update_state(CpSubState new_state)
+{
+    if (new_state == prev_state1 && new_state == prev_state2)
+        cp_state.store(new_state, std::memory_order_relaxed);
+    prev_state2 = prev_state1;
+    prev_state1 = new_state;
+}
 #if CP_USE_DMA_ADC
 static adc_unit_t cp_unit = ADC_UNIT_1;
 static adc_channel_t cp_channel = 0;
@@ -71,22 +91,24 @@ static CpSubState mv2state(uint16_t mv) {
 }
 
 static void IRAM_ATTR onAdc() {
-    uint16_t vmax = 0;
-    const uint8_t N = 8;
-    for (uint8_t i = 0; i < N; ++i) {
-        uint16_t v = analogReadMilliVolts(CP_READ_ADC_PIN);
-        if (v > vmax)
-            vmax = v;
-    }
-    cp_mv.store(vmax, std::memory_order_relaxed);
-    cp_state.store(mv2state(vmax), std::memory_order_relaxed);
+    uint16_t s[3];
+    s[0] = analogReadMilliVolts(CP_READ_ADC_PIN);
+    s[1] = analogReadMilliVolts(CP_READ_ADC_PIN);
+    s[2] = analogReadMilliVolts(CP_READ_ADC_PIN);
+    // simple insertion sort for 3 values
+    if (s[1] < s[0]) std::swap(s[0], s[1]);
+    if (s[2] < s[1]) std::swap(s[1], s[2]);
+    if (s[1] < s[0]) std::swap(s[0], s[1]);
+    uint16_t med = s[1];
+    cp_mv.store(med, std::memory_order_relaxed);
+    update_state(mv2state(med));
 }
 
 static void IRAM_ATTR sample_isr() {
     timerAlarmDisable(sampleTimer);            // one-shot
     uint16_t v = adc_oneshot_read_inline();    // IRAM-safe helper
     cp_mv.store(v, std::memory_order_relaxed);
-    cp_state.store(mv2state(v), std::memory_order_relaxed);
+    update_state(mv2state(v));
 }
 
 #if CP_USE_DMA_ADC
@@ -107,7 +129,7 @@ static void IRAM_ATTR dma_timer_isr() {
             vmax = dma_ring[i];
     uint16_t mv = raw_to_mv(vmax);
     cp_mv.store(mv, std::memory_order_relaxed);
-    cp_state.store(mv2state(mv), std::memory_order_relaxed);
+    update_state(mv2state(mv));
 }
 #endif
 
@@ -142,12 +164,14 @@ void cpLowRateStop() {
         timerAlarmDisable(adcTimer);
 }
 
+#if !CP_USE_DMA_ADC
 void cpFastSampleStart() {
     if (!sampleTimer)
         sampleTimer = timerBegin(1, 80, true);
     timerAttachInterrupt(sampleTimer, &sample_isr, true);
-    timerAlarmWrite(sampleTimer, CP_SAMPLE_OFFSET_US, false);
+    timerAlarmWrite(sampleTimer, 0, false);
     timerAlarmDisable(sampleTimer);
+    updateSampleOffset(cp_duty.load(std::memory_order_relaxed));
 
     if (!ledcIsrHandle) {
         esp_err_t rc = ledc_isr_register(ledc_isr, nullptr, ESP_INTR_FLAG_IRAM,
@@ -168,6 +192,7 @@ void cpFastSampleStop() {
     if (sampleTimer)
         timerAlarmDisable(sampleTimer);
 }
+#endif // !CP_USE_DMA_ADC
 
 #if CP_USE_DMA_ADC
 void cpDmaStart() {
@@ -217,6 +242,7 @@ char cpGetStateLetter() { return toLetter(cp_state.load(std::memory_order_relaxe
 
 void cpSetLastPwmDuty(uint16_t duty) {
     cp_duty.store(duty, std::memory_order_relaxed);
+    updateSampleOffset(duty);
 }
 uint16_t cpGetLastPwmDuty() {
     return cp_duty.load(std::memory_order_relaxed);
