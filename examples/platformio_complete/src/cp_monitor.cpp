@@ -164,6 +164,7 @@ void cpFastSampleStart() {
             ledcIsrHandle = nullptr;
         } else {
             LEDC.int_clr.val = LEDC.int_st.val;
+            LEDC.int_ena.lstimer0_ovf = 1;
         }
     }
 }
@@ -172,6 +173,7 @@ void cpFastSampleStop() {
     if (ledcIsrHandle) {
         esp_intr_free(ledcIsrHandle);
         ledcIsrHandle = nullptr;
+        LEDC.int_ena.lstimer0_ovf = 0;
     }
     if (sampleTimer)
         timerAlarmDisable(sampleTimer);

@@ -10,7 +10,6 @@ bool cpPwmIsRunning() { return pwmRunning; }
 void cpPwmInit() {
     ledcSetup(PWM_CHANNEL, CP_PWM_FREQ_HZ, CP_PWM_RES_BITS);
     ledcAttachPin(CP_PWM_OUT_PIN, PWM_CHANNEL);
-    LEDC.int_ena.lstimer0_ovf = 1;
     cpPwmStop();
 }
 
