@@ -500,6 +500,11 @@ static void handleRxError(const char* reason) {
     ESP_LOGW(PLC_TAG, "RX error: %s - resetting", reason);
     spiWr16_slow(SPI_REG_INTR_ENABLE, 0);
     bool ok = qca7000SoftReset();
+    uint16_t cfg = spiRd16_slow(SPI_REG_SPI_CONFIG);
+    if (cfg & QCASPI_MULTI_CS_BIT) {
+        ESP_LOGW(PLC_TAG, "Clearing MULTI_CS bit after reset");
+        spiWr16_slow(SPI_REG_SPI_CONFIG, cfg & ~QCASPI_MULTI_CS_BIT);
+    }
     if (!ok) {
         ESP_LOGW(PLC_TAG, "Soft reset failed - performing hard reset");
         hardReset();
