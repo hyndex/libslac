@@ -3,6 +3,7 @@
 #include <driver/ledc.h>
 #include <driver/timer.h>
 #include <esp_intr_alloc.h>
+#include <esp_adc/adc_oneshot.h>
 #include <soc/ledc_struct.h>
 
 static hw_timer_t* adcTimer = nullptr;   // low rate timer
@@ -11,9 +12,13 @@ static intr_handle_t ledcIsrHandle = nullptr;
 static std::atomic<uint16_t> cp_mv{0};
 static std::atomic<uint16_t> cp_duty{0};
 static std::atomic<CpSubState> cp_state{CP_A};
+static DRAM_ATTR adc_oneshot_unit_handle_t adc_handle = nullptr;
+static adc_channel_t cp_channel;
 
 static inline uint16_t adc_oneshot_read_inline() {
-    return analogReadMilliVolts(CP_READ_ADC_PIN);
+    int raw = 0;
+    adc_oneshot_read(adc_handle, cp_channel, &raw);
+    return static_cast<uint16_t>((raw * 3300) / 4095);
 }
 
 static char toLetter(CpSubState s) {
@@ -76,9 +81,15 @@ static void IRAM_ATTR ledc_isr(void*) {
 }
 
 void cpMonitorInit() {
-    analogReadResolution(12);
-    analogSetPinAttenuation(CP_READ_ADC_PIN, ADC_11db);
-    uint16_t mv = analogReadMilliVolts(CP_READ_ADC_PIN);
+    adc_unit_t unit;
+    adc_oneshot_io_to_channel(CP_READ_ADC_PIN, &unit, &cp_channel);
+    adc_oneshot_unit_init_cfg_t unit_cfg{.unit_id = unit, .ulp_mode = ADC_ULP_MODE_DISABLE};
+    adc_oneshot_new_unit(&unit_cfg, &adc_handle);
+    adc_oneshot_chan_cfg_t chan_cfg{.atten = ADC_ATTEN_DB_11, .bitwidth = ADC_BITWIDTH_12};
+    adc_oneshot_config_channel(adc_handle, cp_channel, &chan_cfg);
+    int raw = 0;
+    adc_oneshot_read(adc_handle, cp_channel, &raw);
+    uint16_t mv = static_cast<uint16_t>((raw * 3300) / 4095);
     cp_mv.store(mv, std::memory_order_relaxed);
     cp_state.store(mv2state(mv), std::memory_order_relaxed);
 }
