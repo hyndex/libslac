@@ -508,16 +508,18 @@ static void fetchRx() {
         uint16_t requested = avail;
         spiWr16_slow(SPI_REG_BFR_SIZE, requested);
 
-        static uint8_t buf[V2GTP_BUFFER_SIZE + 2];
+        static uint8_t buf[V2GTP_BUFFER_SIZE];
         g_spi->beginTransaction(setFast());
         digitalWrite(g_cs, LOW);
-        g_spi->transfer16(cmd16(true, false, 0));
-        for (uint16_t i = 0; i < avail + 2; ++i)
-            buf[i] = g_spi->transfer(0);
+        uint16_t first = g_spi->transfer16(cmd16(true, false, 0));
+        buf[0] = first & 0xFF;
+        buf[1] = first >> 8;
+        for (uint16_t i = 0; i < avail - 2; ++i)
+            buf[i + 2] = g_spi->transfer(0);
         digitalWrite(g_cs, HIGH);
         g_spi->endTransaction();
 
-        const uint8_t* p = buf + 2;
+        const uint8_t* p = buf;
         uint32_t len = (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
         if (len != requested) {
             ESP_LOGE(PLC_TAG, "RX len mismatch: req=%u got=%u", requested, len);
