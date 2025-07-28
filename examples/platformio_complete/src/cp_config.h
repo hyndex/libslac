@@ -1,6 +1,10 @@
 #pragma once
 #include <stdint.h>
 
+#ifndef CP_USE_DMA_ADC
+#define CP_USE_DMA_ADC 0
+#endif
+
 #define CP_PWM_OUT_PIN      38
 #define CP_READ_ADC_PIN     1
 #define LOCK_FB_PIN         10

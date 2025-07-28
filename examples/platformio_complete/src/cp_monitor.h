@@ -9,6 +9,13 @@ void     cpLowRateStart(uint32_t period_ms = 5);
 void     cpLowRateStop();
 void     cpFastSampleStart();
 void     cpFastSampleStop();
+#if CP_USE_DMA_ADC
+void     cpDmaStart();
+void     cpDmaStop();
+#else
+static inline void cpDmaStart() {}
+static inline void cpDmaStop() {}
+#endif
 
 uint16_t cpGetVoltageMv();
 CpSubState cpGetSubState();
