@@ -495,6 +495,21 @@ static bool txFrame(const uint8_t* eth, size_t ethLen) {
     g_spi->endTransaction();
     return true;
 }
+
+static void handleRxError(const char* reason) {
+    ESP_LOGW(PLC_TAG, "RX error: %s - resetting", reason);
+    spiWr16_slow(SPI_REG_INTR_ENABLE, 0);
+    bool ok = qca7000SoftReset();
+    if (!ok) {
+        ESP_LOGW(PLC_TAG, "Soft reset failed - performing hard reset");
+        hardReset();
+    }
+    head.store(0, std::memory_order_relaxed);
+    tail.store(0, std::memory_order_relaxed);
+    spiWr16_slow(SPI_REG_INTR_ENABLE, INTR_MASK);
+    if (g_err_cb.cb)
+        g_err_cb.cb(Qca7000ErrorStatus::Reset, g_err_cb.arg);
+}
 #ifdef LIBSLAC_TESTING
 void fetchRx() {
 #else
@@ -523,15 +538,22 @@ static void fetchRx() {
         uint32_t len = (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
         if (len != requested) {
             ESP_LOGE(PLC_TAG, "RX len mismatch: req=%u got=%u", requested, len);
+            handleRxError("length mismatch");
             break;
         }
-        if (memcmp(p + 4, "\xAA\xAA\xAA\xAA", 4) != 0)
+        if (memcmp(p + 4, "\xAA\xAA\xAA\xAA", 4) != 0) {
+            handleRxError("bad SOF");
             break;
+        }
         uint16_t fl = slac::le16toh(static_cast<uint16_t>((p[9] << 8) | p[8]));
-        if (fl > avail - RX_HDR - FTR_LEN)
+        if (fl > avail - RX_HDR - FTR_LEN) {
+            handleRxError("invalid FL");
             break;
-        if (p[RX_HDR + fl] != 0x55 || p[RX_HDR + fl + 1] != 0x55)
+        }
+        if (p[RX_HDR + fl] != 0x55 || p[RX_HDR + fl + 1] != 0x55) {
+            handleRxError("bad EOF");
             break;
+        }
         ringPush(p + RX_HDR, fl);
     }
 }
