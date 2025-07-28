@@ -116,14 +116,23 @@ void fetchRx() {
 
     uint32_t len = (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
                     ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
-    if (len != avail || memcmp(p + 4, "\xAA\xAA\xAA\xAA", 4) != 0) {
+    if (len != avail) {
+        if (len + 4 == avail)
+            len = avail;
+        else {
+            qca7000SoftReset();
+            spi_read_len = 0;
+            return;
+        }
+    }
+    if (memcmp(p + 4, "\xAA\xAA\xAA\xAA", 4) != 0) {
         qca7000SoftReset();
         spi_read_len = 0;
         return;
     }
 
     uint16_t fl = slac::le16toh(static_cast<uint16_t>((p[9] << 8) | p[8]));
-    if (fl > avail - RX_HDR - FTR_LEN) {
+    if (fl > len - RX_HDR - FTR_LEN) {
         qca7000SoftReset();
         spi_read_len = 0;
         return;
