@@ -17,6 +17,14 @@ static intr_handle_t ledcIsrHandle = nullptr;
 static std::atomic<uint16_t> cp_mv{0};
 static std::atomic<uint16_t> cp_duty{0};
 static std::atomic<CpSubState> cp_state{CP_A};
+
+static void updateSampleOffset(uint16_t duty_raw) {
+    if (!sampleTimer)
+        return;
+    const uint32_t period_us = 1000000 / CP_PWM_FREQ_HZ;
+    uint64_t high_us = (static_cast<uint64_t>(period_us) * duty_raw) >> CP_PWM_RES_BITS;
+    timerAlarmWrite(sampleTimer, static_cast<uint32_t>(high_us / 2), false);
+}
 #if CP_USE_DMA_ADC
 static adc_unit_t cp_unit = ADC_UNIT_1;
 static adc_channel_t cp_channel = 0;
@@ -146,7 +154,7 @@ void cpFastSampleStart() {
     if (!sampleTimer)
         sampleTimer = timerBegin(1, 80, true);
     timerAttachInterrupt(sampleTimer, &sample_isr, true);
-    timerAlarmWrite(sampleTimer, CP_SAMPLE_OFFSET_US, false);
+    updateSampleOffset(cp_duty.load(std::memory_order_relaxed));
     timerAlarmDisable(sampleTimer);
 
     if (!ledcIsrHandle) {
@@ -217,6 +225,7 @@ char cpGetStateLetter() { return toLetter(cp_state.load(std::memory_order_relaxe
 
 void cpSetLastPwmDuty(uint16_t duty) {
     cp_duty.store(duty, std::memory_order_relaxed);
+    updateSampleOffset(duty);
 }
 uint16_t cpGetLastPwmDuty() {
     return cp_duty.load(std::memory_order_relaxed);

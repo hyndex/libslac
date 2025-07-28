@@ -21,8 +21,11 @@ static void reset_mocks() {
 
 TEST(CpMonitor, FastSampleSchedulesOffset) {
     reset_mocks();
+    cpSetLastPwmDuty(CP_PWM_DUTY_5PCT);
     cpFastSampleStart();
-    EXPECT_EQ(g_last_alarm_value, CP_SAMPLE_OFFSET_US);
+    uint32_t period = 1000000 / CP_PWM_FREQ_HZ;
+    uint32_t expected = ((period * CP_PWM_DUTY_5PCT) >> CP_PWM_RES_BITS) / 2;
+    EXPECT_EQ(g_last_alarm_value, expected);
 }
 
 TEST(CpMonitor, DmaPeakDetection) {
