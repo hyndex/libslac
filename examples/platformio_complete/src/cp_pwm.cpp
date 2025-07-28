@@ -23,7 +23,11 @@ void cpPwmStart(uint16_t duty_raw) {
     ledcWrite(PWM_CHANNEL, duty_raw);
     cpSetLastPwmDuty(duty_raw);
     pwmRunning = true;
+#if CP_USE_DMA_ADC
+    cpDmaStart();
+#else
     cpFastSampleStart();
+#endif
 }
 
 void cpPwmSetDuty(uint16_t duty_raw) {
@@ -50,6 +54,10 @@ void cpPwmStop()
     ledcDetachPin(CP_PWM_OUT_PIN);
     pinMode(CP_PWM_OUT_PIN, INPUT);
 #endif
-    pwmRunning = false;
+#if CP_USE_DMA_ADC
+    cpDmaStop();
+#else
     cpFastSampleStop();
+#endif
+    pwmRunning = false;
 }
