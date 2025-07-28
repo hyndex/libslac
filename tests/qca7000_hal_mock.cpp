@@ -26,6 +26,13 @@ int spi_cs = -1;
 int spi_rst = -1;
 
 bool reset_called = false;
+bool soft_reset_called = false;
+
+static uint8_t spi_read_buf[V2GTP_BUFFER_SIZE];
+static size_t spi_read_len = 0;
+
+static constexpr uint16_t RX_HDR = 12;
+static constexpr uint16_t FTR_LEN = 2;
 
 uint8_t myethtransmitbuffer[V2GTP_BUFFER_SIZE];
 size_t myethtransmitlen = 0;
@@ -57,6 +64,14 @@ extern "C" void mock_receive_frame(const uint8_t* f, size_t l) {
     head.store(next);
 }
 
+extern "C" void mock_spi_feed_raw(const uint8_t* d, size_t l) {
+    if (l > V2GTP_BUFFER_SIZE)
+        l = V2GTP_BUFFER_SIZE;
+    memcpy(spi_read_buf, d, l);
+    spi_read_len = l;
+    soft_reset_called = false;
+}
+
 bool qca7000setup(SPIClass* spi, int cs, int rst) {
     spi_used = spi; spi_cs = cs; spi_rst = rst; return true;
 }
@@ -67,7 +82,10 @@ bool qca7000ResetAndCheck() {
     reset_called = true;
     return true;
 }
-bool qca7000SoftReset() { return true; }
+bool qca7000SoftReset() {
+    soft_reset_called = true;
+    return true;
+}
 uint16_t qca7000ReadInternalReg(uint16_t reg) {
     if (reg == SPI_REG_SIGNATURE)
         return mock_signature;
@@ -84,6 +102,41 @@ bool qca7000CheckAlive() {
     return sig == 0xAA55 && (cause & SPI_INT_CPU_ON);
 }
 bool qca7000ReadSignature(uint16_t* sig, uint16_t* ver) { if(sig) *sig = 0xAA55; if(ver) *ver=1; return true; }
+
+void fetchRx() {
+    if (spi_read_len == 0)
+        return;
+
+    size_t avail = spi_read_len;
+    const uint8_t* p = spi_read_buf;
+    if (avail < RX_HDR + FTR_LEN || avail > V2GTP_BUFFER_SIZE) {
+        spi_read_len = 0;
+        return;
+    }
+
+    uint32_t len = (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
+                    ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+    if (len != avail || memcmp(p + 4, "\xAA\xAA\xAA\xAA", 4) != 0) {
+        qca7000SoftReset();
+        spi_read_len = 0;
+        return;
+    }
+
+    uint16_t fl = slac::le16toh(static_cast<uint16_t>((p[9] << 8) | p[8]));
+    if (fl > avail - RX_HDR - FTR_LEN) {
+        qca7000SoftReset();
+        spi_read_len = 0;
+        return;
+    }
+    if (p[RX_HDR + fl] != 0x55 || p[RX_HDR + fl + 1] != 0x55) {
+        qca7000SoftReset();
+        spi_read_len = 0;
+        return;
+    }
+    mock_receive_frame(p + RX_HDR, fl);
+    spi_read_len = 0;
+}
+
 size_t spiQCA7000checkForReceivedData(uint8_t* dst, size_t len) {
     uint8_t t = tail.load();
     if (head.load() == t)
