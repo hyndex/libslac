@@ -5,6 +5,7 @@
 #include "esp_adc/adc_oneshot.h"
 #include "esp_adc/adc_continuous.h"
 #include "arduino_stubs.hpp"
+#include "freertos/timers.h"
 
 extern "C" {
 
@@ -70,6 +71,18 @@ int adc_continuous_read(adc_continuous_handle_t, uint8_t* buf, uint32_t len, uin
     if (outlen) *outlen = copy;
     return 0;
 }
+
+// ----- FreeRTOS timer stubs -----
+using timer_cb_t = void (*)(void*);
+struct timer_s { uint32_t period; timer_cb_t cb; };
+static timer_s g_timer{};
+
+TimerHandle_t xTimerCreate(const char*, uint32_t period, int, void* arg, timer_cb_t cb) {
+    (void)arg; g_timer.period = period; g_timer.cb = cb; return &g_timer;
+}
+void xTimerStart(TimerHandle_t, uint32_t) { if (g_timer.cb) g_timer.cb(&g_timer); }
+void xTimerStop(TimerHandle_t, uint32_t) {}
+void xTimerChangePeriod(TimerHandle_t, uint32_t period, uint32_t) { g_timer.period = period; }
 
 } // extern "C"
 

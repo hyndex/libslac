@@ -1,8 +1,11 @@
 #include "cp_monitor.h"
 #include <atomic>
+#include <algorithm>
 #include <driver/ledc.h>
 #include <driver/timer.h>
 #include <esp_intr_alloc.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/timers.h>
 #if CP_USE_DMA_ADC
 #include <esp_adc/adc_continuous.h>
 #ifdef LIBSLAC_TESTING
@@ -17,6 +20,11 @@ static intr_handle_t ledcIsrHandle = nullptr;
 static std::atomic<uint16_t> cp_mv{0};
 static std::atomic<uint16_t> cp_duty{0};
 static std::atomic<CpSubState> cp_state{CP_A};
+static TimerHandle_t cp_proc_timer = nullptr;
+
+static constexpr size_t ADC_BUF_SIZE = 8;
+static volatile uint16_t adc_buf[ADC_BUF_SIZE];
+static volatile uint8_t adc_head = 0;
 
 static void updateSampleOffset(uint16_t duty_raw) {
     if (!sampleTimer)
@@ -79,15 +87,8 @@ static CpSubState mv2state(uint16_t mv) {
 }
 
 static void IRAM_ATTR onAdc() {
-    uint16_t vmax = 0;
-    const uint8_t N = 8;
-    for (uint8_t i = 0; i < N; ++i) {
-        uint16_t v = analogReadMilliVolts(CP_READ_ADC_PIN);
-        if (v > vmax)
-            vmax = v;
-    }
-    cp_mv.store(vmax, std::memory_order_relaxed);
-    cp_state.store(mv2state(vmax), std::memory_order_relaxed);
+    adc_buf[adc_head] = adc_oneshot_read_inline();
+    adc_head = (adc_head + 1) % ADC_BUF_SIZE;
 }
 
 static void IRAM_ATTR sample_isr() {
@@ -95,6 +96,23 @@ static void IRAM_ATTR sample_isr() {
     uint16_t v = adc_oneshot_read_inline();    // IRAM-safe helper
     cp_mv.store(v, std::memory_order_relaxed);
     cp_state.store(mv2state(v), std::memory_order_relaxed);
+}
+
+static inline uint16_t median3(uint16_t a, uint16_t b, uint16_t c) {
+    if (a > b) std::swap(a, b);
+    if (b > c) std::swap(b, c);
+    if (a > b) std::swap(a, b);
+    return b;
+}
+
+static void cp_timer_cb(TimerHandle_t) {
+    uint8_t head = adc_head;
+    uint16_t s0 = adc_buf[(head + ADC_BUF_SIZE - 1) % ADC_BUF_SIZE];
+    uint16_t s1 = adc_buf[(head + ADC_BUF_SIZE - 2) % ADC_BUF_SIZE];
+    uint16_t s2 = adc_buf[(head + ADC_BUF_SIZE - 3) % ADC_BUF_SIZE];
+    uint16_t mv = median3(s0, s1, s2);
+    cp_mv.store(mv, std::memory_order_relaxed);
+    cp_state.store(mv2state(mv), std::memory_order_relaxed);
 }
 
 #if CP_USE_DMA_ADC
@@ -135,6 +153,9 @@ void cpMonitorInit() {
     uint16_t mv = analogReadMilliVolts(CP_READ_ADC_PIN);
     cp_mv.store(mv, std::memory_order_relaxed);
     cp_state.store(mv2state(mv), std::memory_order_relaxed);
+    for (size_t i = 0; i < ADC_BUF_SIZE; ++i)
+        adc_buf[i] = mv;
+    adc_head = 0;
 }
 
 void cpLowRateStart(uint32_t period_ms) {
@@ -143,11 +164,21 @@ void cpLowRateStart(uint32_t period_ms) {
     timerAttachInterrupt(adcTimer, &onAdc, true);
     timerAlarmWrite(adcTimer, period_ms * 1000, true);
     timerAlarmEnable(adcTimer);
+    if (!cp_proc_timer) {
+        cp_proc_timer =
+            xTimerCreate("cp_proc", pdMS_TO_TICKS(period_ms), pdTRUE, nullptr,
+                        cp_timer_cb);
+    } else {
+        xTimerChangePeriod(cp_proc_timer, pdMS_TO_TICKS(period_ms), 0);
+    }
+    xTimerStart(cp_proc_timer, 0);
 }
 
 void cpLowRateStop() {
     if (adcTimer)
         timerAlarmDisable(adcTimer);
+    if (cp_proc_timer)
+        xTimerStop(cp_proc_timer, 0);
 }
 
 void cpFastSampleStart() {
