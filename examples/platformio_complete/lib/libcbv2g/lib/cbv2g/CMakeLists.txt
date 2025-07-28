@@ -19,7 +19,10 @@ target_include_directories(cbv2g_exi_codec
         ${PROJECT_SOURCE_DIR}/include
 )
 
-target_compile_features(cbv2g_exi_codec PRIVATE c_std_99)
+# Using target_compile_features with cross compiled toolchains fails because
+# CMake cannot detect the compiler capabilities.  Instead set the required
+# C standard explicitly which is understood by old and cross compilers alike.
+set_target_properties(cbv2g_exi_codec PROPERTIES C_STANDARD 99)
 
 add_library(cbv2g_din)
 add_library(cbv2g::din ALIAS cbv2g_din)
@@ -46,7 +49,7 @@ target_link_libraries(cbv2g_din
         cbv2g::exi_codec
 )
 
-target_compile_features(cbv2g_din PUBLIC c_std_99)
+set_target_properties(cbv2g_din PROPERTIES C_STANDARD 99)
 
 add_library(cbv2g_iso2)
 add_library(cbv2g::iso2 ALIAS cbv2g_iso2)
@@ -73,7 +76,7 @@ target_link_libraries(cbv2g_iso2
         cbv2g::exi_codec
 )
 
-target_compile_features(cbv2g_iso2 PUBLIC c_std_99)
+set_target_properties(cbv2g_iso2 PROPERTIES C_STANDARD 99)
 
 add_library(cbv2g_iso20)
 add_library(cbv2g::iso20 ALIAS cbv2g_iso20)
@@ -112,7 +115,7 @@ target_link_libraries(cbv2g_iso20
         cbv2g::exi_codec
 )
 
-target_compile_features(cbv2g_iso20 PUBLIC c_std_99)
+set_target_properties(cbv2g_iso20 PROPERTIES C_STANDARD 99)
 
 add_library(cbv2g_tp)
 add_library(cbv2g::tp ALIAS cbv2g_tp)
@@ -130,4 +133,4 @@ target_include_directories(cbv2g_tp
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
-target_compile_features(cbv2g_tp PUBLIC c_std_99)
+set_target_properties(cbv2g_tp PROPERTIES C_STANDARD 99)
