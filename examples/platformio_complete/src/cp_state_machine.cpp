@@ -44,8 +44,10 @@ static inline void stageEnter(EvseStage s) {
 }
 
 static void handleIdleA() {
-    if (t_stage.load(std::memory_order_relaxed) == 0)
+    if (t_stage.load(std::memory_order_relaxed) == 0) {
         cpPwmStop();
+        qca7000Sleep();
+    }
     CpSubState s = cpGetSubState();
     if (s == CP_B1 || s == CP_B3) {
         cpPwmStart(CP_PWM_DUTY_5PCT);
@@ -55,6 +57,10 @@ static void handleIdleA() {
 
 static void handleInitialiseB1() {
     if (t_stage.load(std::memory_order_relaxed) == 0) {
+        if (!qca7000Wake()) {
+            stageEnter(EVSE_IDLE_A);
+            return;
+        }
         if (g_use_random_mac)
             qca7000SetMac(g_mac_addr);
         if (!qca7000startSlac()) {
@@ -119,6 +125,7 @@ static void handlePowerDown() {
 static void handleUnlockB1() {
     cpPwmStart(CP_PWM_DUTY_5PCT); // hold 9V while waiting for unplug
     if (cpGetSubState() == CP_A) {
+        qca7000Sleep();
         stageEnter(EVSE_IDLE_A);
     }
 }

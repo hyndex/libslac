@@ -116,3 +116,12 @@ if (cfg & QCASPI_MULTI_CS_BIT) {
     // device started in legacy mode – verify GPIO2 strap
 }
 ```
+
+If the length field reads something like `0xAAAA4600` while you expect a
+small value (e.g. `74`), the modem is likely unresponsive and the host is
+sampling an idle MISO line. This often happens when the QCA7000 enters its
+low‑power mode because no SLAC partner is present. Power down the modem
+with `qca7000Sleep()` whenever the control pilot is in state **A** and
+call `qca7000Wake()` when a vehicle connects before starting the SLAC
+handshake. Keeping the modem off during idle periods prevents spurious
+"RX len mismatch" errors.
