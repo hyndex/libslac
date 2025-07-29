@@ -20,6 +20,8 @@ static intr_handle_t ledcIsrHandle = nullptr;
 static std::atomic<uint16_t> cp_mv{0};
 static std::atomic<uint16_t> cp_duty{0};
 static std::atomic<CpSubState> cp_state{CP_A};
+static CpSubState cp_prev1 = CP_A;
+static CpSubState cp_prev2 = CP_A;
 static TimerHandle_t cp_proc_timer = nullptr;
 
 static constexpr size_t ADC_BUF_SIZE = 8;
@@ -69,8 +71,14 @@ static char toLetter(CpSubState s) {
 static CpSubState mv2state(uint16_t mv) {
     uint16_t duty = cp_duty.load(std::memory_order_relaxed);
     uint16_t pct  = (duty * 100) >> CP_PWM_RES_BITS;
-    if (mv < CP_THR_NEG12)
-        return CP_E;
+    CpSubState prev = cp_state.load(std::memory_order_relaxed);
+    if (prev == CP_E) {
+        if (mv < CP_THR_NEG12_HIGH)
+            return CP_E;
+    } else {
+        if (mv < CP_THR_NEG12_LOW)
+            return CP_E;
+    }
     if (mv < CP_THR_1V_MV)
         return CP_F;
     if (mv > CP_THR_12V_MV)
@@ -95,7 +103,11 @@ static void IRAM_ATTR sample_isr() {
     timerAlarmDisable(sampleTimer);            // one-shot
     uint16_t v = adc_oneshot_read_inline();    // IRAM-safe helper
     cp_mv.store(v, std::memory_order_relaxed);
-    cp_state.store(mv2state(v), std::memory_order_relaxed);
+    CpSubState ns = mv2state(v);
+    if (ns == cp_prev1 && cp_prev1 == cp_prev2)
+        cp_state.store(ns, std::memory_order_relaxed);
+    cp_prev2 = cp_prev1;
+    cp_prev1 = ns;
 }
 
 static inline uint16_t median3(uint16_t a, uint16_t b, uint16_t c) {
@@ -112,7 +124,11 @@ static void cp_timer_cb(TimerHandle_t) {
     uint16_t s2 = adc_buf[(head + ADC_BUF_SIZE - 3) % ADC_BUF_SIZE];
     uint16_t mv = median3(s0, s1, s2);
     cp_mv.store(mv, std::memory_order_relaxed);
-    cp_state.store(mv2state(mv), std::memory_order_relaxed);
+    CpSubState ns = mv2state(mv);
+    if (ns == cp_prev1 && cp_prev1 == cp_prev2)
+        cp_state.store(ns, std::memory_order_relaxed);
+    cp_prev2 = cp_prev1;
+    cp_prev1 = ns;
 }
 
 #if CP_USE_DMA_ADC
@@ -133,7 +149,11 @@ static void IRAM_ATTR dma_timer_isr() {
             vmax = dma_ring[i];
     uint16_t mv = raw_to_mv(vmax);
     cp_mv.store(mv, std::memory_order_relaxed);
-    cp_state.store(mv2state(mv), std::memory_order_relaxed);
+    CpSubState ns = mv2state(mv);
+    if (ns == cp_prev1 && cp_prev1 == cp_prev2)
+        cp_state.store(ns, std::memory_order_relaxed);
+    cp_prev2 = cp_prev1;
+    cp_prev1 = ns;
 }
 #endif
 
@@ -152,7 +172,9 @@ void cpMonitorInit() {
 #endif
     uint16_t mv = analogReadMilliVolts(CP_READ_ADC_PIN);
     cp_mv.store(mv, std::memory_order_relaxed);
-    cp_state.store(mv2state(mv), std::memory_order_relaxed);
+    CpSubState ns = mv2state(mv);
+    cp_state.store(ns, std::memory_order_relaxed);
+    cp_prev1 = cp_prev2 = ns;
     for (size_t i = 0; i < ADC_BUF_SIZE; ++i)
         adc_buf[i] = mv;
     adc_head = 0;

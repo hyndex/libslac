@@ -20,6 +20,10 @@
 
 // threshold for the negative plateau (-12 V -> state E/F)
 #define CP_THR_NEG12      80
+// hysteresis for negative detection (in mV)
+#define CP_THR_NEG12_HYS  30
+#define CP_THR_NEG12_LOW  (CP_THR_NEG12 - CP_THR_NEG12_HYS)
+#define CP_THR_NEG12_HIGH (CP_THR_NEG12 + CP_THR_NEG12_HYS)
 
 #define CP_PWM_FREQ_HZ      1000
 #define CP_PWM_RES_BITS     12
