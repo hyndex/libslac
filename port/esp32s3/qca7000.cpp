@@ -509,6 +509,11 @@ static void handleRxError(const char* reason) {
         ESP_LOGW(PLC_TAG, "Soft reset failed - performing hard reset");
         hardReset();
     }
+    uint16_t cfg = qca7000ReadInternalReg(SPI_REG_SPI_CONFIG);
+    if (cfg & QCASPI_MULTI_CS_BIT) {
+        ESP_LOGW(PLC_TAG, "MULTI_CS bit set after reset");
+        spiWr16_slow(SPI_REG_SPI_CONFIG, cfg & ~QCASPI_MULTI_CS_BIT);
+    }
     head.store(0, std::memory_order_relaxed);
     tail.store(0, std::memory_order_relaxed);
     spiWr16_slow(SPI_REG_INTR_ENABLE, INTR_MASK);
