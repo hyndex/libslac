@@ -21,6 +21,7 @@
 #endif
 
 static std::atomic<uint16_t> cp_mv{0};
+static std::atomic<uint16_t> vout_mv{0};
 static std::atomic<uint16_t> cp_duty{0};
 static std::atomic<CpSubState> cp_state{CP_A};
 static std::atomic<uint32_t> cp_ts{0};
@@ -31,9 +32,11 @@ static adc_continuous_handle_t adc_handle = nullptr;
 static TaskHandle_t cp_task = nullptr;
 #endif
 
-static constexpr uint32_t DMA_SAMPLE_RATE = 40000; // 40 kS/s
+static constexpr uint32_t DMA_SAMPLE_RATE = 80000; // 80 kS/s total (40 kS/s per channel)
 static constexpr uint32_t DMA_SAMPLES = DMA_SAMPLE_RATE / CP_PWM_FREQ_HZ;
 static constexpr size_t DMA_BUF_BYTES = DMA_SAMPLES * sizeof(adc_digi_output_data_t);
+static constexpr uint8_t CP_ADC_CHANNEL   = CP_READ_ADC_PIN - 1;
+static constexpr uint8_t VOUT_ADC_CHANNEL = VOUT_MON_ADC_PIN - 1;
 
 static inline uint16_t raw_to_mv(uint16_t raw) {
     return static_cast<uint16_t>((raw * 3300u) / 4095u);
@@ -99,31 +102,47 @@ static void process_samples() {
         restart_adc();
         return;
     }
-    if (rc != 0)
+    if (rc != 0 || len == 0)
         return;
+
     size_t n = len / sizeof(adc_digi_output_data_t);
-    uint16_t vmax = 0;
+    uint16_t cp_max = 0;
+    uint32_t vout_sum = 0;
+    size_t vout_cnt = 0;
     for (size_t i = 0; i < n; ++i) {
         auto* d = reinterpret_cast<adc_digi_output_data_t*>(buf + i * sizeof(adc_digi_output_data_t));
-        if (d->type1.data > vmax)
-            vmax = d->type1.data;
-    }
-    uint16_t mv = raw_to_mv(vmax);
-    cp_mv.store(mv, std::memory_order_relaxed);
-    CpSubState ns = mv2state(mv);
-
-    if (vmax == last_raw) {
-        if (stable_cnt < 0xff)
-            ++stable_cnt;
-    } else {
-        stable_cnt = 1;
-        last_raw = vmax;
+        if (d->type1.channel == CP_ADC_CHANNEL) {
+            if (d->type1.data > cp_max)
+                cp_max = d->type1.data;
+        } else if (d->type1.channel == VOUT_ADC_CHANNEL) {
+            vout_sum += d->type1.data;
+            ++vout_cnt;
+        }
     }
 
-    CpSubState cur = cp_state.load(std::memory_order_relaxed);
-    if (stable_cnt >= 3 && ns != cur) {
-        cp_state.store(ns, std::memory_order_relaxed);
-        cp_ts.store(millis(), std::memory_order_relaxed);
+    if (cp_max) {
+        uint16_t mv = raw_to_mv(cp_max);
+        cp_mv.store(mv, std::memory_order_relaxed);
+        CpSubState ns = mv2state(mv);
+
+        if (cp_max == last_raw) {
+            if (stable_cnt < 0xff)
+                ++stable_cnt;
+        } else {
+            stable_cnt = 1;
+            last_raw = cp_max;
+        }
+
+        CpSubState cur = cp_state.load(std::memory_order_relaxed);
+        if (stable_cnt >= 3 && ns != cur) {
+            cp_state.store(ns, std::memory_order_relaxed);
+            cp_ts.store(millis(), std::memory_order_relaxed);
+        }
+    }
+
+    if (vout_cnt) {
+        uint16_t mv = raw_to_mv(static_cast<uint16_t>(vout_sum / vout_cnt));
+        vout_mv.store(mv, std::memory_order_relaxed);
     }
 }
 
@@ -136,10 +155,9 @@ static void cp_dma_task(void*) {
 #endif
 
 void cpMonitorInit() {
-    uint16_t mv = analogReadMilliVolts(CP_READ_ADC_PIN);
-    cp_mv.store(mv, std::memory_order_relaxed);
-    CpSubState ns = mv2state(mv);
-    cp_state.store(ns, std::memory_order_relaxed);
+    cp_mv.store(0, std::memory_order_relaxed);
+    vout_mv.store(0, std::memory_order_relaxed);
+    cp_state.store(CP_A, std::memory_order_relaxed);
     cp_ts.store(millis(), std::memory_order_relaxed);
     stable_cnt = 0;
     last_raw = 0;
@@ -149,18 +167,20 @@ void cpMonitorInit() {
     cfg.conv_frame_size = static_cast<uint32_t>(DMA_BUF_BYTES);
     adc_continuous_new_handle(&cfg, &adc_handle);
 
-    adc_digi_pattern_config_t pattern{};
-    pattern.atten = ADC_ATTEN_DB_11;
-    pattern.channel = 0;
-    pattern.unit = ADC_UNIT_1;
-    pattern.bit_width = ADC_BITWIDTH_12;
+    adc_digi_pattern_config_t pattern[2] = {};
+    pattern[0].atten = ADC_ATTEN_DB_11;
+    pattern[0].channel = CP_ADC_CHANNEL;
+    pattern[0].unit = ADC_UNIT_1;
+    pattern[0].bit_width = ADC_BITWIDTH_12;
+    pattern[1] = pattern[0];
+    pattern[1].channel = VOUT_ADC_CHANNEL;
 
     adc_continuous_config_t dig_cfg{};
     dig_cfg.sample_freq_hz = DMA_SAMPLE_RATE;
     dig_cfg.conv_mode = ADC_CONV_SINGLE_UNIT_1;
     dig_cfg.format = ADC_DIGI_OUTPUT_FORMAT_TYPE1;
-    dig_cfg.pattern_num = 1;
-    dig_cfg.adc_pattern = &pattern;
+    dig_cfg.pattern_num = 2;
+    dig_cfg.adc_pattern = pattern;
     adc_continuous_config(adc_handle, &dig_cfg);
     adc_continuous_start(adc_handle);
 
@@ -186,6 +206,7 @@ void cpMonitorStop() {
 }
 
 uint16_t cpGetVoltageMv() { return cp_mv.load(std::memory_order_relaxed); }
+uint16_t cpGetOutputVoltageMv() { return vout_mv.load(std::memory_order_relaxed); }
 CpSubState cpGetSubState() { return cp_state.load(std::memory_order_relaxed); }
 char cpGetStateLetter() { return toLetter(cp_state.load(std::memory_order_relaxed)); }
 void cpSetLastPwmDuty(uint16_t duty) { cp_duty.store(duty, std::memory_order_relaxed); }

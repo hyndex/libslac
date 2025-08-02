@@ -8,6 +8,7 @@ void     cpMonitorInit();
 void     cpMonitorStop();
 
 uint16_t cpGetVoltageMv();
+uint16_t cpGetOutputVoltageMv();
 CpSubState cpGetSubState();
 char     cpGetStateLetter();
 

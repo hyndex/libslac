@@ -21,6 +21,8 @@ TEST(CpMonitor, DmaPeakDetection) {
     reset_mocks();
     cpMonitorInit();
     adc_digi_output_data_t buf[5] = {};
+    for (int i = 0; i < 5; ++i)
+        buf[i].type1.channel = CP_READ_ADC_PIN - 1;
     buf[0].type1.data = 50;
     buf[1].type1.data = 1000;
     buf[2].type1.data = 3000; // max
