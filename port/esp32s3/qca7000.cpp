@@ -303,6 +303,10 @@ static bool hardReset() {
         spiWr16_slow(SPI_REG_SPI_CONFIG, cfg & ~QCASPI_MULTI_CS_BIT);
 
     spiWr16_slow(SPI_REG_INTR_CAUSE, 0xFFFF);
+    // Read signature twice before enabling interrupts as recommended by
+    // the datasheet to ensure the modem is ready to accept new commands.
+    (void)slowRd16(SPI_REG_SIGNATURE);
+    (void)slowRd16(SPI_REG_SIGNATURE);
     spiWr16_slow(SPI_REG_INTR_ENABLE, INTR_MASK);
     return true;
 }
@@ -353,6 +357,7 @@ static bool softReset() {
         slowWr16(SPI_REG_SPI_CONFIG, cfg & ~QCASPI_MULTI_CS_BIT);
 
     spiWr16_slow(SPI_REG_INTR_CAUSE, 0xFFFF);
+    spiWr16_slow(SPI_REG_INTR_ENABLE, INTR_MASK);
     return true;
 }
 
@@ -1179,20 +1184,17 @@ static void process_cause(uint16_t cause) {
     }
 
     if (cause & (SPI_INT_WRBUF_ERR | SPI_INT_RDBUF_ERR)) {
-        if (!qca7000SoftReset()) {
-            if (!hardReset()) {
-                if (++g_crash_count >= 3 && g_pwr >= 0) {
-                    digitalWrite(g_pwr, LOW);
-                    slac_delay(200);
-                    digitalWrite(g_pwr, HIGH);
-                    slac_delay(200);
-                    g_crash_count = 0;
-                }
-            } else {
+        if (!hardReset()) {
+            if (++g_crash_count >= 3 && g_pwr >= 0) {
+                digitalWrite(g_pwr, LOW);
+                slac_delay(200);
+                digitalWrite(g_pwr, HIGH);
+                slac_delay(200);
                 g_crash_count = 0;
             }
         } else {
             g_crash_count = 0;
+            qca7000startSlac();
         }
         bool fatal = false;
         uint32_t now = slac_millis();
