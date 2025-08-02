@@ -136,11 +136,9 @@ static void cp_dma_task(void*) {
 #endif
 
 void cpMonitorInit() {
-    uint16_t mv = analogReadMilliVolts(CP_READ_ADC_PIN);
-    cp_mv.store(mv, std::memory_order_relaxed);
-    CpSubState ns = mv2state(mv);
-    cp_state.store(ns, std::memory_order_relaxed);
-    cp_ts.store(millis(), std::memory_order_relaxed);
+    cp_mv.store(0, std::memory_order_relaxed);
+    cp_state.store(CP_A, std::memory_order_relaxed);
+    cp_ts.store(0, std::memory_order_relaxed);
     stable_cnt = 0;
     last_raw = 0;
 
@@ -164,10 +162,16 @@ void cpMonitorInit() {
     adc_continuous_config(adc_handle, &dig_cfg);
     adc_continuous_start(adc_handle);
 
+    // Wait for the first DMA frame to initialize voltage and state
+    while (stable_cnt == 0) {
+        process_samples();
+    }
+    uint16_t mv = cp_mv.load(std::memory_order_relaxed);
+    cp_state.store(mv2state(mv), std::memory_order_relaxed);
+    cp_ts.store(millis(), std::memory_order_relaxed);
+
 #ifndef LIBSLAC_TESTING
     xTaskCreatePinnedToCore(cp_dma_task, "cp_dma", 2048, nullptr, 5, &cp_task, 1);
-#else
-    process_samples();
 #endif
 }
 
