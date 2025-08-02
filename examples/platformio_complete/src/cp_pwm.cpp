@@ -33,11 +33,6 @@ void cpPwmStart(uint16_t duty_raw) {
     ledcWrite(PWM_CHANNEL, duty_raw);
     cpSetLastPwmDuty(duty_raw);
     pwmRunning = true;
-#if CP_USE_DMA_ADC
-    cpDmaStart();
-#else
-    cpFastSampleStart();
-#endif
 }
 
 void cpPwmSetDuty(uint16_t duty_raw) {
@@ -53,21 +48,16 @@ void cpPwmSetDuty(uint16_t duty_raw) {
 }
 
 void cpPwmStop() {
-#if CP_IDLE_DRIVE_HIGH
-    constexpr uint16_t DUTY_FULL = (1u << CP_PWM_RES_BITS) - 1;
-    ledcWrite(PWM_CHANNEL, DUTY_FULL);
-    cpSetLastPwmDuty(DUTY_FULL);
-#else
-    ledcWrite(PWM_CHANNEL, 0);
-    cpSetLastPwmDuty(0);
-    ledcDetachPin(CP_PWM_OUT_PIN);
-    pinMode(CP_PWM_OUT_PIN, INPUT);
-#endif
-#if CP_USE_DMA_ADC
-    cpDmaStop();
-#else
-    cpFastSampleStop();
-#endif
+    if (CP_IDLE_DRIVE_HIGH) {
+        constexpr uint16_t DUTY_FULL = (1u << CP_PWM_RES_BITS) - 1;
+        ledcWrite(PWM_CHANNEL, DUTY_FULL);
+        cpSetLastPwmDuty(DUTY_FULL);
+    } else {
+        ledcWrite(PWM_CHANNEL, 0);
+        cpSetLastPwmDuty(0);
+        ledcDetachPin(CP_PWM_OUT_PIN);
+        pinMode(CP_PWM_OUT_PIN, INPUT);
+    }
     pwmRunning = false;
 #ifdef ESP_PLATFORM
     if (cp_pm_lock)

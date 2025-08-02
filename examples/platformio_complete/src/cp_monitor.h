@@ -5,17 +5,7 @@
 enum CpSubState : uint8_t { CP_A, CP_B1, CP_B2, CP_B3, CP_C, CP_D, CP_E, CP_F };
 
 void     cpMonitorInit();
-void     cpLowRateStart(uint32_t period_ms = 5);
-void     cpLowRateStop();
-void     cpFastSampleStart();
-void     cpFastSampleStop();
-#if CP_USE_DMA_ADC
-void     cpDmaStart();
-void     cpDmaStop();
-#else
-static inline void cpDmaStart() {}
-static inline void cpDmaStop() {}
-#endif
+void     cpMonitorStop();
 
 uint16_t cpGetVoltageMv();
 CpSubState cpGetSubState();
@@ -25,3 +15,8 @@ void     cpSetLastPwmDuty(uint16_t duty);
 uint16_t cpGetLastPwmDuty();
 
 bool     cpDigitalCommRequested();
+
+#ifdef LIBSLAC_TESTING
+void     cpMonitorTestProcess();
+#endif
+
