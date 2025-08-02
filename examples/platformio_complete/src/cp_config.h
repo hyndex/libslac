@@ -11,11 +11,11 @@
 #define CP_THR_12V_MV   2350
 #define CP_THR_9V_MV    1950
 #define CP_THR_6V_MV    1650
-#define CP_THR_3V_MV    1400
+#define CP_THR_3V_MV    1350
 #define CP_THR_1V_MV    200          // ≈ 1 V after divider
 
 // threshold for the negative plateau (-12 V -> state E/F)
-#define CP_THR_NEG12      80
+#define CP_THR_NEG12      900
 // hysteresis for negative detection (in mV)
 #define CP_THR_NEG12_HYS  30
 #define CP_THR_NEG12_LOW  (CP_THR_NEG12 - CP_THR_NEG12_HYS)
