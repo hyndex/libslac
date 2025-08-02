@@ -30,7 +30,7 @@
     ((1000000 / CP_PWM_FREQ_HZ) * CP_PWM_DUTY_5PCT / (1u << CP_PWM_RES_BITS) / 2)
 
 #define T_PLC_INIT_MS       700
-#define T_HLC_EST_MS        2000
+#define T_HLC_EST_MS        5000
 #define T_ISO_CPLT_MS       5000
 #define T_PC_DONE_MS        10000
 #define T_STOP_MAX_MS       5000
