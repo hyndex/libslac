@@ -65,8 +65,13 @@ static CpSubState mv2state(uint16_t mv) {
         return CP_F;
     if (mv > CP_THR_12V_MV)
         return CP_A;
-    if (mv > CP_THR_9V_MV)
+    if (mv > CP_THR_9V_MV) {
+#ifdef CP_SUPPORT_B3
         return (duty == 0) ? CP_B1 : CP_B3;
+#else
+        return CP_B1;
+#endif
+    }
     if (mv > CP_THR_6V_MV) {
         if (pct >= 3 && pct <= 7) return CP_B2;
         return CP_C;

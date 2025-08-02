@@ -7,6 +7,17 @@ static bool pwmRunning = false;
 static constexpr uint8_t PWM_CHANNEL = 0;
 static esp_pm_lock_handle_t cp_pm_lock = nullptr;
 
+static uint16_t clamp_5pct(uint16_t duty_raw) {
+    const uint16_t scale = (1u << CP_PWM_RES_BITS);
+    const uint16_t lo = (scale * 9) / 200;  // 4.5 %
+    const uint16_t hi = (scale * 11) / 200; // 5.5 %
+    if (duty_raw < lo)
+        return lo;
+    if (duty_raw > hi)
+        return hi;
+    return duty_raw;
+}
+
 bool cpPwmIsRunning() {
     return pwmRunning;
 }
@@ -30,6 +41,7 @@ void cpPwmStart(uint16_t duty_raw) {
     const uint16_t max_duty = (1u << CP_PWM_RES_BITS) - 1;
     if (duty_raw > max_duty)
         duty_raw = max_duty;
+    duty_raw = clamp_5pct(duty_raw);
     ledcWrite(PWM_CHANNEL, duty_raw);
     cpSetLastPwmDuty(duty_raw);
     pwmRunning = true;
@@ -42,6 +54,7 @@ void cpPwmSetDuty(uint16_t duty_raw) {
         const uint16_t max_duty = (1u << CP_PWM_RES_BITS) - 1;
         if (duty_raw > max_duty)
             duty_raw = max_duty;
+        duty_raw = clamp_5pct(duty_raw);
         ledcWrite(PWM_CHANNEL, duty_raw);
         cpSetLastPwmDuty(duty_raw);
     }
