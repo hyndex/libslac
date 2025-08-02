@@ -61,8 +61,13 @@ static void handleInitialiseB1() {
             stageEnter(EVSE_IDLE_A);
             return;
         }
-        if (g_use_random_mac)
+        if (g_use_random_mac) {
             qca7000SetMac(g_mac_addr);
+            uint8_t nmk[slac::defs::NMK_LEN];
+            for (uint8_t& b : nmk)
+                b = static_cast<uint8_t>(esp_random() & 0xFF);
+            qca7000SetNmk(nmk);
+        }
         if (!qca7000startSlac()) {
             stageEnter(EVSE_IDLE_A);
             return;
