@@ -27,10 +27,11 @@ TEST(CpMonitor, DmaPeakDetection) {
     buf[3].type1.data = 1500;
     buf[4].type1.data = 20;
 
-    g_dma_read_data = reinterpret_cast<uint8_t*>(buf);
-    g_dma_read_len = sizeof(buf);
-
-    cpMonitorTestProcess();
+    for (int i = 0; i < 3; ++i) {
+        g_dma_read_data = reinterpret_cast<uint8_t*>(buf);
+        g_dma_read_len = sizeof(buf);
+        cpMonitorTestProcess();
+    }
 
     uint16_t expected_mv = static_cast<uint16_t>((3000u * 3300) / 4095);
     EXPECT_EQ(cpGetVoltageMv(), expected_mv);

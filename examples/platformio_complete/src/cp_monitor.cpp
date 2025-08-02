@@ -23,8 +23,9 @@
 static std::atomic<uint16_t> cp_mv{0};
 static std::atomic<uint16_t> cp_duty{0};
 static std::atomic<CpSubState> cp_state{CP_A};
-static CpSubState cp_prev1 = CP_A;
-static CpSubState cp_prev2 = CP_A;
+static std::atomic<uint32_t> timestamp{0};
+static uint16_t last_raw = 0;
+static uint8_t stable_cnt = 0;
 static adc_continuous_handle_t adc_handle = nullptr;
 #ifndef LIBSLAC_TESTING
 static TaskHandle_t cp_task = nullptr;
@@ -107,13 +108,21 @@ static void process_samples() {
         if (d->type1.data > vmax)
             vmax = d->type1.data;
     }
-    uint16_t mv = raw_to_mv(vmax);
-    cp_mv.store(mv, std::memory_order_relaxed);
-    CpSubState ns = mv2state(mv);
-    if (ns == cp_prev1 && cp_prev1 == cp_prev2)
-        cp_state.store(ns, std::memory_order_relaxed);
-    cp_prev2 = cp_prev1;
-    cp_prev1 = ns;
+
+    if (vmax == last_raw) {
+        if (stable_cnt < 255)
+            ++stable_cnt;
+    } else {
+        last_raw = vmax;
+        stable_cnt = 1;
+    }
+
+    if (stable_cnt >= 3) {
+        uint16_t mv = raw_to_mv(vmax);
+        cp_mv.store(mv, std::memory_order_relaxed);
+        cp_state.store(mv2state(mv), std::memory_order_relaxed);
+        timestamp.store(millis(), std::memory_order_relaxed);
+    }
 }
 
 #ifndef LIBSLAC_TESTING
@@ -129,7 +138,9 @@ void cpMonitorInit() {
     cp_mv.store(mv, std::memory_order_relaxed);
     CpSubState ns = mv2state(mv);
     cp_state.store(ns, std::memory_order_relaxed);
-    cp_prev1 = cp_prev2 = ns;
+    last_raw = static_cast<uint16_t>((mv * 4095u) / 3300u);
+    stable_cnt = 3;
+    timestamp.store(millis(), std::memory_order_relaxed);
 
     adc_continuous_handle_cfg_t cfg{};
     cfg.max_store_buf_size = static_cast<uint32_t>(DMA_BUF_BYTES * 2);
