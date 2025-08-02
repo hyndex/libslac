@@ -56,7 +56,7 @@ platform = espressif32
 board = esp32-s3-devkitc-1
 framework = arduino
 build_unflags = -std=gnu++11
-build_flags = -std=gnu++17 -DESP_PLATFORM
+build_flags = -std=gnu++17
 lib_deps = https://github.com/hyndex/libslac.git
 ```
 
