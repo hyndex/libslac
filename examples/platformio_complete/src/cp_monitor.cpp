@@ -16,6 +16,9 @@
 #ifndef ADC_BITWIDTH_12
 #define ADC_BITWIDTH_12 12
 #endif
+#ifndef ESP_ERR_TIMEOUT
+#define ESP_ERR_TIMEOUT -1
+#endif
 
 static std::atomic<uint16_t> cp_mv{0};
 static std::atomic<uint16_t> cp_duty{0};
@@ -27,7 +30,7 @@ static adc_continuous_handle_t adc_handle = nullptr;
 static TaskHandle_t cp_task = nullptr;
 #endif
 
-static constexpr uint32_t DMA_SAMPLE_RATE = 50000; // 50 kS/s
+static constexpr uint32_t DMA_SAMPLE_RATE = 40000; // 40 kS/s
 static constexpr uint32_t DMA_SAMPLES = DMA_SAMPLE_RATE / CP_PWM_FREQ_HZ;
 static constexpr size_t DMA_BUF_BYTES = DMA_SAMPLES * sizeof(adc_digi_output_data_t);
 
@@ -73,12 +76,23 @@ static CpSubState mv2state(uint16_t mv) {
     return CP_E;
 }
 
+static void restart_adc() {
+    if (!adc_handle)
+        return;
+    adc_continuous_stop(adc_handle);
+    adc_continuous_start(adc_handle);
+}
+
 static void process_samples() {
     if (!adc_handle)
         return;
     uint8_t buf[DMA_BUF_BYTES];
     uint32_t len = 0;
     int rc = adc_continuous_read(adc_handle, buf, sizeof(buf), &len, 1000);
+    if (rc == ESP_ERR_TIMEOUT) {
+        restart_adc();
+        return;
+    }
     if (rc != 0)
         return;
     size_t n = len / sizeof(adc_digi_output_data_t);
