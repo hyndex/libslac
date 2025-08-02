@@ -19,7 +19,14 @@ static void reset_mocks() {
 
 TEST(CpMonitor, DmaPeakDetection) {
     reset_mocks();
+    // Provide initial frame for cpMonitorInit()
+    adc_digi_output_data_t initbuf[1] = {};
+    initbuf[0].type1.data = 0;
+    g_dma_read_data = reinterpret_cast<uint8_t*>(initbuf);
+    g_dma_read_len = sizeof(initbuf);
+
     cpMonitorInit();
+
     adc_digi_output_data_t buf[5] = {};
     buf[0].type1.data = 50;
     buf[1].type1.data = 1000;
