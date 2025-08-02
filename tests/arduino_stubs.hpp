@@ -50,5 +50,3 @@ inline uint32_t micros() { return g_mock_millis * 1000; }
 inline void delay(unsigned int ms) { g_mock_millis += ms; }
 inline void noInterrupts() {}
 inline void interrupts() {}
-extern int g_mock_adc_mv;
-inline int analogReadMilliVolts(int) { return g_mock_adc_mv; }
