@@ -21,6 +21,7 @@
 #endif
 
 static std::atomic<uint16_t> cp_mv{0};
+static std::atomic<uint16_t> vout_mv{0};
 static std::atomic<uint16_t> cp_duty{0};
 static std::atomic<CpSubState> cp_state{CP_A};
 static std::atomic<uint32_t> cp_ts{0};
@@ -31,9 +32,12 @@ static adc_continuous_handle_t adc_handle = nullptr;
 static TaskHandle_t cp_task = nullptr;
 #endif
 
-static constexpr uint32_t DMA_SAMPLE_RATE = 40000; // 40 kS/s
+static constexpr uint32_t DMA_SAMPLE_RATE = 40000; // 40 kS/s total
 static constexpr uint32_t DMA_SAMPLES = DMA_SAMPLE_RATE / CP_PWM_FREQ_HZ;
 static constexpr size_t DMA_BUF_BYTES = DMA_SAMPLES * sizeof(adc_digi_output_data_t);
+
+static constexpr uint8_t CP_ADC_CHANNEL   = static_cast<uint8_t>(CP_READ_ADC_PIN - 1);
+static constexpr uint8_t VOUT_ADC_CHANNEL = static_cast<uint8_t>(VOUT_MON_ADC_PIN - 1);
 
 static inline uint16_t raw_to_mv(uint16_t raw) {
     return static_cast<uint16_t>((raw * 3300u) / 4095u);
@@ -102,22 +106,34 @@ static void process_samples() {
     if (rc != 0)
         return;
     size_t n = len / sizeof(adc_digi_output_data_t);
-    uint16_t vmax = 0;
+    uint16_t cp_vmax = 0;
+    uint32_t vout_sum = 0;
+    uint16_t vout_cnt = 0;
     for (size_t i = 0; i < n; ++i) {
         auto* d = reinterpret_cast<adc_digi_output_data_t*>(buf + i * sizeof(adc_digi_output_data_t));
-        if (d->type1.data > vmax)
-            vmax = d->type1.data;
+        uint16_t raw = d->type1.data;
+        if (d->type1.channel == CP_ADC_CHANNEL) {
+            if (raw > cp_vmax)
+                cp_vmax = raw;
+        } else if (d->type1.channel == VOUT_ADC_CHANNEL) {
+            vout_sum += raw;
+            ++vout_cnt;
+        }
     }
-    uint16_t mv = raw_to_mv(vmax);
+    uint16_t mv = raw_to_mv(cp_vmax);
     cp_mv.store(mv, std::memory_order_relaxed);
     CpSubState ns = mv2state(mv);
+    if (vout_cnt > 0) {
+        uint16_t vraw = static_cast<uint16_t>(vout_sum / vout_cnt);
+        vout_mv.store(raw_to_mv(vraw), std::memory_order_relaxed);
+    }
 
-    if (vmax == last_raw) {
+    if (cp_vmax == last_raw) {
         if (stable_cnt < 0xff)
             ++stable_cnt;
     } else {
         stable_cnt = 1;
-        last_raw = vmax;
+        last_raw = cp_vmax;
     }
 
     CpSubState cur = cp_state.load(std::memory_order_relaxed);
@@ -144,18 +160,21 @@ void cpMonitorInit() {
     cfg.conv_frame_size = static_cast<uint32_t>(DMA_BUF_BYTES);
     adc_continuous_new_handle(&cfg, &adc_handle);
 
-    adc_digi_pattern_config_t pattern{};
-    pattern.atten = ADC_ATTEN_DB_11;
-    pattern.channel = 0;
-    pattern.unit = ADC_UNIT_1;
-    pattern.bit_width = ADC_BITWIDTH_12;
+    adc_digi_pattern_config_t patterns[2] = {};
+    for (auto &p : patterns) {
+        p.atten = ADC_ATTEN_DB_11;
+        p.unit = ADC_UNIT_1;
+        p.bit_width = ADC_BITWIDTH_12;
+    }
+    patterns[0].channel = CP_ADC_CHANNEL;
+    patterns[1].channel = VOUT_ADC_CHANNEL;
 
     adc_continuous_config_t dig_cfg{};
     dig_cfg.sample_freq_hz = DMA_SAMPLE_RATE;
     dig_cfg.conv_mode = ADC_CONV_SINGLE_UNIT_1;
     dig_cfg.format = ADC_DIGI_OUTPUT_FORMAT_TYPE1;
-    dig_cfg.pattern_num = 1;
-    dig_cfg.adc_pattern = &pattern;
+    dig_cfg.pattern_num = 2;
+    dig_cfg.adc_pattern = patterns;
     adc_continuous_config(adc_handle, &dig_cfg);
     adc_continuous_start(adc_handle);
 
@@ -171,19 +190,31 @@ void cpMonitorInit() {
         if (rc != 0 || len == 0)
             continue;
         size_t n = len / sizeof(adc_digi_output_data_t);
-        uint16_t vmax = 0;
+        uint16_t cp_vmax = 0;
+        uint32_t vout_sum = 0;
+        uint16_t vout_cnt = 0;
         for (size_t i = 0; i < n; ++i) {
             auto* d = reinterpret_cast<adc_digi_output_data_t*>(buf + i * sizeof(adc_digi_output_data_t));
-            if (d->type1.data > vmax)
-                vmax = d->type1.data;
+            uint16_t raw = d->type1.data;
+            if (d->type1.channel == CP_ADC_CHANNEL) {
+                if (raw > cp_vmax)
+                    cp_vmax = raw;
+            } else if (d->type1.channel == VOUT_ADC_CHANNEL) {
+                vout_sum += raw;
+                ++vout_cnt;
+            }
         }
-        uint16_t mv = raw_to_mv(vmax);
+        uint16_t mv = raw_to_mv(cp_vmax);
         cp_mv.store(mv, std::memory_order_relaxed);
         CpSubState ns = mv2state(mv);
         cp_state.store(ns, std::memory_order_relaxed);
         cp_ts.store(millis(), std::memory_order_relaxed);
-        last_raw = vmax;
+        last_raw = cp_vmax;
         stable_cnt = 1;
+        if (vout_cnt > 0) {
+            uint16_t vraw = static_cast<uint16_t>(vout_sum / vout_cnt);
+            vout_mv.store(raw_to_mv(vraw), std::memory_order_relaxed);
+        }
         break;
     }
 
@@ -207,6 +238,7 @@ void cpMonitorStop() {
 }
 
 uint16_t cpGetVoltageMv() { return cp_mv.load(std::memory_order_relaxed); }
+uint16_t voutGetVoltageMv() { return vout_mv.load(std::memory_order_relaxed); }
 CpSubState cpGetSubState() { return cp_state.load(std::memory_order_relaxed); }
 char cpGetStateLetter() { return toLetter(cp_state.load(std::memory_order_relaxed)); }
 void cpSetLastPwmDuty(uint16_t duty) { cp_duty.store(duty, std::memory_order_relaxed); }
