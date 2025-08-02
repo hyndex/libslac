@@ -4,22 +4,15 @@
 
 #include "cp_monitor.h"
 #include "esp_adc/adc_continuous.h"
+#include "cp_monitor_mocks.hpp"
 
 #include "cp_config.h"
 
 static constexpr uint8_t CP_CH = CP_READ_ADC_PIN - 1;
 static constexpr uint8_t VOUT_CH = VOUT_MON_ADC_PIN - 1;
 
-extern "C" {
-extern uint8_t* g_dma_read_data;
-extern uint32_t g_dma_read_len;
-}
-extern int g_mock_adc_mv;
-
 static void reset_mocks() {
-    g_dma_read_data = nullptr;
-    g_dma_read_len = 0;
-    g_mock_adc_mv = 0;
+    adcMockReset();
 }
 
 TEST(CpMonitor, DmaPeakDetection) {
@@ -28,8 +21,7 @@ TEST(CpMonitor, DmaPeakDetection) {
     adc_digi_output_data_t initbuf[1] = {};
     initbuf[0].type1.data = 0;
     initbuf[0].type1.channel = CP_CH;
-    g_dma_read_data = reinterpret_cast<uint8_t*>(initbuf);
-    g_dma_read_len = sizeof(initbuf);
+    adcMockSetDmaData(initbuf, 1);
 
     cpMonitorInit();
 
@@ -40,8 +32,7 @@ TEST(CpMonitor, DmaPeakDetection) {
     buf[3].type1.data = 1500; buf[3].type1.channel = CP_CH;
     buf[4].type1.data = 20;   buf[4].type1.channel = CP_CH;
 
-    g_dma_read_data = reinterpret_cast<uint8_t*>(buf);
-    g_dma_read_len = sizeof(buf);
+    adcMockSetDmaData(buf, 5);
 
     cpMonitorTestProcess();
 
@@ -56,8 +47,7 @@ TEST(CpMonitor, VoutMeasurement) {
     initbuf[0].type1.data = 0;
     initbuf[1].type1.channel = VOUT_CH;
     initbuf[1].type1.data = 0;
-    g_dma_read_data = reinterpret_cast<uint8_t*>(initbuf);
-    g_dma_read_len = sizeof(initbuf);
+    adcMockSetDmaData(initbuf, 2);
 
     cpMonitorInit();
 
@@ -66,8 +56,7 @@ TEST(CpMonitor, VoutMeasurement) {
     buf[1].type1.channel = VOUT_CH; buf[1].type1.data = 3000;
     buf[2].type1.channel = CP_CH;   buf[2].type1.data = 0;
     buf[3].type1.channel = CP_CH;   buf[3].type1.data = 0;
-    g_dma_read_data = reinterpret_cast<uint8_t*>(buf);
-    g_dma_read_len = sizeof(buf);
+    adcMockSetDmaData(buf, 4);
 
     cpMonitorTestProcess();
 
