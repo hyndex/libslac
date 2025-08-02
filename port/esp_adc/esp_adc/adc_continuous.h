@@ -28,7 +28,10 @@ typedef struct {
 } adc_continuous_config_t;
 
 typedef struct {
-    struct { uint16_t data; } type1;
+    struct {
+        uint16_t data:12;
+        uint16_t channel:4;
+    } type1;
 } adc_digi_output_data_t;
 
 #define ADC_CONV_SINGLE_UNIT_1 0
