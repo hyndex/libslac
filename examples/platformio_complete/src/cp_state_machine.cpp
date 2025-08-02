@@ -107,7 +107,7 @@ static void handlePrecharge() {
         stageEnter(EVSE_POWER_DOWN);
     }
     // converter output scaled to ADC range (~3.3V = ~400V)
-    if (analogReadMilliVolts(VOUT_MON_ADC_PIN) > 3300) {
+    if (voutGetVoltageMv() > 3300) {
         stageEnter(EVSE_ENERGY_TRANSFER);
     }
 }
