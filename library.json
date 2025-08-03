@@ -3,7 +3,7 @@
     "version": "0.3.1",
     "description": "Minimal ISO15118-3 SLAC implementation",
     "keywords": "iso15118, slac, ev, charging",
-    "frameworks": ["arduino"],
+    "frameworks": "*",
     "platforms": ["espressif32"],
     "export": {
         "exclude": [

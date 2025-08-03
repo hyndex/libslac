@@ -85,7 +85,7 @@ bool HomeplugMessage::setup_payload(void const* payload, int len, uint16_t mmtyp
     const auto max_len = effective_payload_length(mmv);
     if (len > max_len) {
         // mark the message invalid and signal the failure
-        assert(("Homeplug Payload length too long", len <= max_len));
+        assert(len <= max_len && "Homeplug Payload length too long");
         raw_msg_len = -1;
         return false;
     }

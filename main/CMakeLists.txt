@@ -1,0 +1,12 @@
+idf_component_register(
+    SRCS
+        "main.cpp"
+        "../src/channel.cpp"
+        "../src/slac.cpp"
+        "../src/config.cpp"
+        "../3rd_party/hash_library/sha256.cpp"
+    INCLUDE_DIRS
+        "../include"
+        "../3rd_party"
+        "../3rd_party/fsm"
+)
