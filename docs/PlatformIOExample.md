@@ -96,7 +96,7 @@ void loop() {
     if (g_channel && g_channel->poll(msg)) {
         // handle incoming packets
     }
-    delay(1);
+    slac_delay(1);
 }
 ```
 

@@ -6,6 +6,11 @@
 #ifndef LIBSLAC_TESTING
 #include <freertos/task.h>
 #endif
+#ifdef ESP_PLATFORM
+#include <port/esp32s3/port_config.hpp>
+#else
+#include <port/port_common.hpp>
+#endif
 
 #ifndef ADC_ATTEN_DB_11
 #define ADC_ATTEN_DB_11 0
@@ -139,7 +144,7 @@ static void process_samples() {
     CpSubState cur = cp_state.load(std::memory_order_relaxed);
     if (stable_cnt >= 3 && ns != cur) {
         cp_state.store(ns, std::memory_order_relaxed);
-        cp_ts.store(millis(), std::memory_order_relaxed);
+        cp_ts.store(slac_millis(), std::memory_order_relaxed);
     }
 }
 
@@ -208,7 +213,7 @@ void cpMonitorInit() {
         cp_mv.store(mv, std::memory_order_relaxed);
         CpSubState ns = mv2state(mv);
         cp_state.store(ns, std::memory_order_relaxed);
-        cp_ts.store(millis(), std::memory_order_relaxed);
+        cp_ts.store(slac_millis(), std::memory_order_relaxed);
         last_raw = cp_vmax;
         stable_cnt = 1;
         if (vout_cnt > 0) {

@@ -55,15 +55,15 @@ static void generate_random_mac() {
 
 static void check_serial_flag() {
     Serial.println("Press 'R' for random MAC");
-    uint32_t start = millis();
-    while (millis() - start < 3000) {
+    uint32_t start = slac_millis();
+    while (slac_millis() - start < 3000) {
         if (Serial.available()) {
             char c = Serial.read();
             if (c == 'R' || c == 'r')
                 g_use_random_mac = true;
             break;
         }
-        delay(10);
+        slac_delay(10);
     }
     generate_random_mac();
 }
@@ -86,7 +86,7 @@ static void logTask(void*) {
 
 void setup() {
     Serial.begin(115200);
-    delay(4000);
+    slac_delay(4000);
     Serial.println("Starting SLAC modem...");
     check_serial_flag();
     pinMode(LOCK_FB_PIN, INPUT_PULLUP);
@@ -108,7 +108,7 @@ void setup() {
         Serial.println("Failed to open SLAC channel, aborting");
         g_channel = nullptr;
         while (true)
-            delay(1000);
+            slac_delay(1000);
     }
     pinMode(PLC_INT_PIN, INPUT);
     attachInterrupt(PLC_INT_PIN, plc_isr, FALLING);
@@ -143,7 +143,7 @@ void loop() {
         if (g_use_random_mac)
             qca7000SetMac(g_mac_addr);
         if (qca7000startSlac())
-            g_slac_ts.store(millis(), std::memory_order_relaxed);
+            g_slac_ts.store(slac_millis(), std::memory_order_relaxed);
     }
 
     // Update the SLAC state machine and restart if no progress for 60s
@@ -154,17 +154,17 @@ void loop() {
         hlc_stop();
     if (g_slac_state.load(std::memory_order_relaxed) != 0 &&
         g_slac_state.load(std::memory_order_relaxed) != 5) {
-        if (millis() - g_slac_ts.load(std::memory_order_relaxed) > 60000) {
+        if (slac_millis() - g_slac_ts.load(std::memory_order_relaxed) > 60000) {
             Serial.println("Restarting SLAC handshake");
             if (g_use_random_mac)
                 qca7000SetMac(g_mac_addr);
             if (!qca7000startSlac())
                 Serial.println("startSlac failed");
-            g_slac_ts.store(millis(), std::memory_order_relaxed);
+            g_slac_ts.store(slac_millis(), std::memory_order_relaxed);
         }
     } else {
-        g_slac_ts.store(millis(), std::memory_order_relaxed);
+        g_slac_ts.store(slac_millis(), std::memory_order_relaxed);
     }
 
-    delay(1);
+    slac_delay(1);
 }

@@ -191,7 +191,7 @@ parameter.
        if (channel.poll(msg)) {
            // handle message
        }
-       delay(1);
+       slac_delay(1);
    }
 Polling Operation
 -----------------
