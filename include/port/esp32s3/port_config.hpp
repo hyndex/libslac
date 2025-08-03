@@ -1,7 +1,17 @@
 #ifndef SLAC_PORT_CONFIG_HPP
 #define SLAC_PORT_CONFIG_HPP
 
+#define slac_millis slac_millis
+#define slac_delay slac_delay
+#define slac_micros slac_micros
+#define slac_noInterrupts slac_noInterrupts
+#define slac_interrupts slac_interrupts
 #include "../port_common.hpp"
+#undef slac_millis
+#undef slac_delay
+#undef slac_micros
+#undef slac_noInterrupts
+#undef slac_interrupts
 
 #ifndef PLC_SPI_CS_PIN
 #define PLC_SPI_CS_PIN   36

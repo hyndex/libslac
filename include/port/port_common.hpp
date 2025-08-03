@@ -3,38 +3,24 @@
 
 #include <stdint.h>
 
-#ifdef ARDUINO
-#include <Arduino.h>
-#endif
-
 #ifndef slac_millis
-#if defined(ARDUINO) && !defined(ESP_PLATFORM)
-static inline uint32_t slac_millis() { return millis(); }
-#endif
+inline __attribute__((weak)) uint32_t slac_millis() { return 0; }
 #endif
 
 #ifndef slac_delay
-#if defined(ARDUINO) && !defined(ESP_PLATFORM)
-static inline void slac_delay(uint32_t ms) { delay(ms); }
-#endif
+inline __attribute__((weak)) void slac_delay(uint32_t) {}
 #endif
 
 #ifndef slac_micros
-#if defined(ARDUINO) && !defined(ESP_PLATFORM)
-static inline uint32_t slac_micros() { return micros(); }
-#endif
+inline __attribute__((weak)) uint32_t slac_micros() { return 0; }
 #endif
 
 #ifndef slac_noInterrupts
-#if defined(ARDUINO) && !defined(ESP_PLATFORM)
-static inline void slac_noInterrupts() { noInterrupts(); }
-#endif
+inline __attribute__((weak)) void slac_noInterrupts() {}
 #endif
 
 #ifndef slac_interrupts
-#if defined(ARDUINO) && !defined(ESP_PLATFORM)
-static inline void slac_interrupts() { interrupts(); }
-#endif
+inline __attribute__((weak)) void slac_interrupts() {}
 #endif
 
 #endif // SLAC_GENERIC_PORT_CONFIG_HPP

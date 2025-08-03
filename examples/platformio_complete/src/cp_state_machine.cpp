@@ -72,7 +72,7 @@ static void handleInitialiseB1() {
             stageEnter(EVSE_IDLE_A);
             return;
         }
-        g_slac_ts.store(millis(), std::memory_order_relaxed);
+        g_slac_ts.store(slac_millis(), std::memory_order_relaxed);
         stageEnter(EVSE_DIGITAL_REQ_B2);
     }
 }

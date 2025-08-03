@@ -1168,13 +1168,7 @@ uint8_t qca7000getSlacResult() {
     return g_slac_ctx.result;
 }
 
-static inline uint32_t get_us() {
-#ifdef ESP_PLATFORM
-    return (uint32_t)esp_timer_get_time();
-#else
-    return micros();
-#endif
-}
+static inline uint32_t get_us() { return slac_micros(); }
 
 static void process_cause(uint16_t cause) {
     if (cause & SPI_INT_CPU_ON) {
