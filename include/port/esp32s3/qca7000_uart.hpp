@@ -7,7 +7,7 @@
 using uart_port_t = int;
 #endif
 
-#include "ethernet_defs.hpp"
+#include <slac/ethernet_defs.hpp>
 #ifndef V2GTP_BUFFER_SIZE
 #define V2GTP_BUFFER_SIZE 1536
 #endif

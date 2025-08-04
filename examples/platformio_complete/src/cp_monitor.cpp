@@ -6,11 +6,17 @@
 #ifndef LIBSLAC_TESTING
 #include <freertos/task.h>
 #endif
-#include <esp_timer.h>
 #ifdef ESP_PLATFORM
+#include <esp_timer.h>
 #include <port/esp32s3/port_config.hpp>
 #else
+#include <sys/time.h>
 #include <port/port_common.hpp>
+static inline int64_t esp_timer_get_time() {
+    struct timeval tv;
+    gettimeofday(&tv, nullptr);
+    return static_cast<int64_t>(tv.tv_sec) * 1000000 + tv.tv_usec;
+}
 #endif
 
 #ifndef ADC_ATTEN_DB_11

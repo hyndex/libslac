@@ -10,7 +10,7 @@
 #include <type_traits>
 #include <utility>
 
-#include "port/esp32s3/ethernet_defs.hpp"
+#include <slac/ethernet_defs.hpp>
 
 namespace slac {
 
