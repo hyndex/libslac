@@ -12,9 +12,9 @@ static constexpr uint16_t RX_HDR = 8;
 static constexpr uint16_t FTR_LEN = 2;
 
 #ifdef LIBSLAC_TESTING
-uart_port_t g_uart = -1;
+uart_port_t g_uart = UART_NUM_MAX;
 #else
-static uart_port_t g_uart = -1;
+static uart_port_t g_uart = UART_NUM_MAX;
 #endif
 
 namespace {
@@ -129,7 +129,7 @@ inline void pollRx() {
     }
 #ifdef ESP_PLATFORM
     uint8_t b;
-    while (g_uart >= 0 && uart_read_bytes(g_uart, &b, 1, 0) > 0) {
+    while (g_uart != UART_NUM_MAX && uart_read_bytes(g_uart, &b, 1, 0) > 0) {
         processByte(b);
         last_rx_time = slac_millis();
     }
@@ -142,7 +142,7 @@ bool uartTxFrame(const uint8_t* eth, size_t ethLen) {
 #else
 static bool uartTxFrame(const uint8_t* eth, size_t ethLen) {
 #endif
-    if (g_uart < 0 || ethLen > 1522)
+    if (g_uart == UART_NUM_MAX || ethLen > 1522)
         return false;
     size_t frameLen = ethLen;
     if (frameLen < 60)
@@ -168,19 +168,15 @@ static bool uartTxFrame(const uint8_t* eth, size_t ethLen) {
 }
 
 #ifdef LIBSLAC_TESTING
-void uartFetchRx() {
-#else
-static void uartFetchRx() {
+void uartFetchRx() { pollRx(); }
 #endif
-    pollRx();
-}
 
 void uartQca7000Teardown() {
 #ifdef ESP_PLATFORM
-    if (g_uart >= 0)
+    if (g_uart != UART_NUM_MAX)
         uart_driver_delete(g_uart);
 #endif
-    g_uart = -1;
+    g_uart = UART_NUM_MAX;
     head.store(0, std::memory_order_release);
     tail.store(0, std::memory_order_release);
 }

@@ -14,7 +14,10 @@
 #endif
 #include <slac/endian.hpp>
 #include <stdint.h>
-#ifndef ESP_PLATFORM
+#include <inttypes.h>
+#ifdef ESP_PLATFORM
+#include <esp_random.h>
+#else
 static inline uint32_t esp_random() {
     return 0x12345678u;
 }
@@ -169,11 +172,7 @@ static inline int setSlow() { return slac::spi_slow_hz(); }
 static inline int setFast() { return slac::spi_fast_hz(); }
 
 #ifdef ESP_PLATFORM
-static int g_spi_speed = 0;
-static inline void spiBegin(int speed) {
-    g_spi_speed = speed;
-    spi_device_acquire_bus(g_spi, portMAX_DELAY);
-}
+static inline void spiBegin(int) { spi_device_acquire_bus(g_spi, portMAX_DELAY); }
 static inline void spiEnd() { spi_device_release_bus(g_spi); }
 static inline uint16_t spiTransfer16(uint16_t data) {
     spi_transaction_t t{};
@@ -181,7 +180,6 @@ static inline uint16_t spiTransfer16(uint16_t data) {
     t.length = 16;
     t.tx_data[0] = data >> 8;
     t.tx_data[1] = data & 0xFF;
-    t.speed_hz = g_spi_speed;
     spi_device_polling_transmit(g_spi, &t);
     return (static_cast<uint16_t>(t.rx_data[0]) << 8) | t.rx_data[1];
 }
@@ -190,7 +188,6 @@ static inline uint8_t spiTransfer(uint8_t data) {
     t.flags = SPI_TRANS_USE_TXDATA | SPI_TRANS_USE_RXDATA;
     t.length = 8;
     t.tx_data[0] = data;
-    t.speed_hz = g_spi_speed;
     spi_device_polling_transmit(g_spi, &t);
     return t.rx_data[0];
 }
@@ -199,7 +196,6 @@ static inline void spiWriteBytes(const uint8_t* d, size_t l) {
     spi_transaction_t t{};
     t.length = l * 8;
     t.tx_buffer = d;
-    t.speed_hz = g_spi_speed;
     spi_device_polling_transmit(g_spi, &t);
 }
 #else
@@ -262,16 +258,6 @@ static inline uint16_t cmd16(bool rd, bool intr, uint16_t reg) {
     return (rd ? 0x8000u : 0) | (intr ? 0x4000u : 0) | (reg & 0x3FFFu);
 }
 
-static uint16_t spiRd16_fast(uint16_t reg) {
-    spiBegin(setFast());
-    gpio_set_level(static_cast<gpio_num_t>(g_cs), 0);
-    spiTransfer16(cmd16(true, true, reg));
-    uint16_t v = spiTransfer16(0);
-    gpio_set_level(static_cast<gpio_num_t>(g_cs), 1);
-    spiEnd();
-    return v;
-}
-
 static uint16_t spiRd16_slow(uint16_t reg) {
     spiBegin(setSlow());
     gpio_set_level(static_cast<gpio_num_t>(g_cs), 0);
@@ -280,15 +266,6 @@ static uint16_t spiRd16_slow(uint16_t reg) {
     gpio_set_level(static_cast<gpio_num_t>(g_cs), 1);
     spiEnd();
     return v;
-}
-
-static void spiWr16_fast(uint16_t reg, uint16_t val) {
-    spiBegin(setFast());
-    gpio_set_level(static_cast<gpio_num_t>(g_cs), 0);
-    spiTransfer16(cmd16(false, true, reg));
-    spiTransfer16(val);
-    gpio_set_level(static_cast<gpio_num_t>(g_cs), 1);
-    spiEnd();
 }
 
 static void spiWr16_slow(uint16_t reg, uint16_t val) {
@@ -593,7 +570,8 @@ static void fetchRx() {
             if (len + 4 == requested) {
                 len_excludes_hdr = true;
             } else {
-                ESP_LOGE(PLC_TAG, "RX len mismatch: req=%u got=%u", requested, len);
+                ESP_LOGE(PLC_TAG, "RX len mismatch: req=%" PRIu32 " got=%" PRIu32,
+                         static_cast<uint32_t>(requested), len);
                 handleRxError("length mismatch");
                 break;
             }
@@ -642,7 +620,6 @@ size_t spiQCA7000checkForReceivedData(uint8_t* d, size_t m) {
     return c;
 }
 
-static uint8_t g_run_id[slac::defs::RUN_ID_LEN]{};
 static uint8_t g_src_mac[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 
 void qca7000SetMac(const uint8_t mac[ETH_ALEN]) {

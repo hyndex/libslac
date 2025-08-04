@@ -55,7 +55,7 @@ static inline constexpr uint64_t bswap64(uint64_t v) {
 }
 
 
-#if !defined(ESP_PLATFORM) && !defined(htole16)
+#ifndef htole16
 inline constexpr uint16_t htole16(uint16_t v) {
 #if __BYTE_ORDER == __LITTLE_ENDIAN
     return v;
@@ -67,7 +67,7 @@ inline constexpr uint16_t le16toh(uint16_t v) { return htole16(v); }
 #endif
 
 
-#if !defined(ESP_PLATFORM) && !defined(htole32)
+#ifndef htole32
 inline constexpr uint32_t htole32(uint32_t v) {
 #if __BYTE_ORDER == __LITTLE_ENDIAN
     return v;
@@ -78,7 +78,7 @@ inline constexpr uint32_t htole32(uint32_t v) {
 inline constexpr uint32_t le32toh(uint32_t v) { return htole32(v); }
 #endif
 
-#if !defined(ESP_PLATFORM) && !defined(htole64)
+#ifndef htole64
 inline constexpr uint64_t htole64(uint64_t v) {
 #if __BYTE_ORDER == __LITTLE_ENDIAN
     return v;
@@ -89,7 +89,7 @@ inline constexpr uint64_t htole64(uint64_t v) {
 inline constexpr uint64_t le64toh(uint64_t v) { return htole64(v); }
 #endif
 
-#if !defined(ESP_PLATFORM) && !defined(htons)
+#ifndef htons
 inline constexpr uint16_t htons(uint16_t v) {
 #if __BYTE_ORDER == __LITTLE_ENDIAN
     return bswap16(v);
