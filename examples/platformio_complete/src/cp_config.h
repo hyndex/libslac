@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>
+#include <freertos/FreeRTOS.h>
 
 #define CP_PWM_OUT_PIN      38
 #define CP_READ_ADC_PIN     1

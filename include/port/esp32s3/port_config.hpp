@@ -7,11 +7,6 @@
 #define slac_noInterrupts slac_noInterrupts
 #define slac_interrupts slac_interrupts
 #include "../port_common.hpp"
-#undef slac_millis
-#undef slac_delay
-#undef slac_micros
-#undef slac_noInterrupts
-#undef slac_interrupts
 
 #ifndef PLC_SPI_CS_PIN
 #define PLC_SPI_CS_PIN   36
