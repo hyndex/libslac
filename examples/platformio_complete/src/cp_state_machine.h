@@ -1,5 +1,5 @@
 #pragma once
-#include <Arduino.h>
+#include <stdint.h>
 #include <atomic>
 #include <port/esp32s3/ethernet_defs.hpp>
 #include "cp_monitor.h"

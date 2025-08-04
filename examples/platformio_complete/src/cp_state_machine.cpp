@@ -3,6 +3,9 @@
 #include "cp_pwm.h"
 #include <atomic>
 #include <port/esp32s3/qca7000.hpp>
+#include <esp_log.h>
+#include <esp_timer.h>
+#include <driver/gpio.h>
 
 extern bool g_use_random_mac;
 extern uint8_t g_mac_addr[ETH_ALEN];
@@ -37,10 +40,12 @@ const char* evseStageName(EvseStage s) {
     return stageName(s);
 }
 
+static const char* TAG = "EVSE";
+
 static inline void stageEnter(EvseStage s) {
     stage.store(s, std::memory_order_relaxed);
     t_stage.store(0, std::memory_order_relaxed);
-    Serial.printf("[EVSE] Stage -> %s\n", stageName(s));
+    ESP_LOGI(TAG, "Stage -> %s", stageName(s));
 }
 
 static void handleIdleA() {
@@ -72,7 +77,8 @@ static void handleInitialiseB1() {
             stageEnter(EVSE_IDLE_A);
             return;
         }
-        g_slac_ts.store(slac_millis(), std::memory_order_relaxed);
+        g_slac_ts.store(static_cast<uint32_t>(esp_timer_get_time() / 1000),
+                        std::memory_order_relaxed);
         stageEnter(EVSE_DIGITAL_REQ_B2);
     }
 }
@@ -91,7 +97,8 @@ static void handleCableCheckC() {
     if (t_stage.load(std::memory_order_relaxed) == 0) {
         // Placeholder for lock and isolation checks
     }
-    if (digitalRead(ISOLATION_OK_PIN) && digitalRead(LOCK_FB_PIN)) {
+    if (gpio_get_level(static_cast<gpio_num_t>(ISOLATION_OK_PIN)) &&
+        gpio_get_level(static_cast<gpio_num_t>(LOCK_FB_PIN))) {
         stageEnter(EVSE_PRECHARGE);
     } else if (t_stage.load(std::memory_order_relaxed) > T_ISO_CPLT_MS) {
         cpPwmStop();

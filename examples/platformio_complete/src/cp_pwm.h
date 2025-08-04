@@ -1,5 +1,5 @@
 #pragma once
-#include <Arduino.h>
+#include <stdint.h>
 #include "cp_config.h"
 
 void cpPwmInit();
