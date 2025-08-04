@@ -3,7 +3,7 @@
 #include "../port_common.hpp"
 #include "port_config.hpp"
 
-#include "ethernet_defs.hpp"
+#include <slac/ethernet_defs.hpp>
 #ifdef ESP_PLATFORM
 #include "driver/gpio.h"
 #include "driver/spi_master.h"
@@ -27,7 +27,6 @@ static_assert(PLC_SPI_RST_PIN >= 0, "RST pin unset");
 static_assert(PLC_SPI_SCK_PIN >= 0, "SCK pin unset");
 static_assert(PLC_SPI_MOSI_PIN >= 0, "MOSI pin unset");
 static_assert(PLC_SPI_MISO_PIN >= 0, "MISO pin unset");
-static_assert(QCA7000_SPI_BURST_LEN <= 512, "Burst length exceeds FIFO");
 
 // Register and interrupt definitions (see QCA7000 datasheet)
 #ifndef SPI_INT_CPU_ON

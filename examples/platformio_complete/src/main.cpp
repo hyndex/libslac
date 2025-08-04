@@ -1,4 +1,5 @@
 #include <slac/channel.hpp>
+#include <slac/config.hpp>
 #include <slac/slac.hpp>
 #include <port/esp32s3/qca7000_link.hpp>
 #include <port/esp32s3/qca7000.hpp>
@@ -99,6 +100,14 @@ extern "C" void app_main(void) {
     vTaskDelay(pdMS_TO_TICKS(4000));
     ESP_LOGI(TAG, "Starting SLAC modem...");
     check_serial_flag();
+
+    slac::set_spi_fast_hz(QCA7000_SPI_FAST_HZ);
+    slac::set_spi_slow_hz(PLC_SPI_SLOW_HZ);
+    slac::set_spi_burst_len(QCA7000_SPI_BURST_LEN);
+    slac::set_hardreset_low_ms(QCA7000_HARDRESET_LOW_MS);
+    slac::set_hardreset_high_ms(QCA7000_HARDRESET_HIGH_MS);
+    slac::set_cpuon_timeout_ms(QCA7000_CPUON_TIMEOUT_MS);
+    slac::set_max_retries(QCA7000_MAX_RETRIES);
 
     gpio_config_t in_cfg{};
     in_cfg.mode = GPIO_MODE_INPUT;

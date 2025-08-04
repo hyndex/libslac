@@ -26,6 +26,9 @@ void set_hardreset_high_ms(uint32_t ms) { g_cfg.hardreset_high_ms = ms; }
 uint32_t cpuon_timeout_ms() { return g_cfg.cpuon_timeout_ms; }
 void set_cpuon_timeout_ms(uint32_t ms) { g_cfg.cpuon_timeout_ms = ms; }
 
+uint32_t max_retries() { return g_cfg.max_retries; }
+void set_max_retries(uint32_t retries) { g_cfg.max_retries = retries; }
+
 bool validation_disabled() { return g_cfg.disable_validation; }
 void set_validation_disabled(bool disabled) { g_cfg.disable_validation = disabled; }
 

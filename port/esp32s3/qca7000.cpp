@@ -63,7 +63,6 @@ static constexpr uint16_t EOF_WORD = 0x5555;
 static constexpr uint16_t TX_HDR = 8;
 static constexpr uint16_t RX_HDR = 12;
 static constexpr uint16_t FTR_LEN = 2;
-static_assert(QCA7000_SPI_BURST_LEN <= 512, "Burst length too large");
 static constexpr uint16_t INTR_MASK = SPI_INT_CPU_ON | SPI_INT_PKT_AVLBL | SPI_INT_RDBUF_ERR | SPI_INT_WRBUF_ERR;
 
 using FSMBuffer = slac::fsm::buffer::SwapBuffer<64, 0, 1>;
@@ -1317,7 +1316,7 @@ bool qca7000setup(spi_device_handle_t bus, int csPin, int rstPin) {
         gpio_set_level(static_cast<gpio_num_t>(g_pwr), 1);
     }
 
-    for (int attempt = 1; attempt <= QCA7000_MAX_RETRIES; ++attempt) {
+    for (int attempt = 1; attempt <= static_cast<int>(slac::max_retries()); ++attempt) {
         ESP_LOGI(PLC_TAG, "Setup attempt %d", attempt);
         if (hardReset()) {
             read_region_code(&g_region);
@@ -1325,7 +1324,7 @@ bool qca7000setup(spi_device_handle_t bus, int csPin, int rstPin) {
             return true;
         }
         ESP_LOGE(PLC_TAG, "hardReset failed – modem missing");
-        if (attempt < QCA7000_MAX_RETRIES && g_pwr >= 0) {
+        if (attempt < static_cast<int>(slac::max_retries()) && g_pwr >= 0) {
             gpio_set_level(static_cast<gpio_num_t>(g_pwr), 0);
             slac_delay(200);
             gpio_set_level(static_cast<gpio_num_t>(g_pwr), 1);

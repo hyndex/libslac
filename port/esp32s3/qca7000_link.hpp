@@ -6,7 +6,7 @@
 #include "port_config.hpp"
 #endif
 
-#include "ethernet_defs.hpp"
+#include <slac/ethernet_defs.hpp>
 #include "qca7000.hpp"
 #include <slac/transport.hpp>
 

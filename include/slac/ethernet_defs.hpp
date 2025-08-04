@@ -1,10 +1,4 @@
-#ifndef SLAC_ETHERNET_DEFS_HPP
-#define SLAC_ETHERNET_DEFS_HPP
-
-#include "../port_common.hpp"
-#ifdef ESP_PLATFORM
-#include "port_config.hpp"
-#endif
+#pragma once
 
 #include <stdint.h>
 
@@ -18,4 +12,3 @@ struct ether_header {
     uint16_t ether_type;
 } __attribute__((packed));
 
-#endif // SLAC_ETHERNET_DEFS_HPP
