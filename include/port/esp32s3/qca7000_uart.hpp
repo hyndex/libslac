@@ -2,6 +2,9 @@
 
 #ifdef ESP_PLATFORM
 #include "port_config.hpp"
+#include "driver/uart.h"
+#else
+using uart_port_t = int;
 #endif
 
 #include "ethernet_defs.hpp"
@@ -13,12 +16,8 @@ static_assert(ETH_FRAME_LEN <= V2GTP_BUFFER_SIZE,
               "ETH_FRAME_LEN must not exceed V2GTP_BUFFER_SIZE");
 #include <slac/transport.hpp>
 
-#ifdef ARDUINO
-#include <HardwareSerial.h>
-#endif
-
 struct qca7000_uart_config {
-    HardwareSerial* serial;
+    uart_port_t uart_num;
     uint32_t baud;
     const uint8_t* mac_addr{nullptr};
 };

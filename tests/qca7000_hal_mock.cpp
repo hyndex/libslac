@@ -21,7 +21,7 @@ bool qca7000CheckBcbToggle();
 #undef htole32
 #endif
 
-SPIClass* spi_used = nullptr;
+spi_device_handle_t spi_used = nullptr;
 int spi_cs = -1;
 int spi_rst = -1;
 
@@ -72,7 +72,7 @@ extern "C" void mock_spi_feed_raw(const uint8_t* d, size_t l) {
     soft_reset_called = false;
 }
 
-bool qca7000setup(SPIClass* spi, int cs, int rst) {
+bool qca7000setup(spi_device_handle_t spi, int cs, int rst) {
     spi_used = spi; spi_cs = cs; spi_rst = rst; return true;
 }
 
