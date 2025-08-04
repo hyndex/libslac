@@ -6,7 +6,6 @@
 // see http://create.stephan-brumme.com/disclaimer.html
 //
 
-#include "port/port_common.hpp"
 #include "sha256.h"
 #include <cstring>
 

@@ -1,7 +1,7 @@
 #pragma once
 
-#include <port/port_common.hpp>
 #include "port_config.hpp"
+// port_common.hpp is pulled in by port_config.hpp after guarding
 
 #include <slac/ethernet_defs.hpp>
 #ifdef ESP_PLATFORM

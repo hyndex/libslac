@@ -1,5 +1,5 @@
 #include "arduino_stubs.hpp"
-#include "port/esp32s3/qca7000.hpp"
+#include "qca7000.hpp"
 #include <slac/iso15118_consts.hpp>
 #include <slac/config.hpp>
 #include <cstdint>
