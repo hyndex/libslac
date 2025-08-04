@@ -3,7 +3,9 @@
 This guide walks through creating a minimal PlatformIO project that uses
 `libslac` with an ESP32 board running the Arduino framework.  It
 communicates with a QCA7000 based power line modem and explains the
-required steps in a short tutorial.
+required steps in a short tutorial. The code is equally compatible with
+the QCA7005 variant used on PLC Stamp micro modules, which are pin and
+software compatible with QCA7000 devices.
 
 ## 1. Install PlatformIO
 

@@ -3,7 +3,9 @@
 This example demonstrates how to wire the QCA7000 modem to an
 ESP32-S3 board using PlatformIO. The board uses custom SPI pins and
 it is recommended to connect the interrupt line (`PLC_INT_PIN`, IO16 by
-default) so the driver can react to modem events.
+default) so the driver can react to modem events. QCA7005-based PLC
+Stamp micro modules are fully compatible and can be wired in the same
+way.
 
 ## PlatformIO configuration
 

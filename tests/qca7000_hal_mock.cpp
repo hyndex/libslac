@@ -2,6 +2,7 @@
 #include "qca7000.hpp"
 #include <slac/iso15118_consts.hpp>
 #include <slac/config.hpp>
+#include <slac/endian.hpp>
 #include <cstdint>
 #include <atomic>
 extern uint32_t g_mock_millis;

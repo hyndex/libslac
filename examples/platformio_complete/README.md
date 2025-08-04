@@ -3,7 +3,8 @@
 This directory contains a fully self-contained PlatformIO project
 showing how to use **libslac** on an ESP32-S3 board.  The example
 initialises a QCA7000 modem, polls it for incoming SLAC frames and can
-be built directly with PlatformIO.
+be built directly with PlatformIO.  QCA7005-based PLC Stamp micro
+modules operate the same way and can be used without code changes.
 
 ## Building
 
