@@ -1,8 +1,6 @@
 #ifndef SLAC_TRANSPORT_HPP
 #define SLAC_TRANSPORT_HPP
 
-#include "port/port_common.hpp"
-
 #include <cstddef>
 #include <cstdint>
 

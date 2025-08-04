@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2024 Joulepoint Private Limited (Author Chinmoy Bhuyan)
 #include <slac/slac.hpp>
-#ifdef ESP_PLATFORM
-#include "port/port_common.hpp"
-#endif
 
 #include <algorithm>
 #include <cassert>

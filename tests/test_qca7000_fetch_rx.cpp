@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #define ARDUINO
 #include "arduino_stubs.hpp"
-#include "port/esp32s3/qca7000.hpp"
+#include "qca7000.hpp"
 
 extern "C" void mock_ring_reset();
 extern "C" void mock_spi_feed_raw(const uint8_t*, size_t);

@@ -1,7 +1,4 @@
 #include "qca7000_link.hpp"
-#include <port/port_common.hpp>
-#include "port_config.hpp"
-#include "qca7000.hpp"
 #include <cstring>
 
 namespace slac {
@@ -10,7 +7,7 @@ namespace port {
 Qca7000Link::Qca7000Link(const qca7000_config& c,
                          ErrorCallback cb,
                          void* cb_arg)
-    : cfg(c), error_cb(cb), error_arg(cb_arg) {
+    : error_cb(cb), error_arg(cb_arg), cfg(c) {
     memset(mac_addr, 0, sizeof(mac_addr));
     if (cfg.mac_addr)
         memcpy(mac_addr, cfg.mac_addr, ETH_ALEN);

@@ -8,6 +8,8 @@
 #include <cstdio>
 #include <esp_log.h>
 #include <esp_timer.h>
+#include <esp_system.h>
+#include <esp_random.h>
 #include <driver/gpio.h>
 #include <driver/uart.h>
 #include <driver/spi_master.h>
@@ -39,7 +41,7 @@ static slac::Channel* g_channel = nullptr;
 volatile bool plc_irq = false;
 std::atomic<uint8_t> g_slac_state{0};
 
-void IRAM_ATTR plc_isr() { plc_irq = true; }
+void IRAM_ATTR plc_isr(void*) { plc_irq = true; }
 // Timestamp for SLAC restart logic
 std::atomic<uint32_t> g_slac_ts{0};
 static bool hlc_running = false;
@@ -87,9 +89,10 @@ static void logTask(void*) {
     const TickType_t period = pdMS_TO_TICKS(1000);
     while (true) {
         uint32_t mv = cpGetVoltageMv();
-        printf("[STAT] CP=%c %u.%03u V Stage=%s SLAC=%u\n",
+        printf("[STAT] CP=%c %lu.%03lu V Stage=%s SLAC=%u\n",
                cpGetStateLetter(),
-               mv / 1000, mv % 1000,
+               static_cast<unsigned long>(mv / 1000),
+               static_cast<unsigned long>(mv % 1000),
                evseStageName(evseGetStage()),
                g_slac_state.load(std::memory_order_relaxed));
         vTaskDelay(period);

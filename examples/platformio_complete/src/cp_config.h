@@ -1,5 +1,8 @@
 #pragma once
 #include <stdint.h>
+#ifdef ESP_PLATFORM
+#include <freertos/FreeRTOS.h>
+#endif
 
 #define CP_PWM_OUT_PIN      38
 #define CP_READ_ADC_PIN     1

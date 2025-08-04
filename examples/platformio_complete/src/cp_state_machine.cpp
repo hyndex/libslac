@@ -5,6 +5,7 @@
 #include <esp32s3/qca7000.hpp>
 #include <esp_log.h>
 #include <esp_timer.h>
+#include <esp_random.h>
 #include <driver/gpio.h>
 
 extern bool g_use_random_mac;

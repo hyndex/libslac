@@ -123,11 +123,11 @@ static void process_samples() {
     uint16_t vout_cnt = 0;
     for (size_t i = 0; i < n; ++i) {
         auto* d = reinterpret_cast<adc_digi_output_data_t*>(buf + i * sizeof(adc_digi_output_data_t));
-        uint16_t raw = d->type1.data;
-        if (d->type1.channel == CP_ADC_CHANNEL) {
+        uint16_t raw = d->type2.data;
+        if (d->type2.channel == CP_ADC_CHANNEL) {
             if (raw > cp_vmax)
                 cp_vmax = raw;
-        } else if (d->type1.channel == VOUT_ADC_CHANNEL) {
+        } else if (d->type2.channel == VOUT_ADC_CHANNEL) {
             vout_sum += raw;
             ++vout_cnt;
         }
@@ -208,11 +208,11 @@ void cpMonitorInit() {
         uint16_t vout_cnt = 0;
         for (size_t i = 0; i < n; ++i) {
             auto* d = reinterpret_cast<adc_digi_output_data_t*>(buf + i * sizeof(adc_digi_output_data_t));
-            uint16_t raw = d->type1.data;
-            if (d->type1.channel == CP_ADC_CHANNEL) {
+            uint16_t raw = d->type2.data;
+            if (d->type2.channel == CP_ADC_CHANNEL) {
                 if (raw > cp_vmax)
                     cp_vmax = raw;
-            } else if (d->type1.channel == VOUT_ADC_CHANNEL) {
+            } else if (d->type2.channel == VOUT_ADC_CHANNEL) {
                 vout_sum += raw;
                 ++vout_cnt;
             }

@@ -1,7 +1,6 @@
 #ifndef SLAC_QCA7000_LINK_HPP
 #define SLAC_QCA7000_LINK_HPP
 
-#include <port/port_common.hpp>
 #ifdef ESP_PLATFORM
 #include "port_config.hpp"
 #endif

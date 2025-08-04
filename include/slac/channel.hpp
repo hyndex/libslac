@@ -3,8 +3,6 @@
 #ifndef SLAC_CHANNEL_HPP
 #define SLAC_CHANNEL_HPP
 
-#include "port/port_common.hpp"
-
 #include <slac/transport.hpp>
 #include <string>
 

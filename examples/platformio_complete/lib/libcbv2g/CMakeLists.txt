@@ -1,10 +1,17 @@
+if(CMAKE_SCRIPT_MODE_FILE)
+    # Prevent ESP-IDF's script-mode pass from executing the third-party
+    # library's full build logic. The actual build is performed in the
+    # PlatformIO pre-build step.
+    return()
+endif()
+
 cmake_minimum_required(VERSION 3.14)
 
 project(cb_v2g
     VERSION 0.3.1
     DESCRIPTION "V2GTP EXI library"
     HOMEPAGE_URL "https://github.com/Everest/libcbv2g"
-	LANGUAGES C CXX
+    LANGUAGES C CXX
 )
 
 find_package(everest-cmake 0.1 REQUIRED

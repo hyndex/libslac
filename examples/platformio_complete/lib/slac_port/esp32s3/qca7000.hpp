@@ -1,6 +1,5 @@
 #pragma once
 
-#include <port/port_common.hpp>
 #include "port_config.hpp"
 
 #include <slac/ethernet_defs.hpp>

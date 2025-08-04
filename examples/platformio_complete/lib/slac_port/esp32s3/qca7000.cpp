@@ -1,6 +1,4 @@
 #include "qca7000.hpp"
-#include <port/port_common.hpp>
-#include <esp32s3/port_config.hpp>
 #include <slac/config.hpp>
 #ifdef ESP_LOGW
 #pragma push_macro("ESP_LOGW")
