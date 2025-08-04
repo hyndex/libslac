@@ -12,9 +12,9 @@ static constexpr uint16_t RX_HDR = 8;
 static constexpr uint16_t FTR_LEN = 2;
 
 #ifdef LIBSLAC_TESTING
-HardwareSerial* g_serial = nullptr;
+uart_port_t g_uart = -1;
 #else
-static HardwareSerial* g_serial = nullptr;
+static uart_port_t g_uart = -1;
 #endif
 
 namespace {
@@ -127,13 +127,13 @@ inline void pollRx() {
         sof_count = 0;
         rx_pos = 0;
     }
-    while (g_serial && g_serial->available()) {
-        int v = g_serial->read();
-        if (v < 0)
-            break;
-        processByte(static_cast<uint8_t>(v));
+#ifdef ESP_PLATFORM
+    uint8_t b;
+    while (g_uart >= 0 && uart_read_bytes(g_uart, &b, 1, 0) > 0) {
+        processByte(b);
         last_rx_time = slac_millis();
     }
+#endif
 }
 } // namespace
 
@@ -142,7 +142,7 @@ bool uartTxFrame(const uint8_t* eth, size_t ethLen) {
 #else
 static bool uartTxFrame(const uint8_t* eth, size_t ethLen) {
 #endif
-    if (!g_serial || ethLen > 1522)
+    if (g_uart < 0 || ethLen > 1522)
         return false;
     size_t frameLen = ethLen;
     if (frameLen < 60)
@@ -153,15 +153,17 @@ static bool uartTxFrame(const uint8_t* eth, size_t ethLen) {
     hdr[5] = (frameLen >> 8) & 0xFF;
     hdr[6] = 0;
     hdr[7] = 0;
-    g_serial->write(hdr, TX_HDR);
+#ifdef ESP_PLATFORM
+    uart_write_bytes(g_uart, reinterpret_cast<const char*>(hdr), TX_HDR);
     if (ethLen)
-        g_serial->write(eth, ethLen);
+        uart_write_bytes(g_uart, reinterpret_cast<const char*>(eth), ethLen);
     if (frameLen > ethLen) {
         uint8_t pad[60]{};
-        g_serial->write(pad, frameLen - ethLen);
+        uart_write_bytes(g_uart, reinterpret_cast<const char*>(pad), frameLen - ethLen);
     }
     uint8_t eof[2] = {0x55, 0x55};
-    g_serial->write(eof, 2);
+    uart_write_bytes(g_uart, reinterpret_cast<const char*>(eof), 2);
+#endif
     return true;
 }
 
@@ -174,11 +176,11 @@ static void uartFetchRx() {
 }
 
 void uartQca7000Teardown() {
-#ifdef ARDUINO
-    if (g_serial)
-        g_serial->end();
+#ifdef ESP_PLATFORM
+    if (g_uart >= 0)
+        uart_driver_delete(g_uart);
 #endif
-    g_serial = nullptr;
+    g_uart = -1;
     head.store(0, std::memory_order_release);
     tail.store(0, std::memory_order_release);
 }
@@ -229,21 +231,29 @@ bool Qca7000UartLink::open() {
     if (initialization_error)
         return false;
 
-    g_serial = cfg.serial ? cfg.serial : &Serial;
+    g_uart = cfg.uart_num;
     if (ETH_FRAME_LEN > V2GTP_BUFFER_SIZE) {
         initialization_error = true;
         return false;
     }
-#ifdef ARDUINO
-    if (g_serial) {
-        uint32_t baud = cfg.baud ? cfg.baud : 115200;
-        g_serial->begin(baud);
-        uint64_t bits = static_cast<uint64_t>(V2GTP_BUFFER_SIZE + TX_HDR + FTR_LEN) * 10ULL;
-        uint32_t base_timeout = static_cast<uint32_t>((bits * 1000ULL + baud - 1) / baud);
-        frame_timeout_ms = base_timeout * 4; // add margin for RTS/CTS flow control
-    }
-#else
     uint32_t baud = cfg.baud ? cfg.baud : 115200;
+#ifdef ESP_PLATFORM
+    uart_config_t ucfg{};
+    ucfg.baud_rate = static_cast<int>(baud);
+    ucfg.data_bits = UART_DATA_8_BITS;
+    ucfg.parity = UART_PARITY_DISABLE;
+    ucfg.stop_bits = UART_STOP_BITS_1;
+    ucfg.flow_ctrl = UART_HW_FLOWCTRL_RTS;
+    ucfg.source_clk = UART_SCLK_DEFAULT;
+    uart_param_config(g_uart, &ucfg);
+#ifdef PLC_UART_TX_PIN
+    uart_set_pin(g_uart, PLC_UART_TX_PIN, PLC_UART_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+#endif
+    uart_driver_install(g_uart, V2GTP_BUFFER_SIZE * 2, V2GTP_BUFFER_SIZE * 2, 0, nullptr, 0);
+    uint64_t bits = static_cast<uint64_t>(V2GTP_BUFFER_SIZE + TX_HDR + FTR_LEN) * 10ULL;
+    uint32_t base_timeout = static_cast<uint32_t>((bits * 1000ULL + baud - 1) / baud);
+    frame_timeout_ms = base_timeout * 4; // add margin for RTS/CTS flow control
+#else
     uint64_t bits = static_cast<uint64_t>(V2GTP_BUFFER_SIZE + TX_HDR + FTR_LEN) * 10ULL;
     uint32_t base_timeout = static_cast<uint32_t>((bits * 1000ULL + baud - 1) / baud);
     frame_timeout_ms = base_timeout * 4; // add margin for RTS/CTS flow control

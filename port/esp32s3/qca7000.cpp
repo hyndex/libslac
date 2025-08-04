@@ -18,6 +18,10 @@
 static inline uint32_t esp_random() {
     return 0x12345678u;
 }
+using gpio_num_t = int;
+static inline void gpio_set_level(gpio_num_t, int) {}
+static inline void gpio_set_direction(gpio_num_t, int) {}
+#define GPIO_MODE_OUTPUT 0
 #endif
 #include <atomic>
 #include <slac/fsm.hpp>
@@ -152,22 +156,60 @@ void qca7000SetNmk(const uint8_t nmk[slac::defs::NMK_LEN]) {
 }
 
 #ifdef LIBSLAC_TESTING
-SPIClass* g_spi = nullptr;
+spi_device_handle_t g_spi = nullptr;
 int g_cs = -1;
 int g_rst = PLC_SPI_RST_PIN;
 int g_pwr = PLC_PWR_EN_PIN;
 #else
-static SPIClass* g_spi = nullptr;
+static spi_device_handle_t g_spi = nullptr;
 static int g_cs = -1;
 static int g_rst = PLC_SPI_RST_PIN;
 static int g_pwr = PLC_PWR_EN_PIN;
 #endif
-static inline SPISettings setSlow() {
-    return SPISettings(slac::spi_slow_hz(), MSBFIRST, SPI_MODE3);
+static inline int setSlow() { return slac::spi_slow_hz(); }
+static inline int setFast() { return slac::spi_fast_hz(); }
+
+#ifdef ESP_PLATFORM
+static int g_spi_speed = 0;
+static inline void spiBegin(int speed) {
+    g_spi_speed = speed;
+    spi_device_acquire_bus(g_spi, portMAX_DELAY);
 }
-static inline SPISettings setFast() {
-    return SPISettings(slac::spi_fast_hz(), MSBFIRST, SPI_MODE3);
+static inline void spiEnd() { spi_device_release_bus(g_spi); }
+static inline uint16_t spiTransfer16(uint16_t data) {
+    spi_transaction_t t{};
+    t.flags = SPI_TRANS_USE_TXDATA | SPI_TRANS_USE_RXDATA;
+    t.length = 16;
+    t.tx_data[0] = data >> 8;
+    t.tx_data[1] = data & 0xFF;
+    t.speed_hz = g_spi_speed;
+    spi_device_polling_transmit(g_spi, &t);
+    return (static_cast<uint16_t>(t.rx_data[0]) << 8) | t.rx_data[1];
 }
+static inline uint8_t spiTransfer(uint8_t data) {
+    spi_transaction_t t{};
+    t.flags = SPI_TRANS_USE_TXDATA | SPI_TRANS_USE_RXDATA;
+    t.length = 8;
+    t.tx_data[0] = data;
+    t.speed_hz = g_spi_speed;
+    spi_device_polling_transmit(g_spi, &t);
+    return t.rx_data[0];
+}
+static inline void spiWriteBytes(const uint8_t* d, size_t l) {
+    if (!l) return;
+    spi_transaction_t t{};
+    t.length = l * 8;
+    t.tx_buffer = d;
+    t.speed_hz = g_spi_speed;
+    spi_device_polling_transmit(g_spi, &t);
+}
+#else
+static inline void spiBegin(int) {}
+static inline void spiEnd() {}
+static inline uint16_t spiTransfer16(uint16_t) { return 0; }
+static inline uint8_t spiTransfer(uint8_t) { return 0; }
+static inline void spiWriteBytes(const uint8_t*, size_t) {}
+#endif
 
 namespace {
 struct RxEntry {
@@ -222,57 +264,57 @@ static inline uint16_t cmd16(bool rd, bool intr, uint16_t reg) {
 }
 
 static uint16_t spiRd16_fast(uint16_t reg) {
-    g_spi->beginTransaction(setFast());
-    digitalWrite(g_cs, LOW);
-    g_spi->transfer16(cmd16(true, true, reg));
-    uint16_t v = g_spi->transfer16(0);
-    digitalWrite(g_cs, HIGH);
-    g_spi->endTransaction();
+    spiBegin(setFast());
+    gpio_set_level(static_cast<gpio_num_t>(g_cs), 0);
+    spiTransfer16(cmd16(true, true, reg));
+    uint16_t v = spiTransfer16(0);
+    gpio_set_level(static_cast<gpio_num_t>(g_cs), 1);
+    spiEnd();
     return v;
 }
 
 static uint16_t spiRd16_slow(uint16_t reg) {
-    g_spi->beginTransaction(setSlow());
-    digitalWrite(g_cs, LOW);
-    g_spi->transfer16(cmd16(true, true, reg));
-    uint16_t v = g_spi->transfer16(0);
-    digitalWrite(g_cs, HIGH);
-    g_spi->endTransaction();
+    spiBegin(setSlow());
+    gpio_set_level(static_cast<gpio_num_t>(g_cs), 0);
+    spiTransfer16(cmd16(true, true, reg));
+    uint16_t v = spiTransfer16(0);
+    gpio_set_level(static_cast<gpio_num_t>(g_cs), 1);
+    spiEnd();
     return v;
 }
 
 static void spiWr16_fast(uint16_t reg, uint16_t val) {
-    g_spi->beginTransaction(setFast());
-    digitalWrite(g_cs, LOW);
-    g_spi->transfer16(cmd16(false, true, reg));
-    g_spi->transfer16(val);
-    digitalWrite(g_cs, HIGH);
-    g_spi->endTransaction();
+    spiBegin(setFast());
+    gpio_set_level(static_cast<gpio_num_t>(g_cs), 0);
+    spiTransfer16(cmd16(false, true, reg));
+    spiTransfer16(val);
+    gpio_set_level(static_cast<gpio_num_t>(g_cs), 1);
+    spiEnd();
 }
 
 static void spiWr16_slow(uint16_t reg, uint16_t val) {
-    g_spi->beginTransaction(setSlow());
-    digitalWrite(g_cs, LOW);
-    g_spi->transfer16(cmd16(false, true, reg));
-    g_spi->transfer16(val);
-    digitalWrite(g_cs, HIGH);
-    g_spi->endTransaction();
+    spiBegin(setSlow());
+    gpio_set_level(static_cast<gpio_num_t>(g_cs), 0);
+    spiTransfer16(cmd16(false, true, reg));
+    spiTransfer16(val);
+    gpio_set_level(static_cast<gpio_num_t>(g_cs), 1);
+    spiEnd();
 }
 
 static bool hardReset() {
-    pinMode(g_rst, OUTPUT);
-    digitalWrite(g_rst, LOW);
+    gpio_set_direction(static_cast<gpio_num_t>(g_rst), GPIO_MODE_OUTPUT);
+    gpio_set_level(static_cast<gpio_num_t>(g_rst), 0);
     slac_delay(slac::hardreset_low_ms());
-    digitalWrite(g_rst, HIGH);
+    gpio_set_level(static_cast<gpio_num_t>(g_rst), 1);
     slac_delay(slac::hardreset_high_ms());
 
     auto slowRd16 = [&](uint16_t reg) -> uint16_t {
-        g_spi->beginTransaction(setSlow());
-        digitalWrite(g_cs, LOW);
-        g_spi->transfer16(cmd16(true, true, reg));
-        uint16_t v = g_spi->transfer16(0);
-        digitalWrite(g_cs, HIGH);
-        g_spi->endTransaction();
+        spiBegin(setSlow());
+        gpio_set_level(static_cast<gpio_num_t>(g_cs), 0);
+        spiTransfer16(cmd16(true, true, reg));
+        uint16_t v = spiTransfer16(0);
+        gpio_set_level(static_cast<gpio_num_t>(g_cs), 1);
+        spiEnd();
         return v;
     };
 
@@ -313,21 +355,21 @@ static bool hardReset() {
 
 static bool softReset() {
     auto slowRd16 = [&](uint16_t reg) -> uint16_t {
-        g_spi->beginTransaction(setSlow());
-        digitalWrite(g_cs, LOW);
-        g_spi->transfer16(cmd16(true, true, reg));
-        uint16_t v = g_spi->transfer16(0);
-        digitalWrite(g_cs, HIGH);
-        g_spi->endTransaction();
+        spiBegin(setSlow());
+        gpio_set_level(static_cast<gpio_num_t>(g_cs), 0);
+        spiTransfer16(cmd16(true, true, reg));
+        uint16_t v = spiTransfer16(0);
+        gpio_set_level(static_cast<gpio_num_t>(g_cs), 1);
+        spiEnd();
         return v;
     };
     auto slowWr16 = [&](uint16_t reg, uint16_t val) {
-        g_spi->beginTransaction(setSlow());
-        digitalWrite(g_cs, LOW);
-        g_spi->transfer16(cmd16(false, true, reg));
-        g_spi->transfer16(val);
-        digitalWrite(g_cs, HIGH);
-        g_spi->endTransaction();
+        spiBegin(setSlow());
+        gpio_set_level(static_cast<gpio_num_t>(g_cs), 0);
+        spiTransfer16(cmd16(false, true, reg));
+        spiTransfer16(val);
+        gpio_set_level(static_cast<gpio_num_t>(g_cs), 1);
+        spiEnd();
     };
 
     uint16_t cfg = slowRd16(SPI_REG_SPI_CONFIG);
@@ -466,20 +508,20 @@ static bool txFrame(const uint8_t* eth, size_t ethLen) {
 
     spiWr16_slow(SPI_REG_BFR_SIZE, spiLen);
 
-    g_spi->beginTransaction(setFast());
-    digitalWrite(g_cs, LOW);
-    g_spi->transfer16(cmd16(false, false, 0));
-    g_spi->transfer16(SOF_WORD);
-    g_spi->transfer16(SOF_WORD);
-    g_spi->transfer16(slac::htole16(static_cast<uint16_t>(frameLen)));
-    g_spi->transfer16(0);
+    spiBegin(setFast());
+    gpio_set_level(static_cast<gpio_num_t>(g_cs), 0);
+    spiTransfer16(cmd16(false, false, 0));
+    spiTransfer16(SOF_WORD);
+    spiTransfer16(SOF_WORD);
+    spiTransfer16(slac::htole16(static_cast<uint16_t>(frameLen)));
+    spiTransfer16(0);
     if (ethLen) {
         size_t off = 0;
         while (off < ethLen) {
             size_t chunk = ethLen - off;
             if (chunk > slac::spi_burst_len())
                 chunk = slac::spi_burst_len();
-            g_spi->writeBytes(eth + off, chunk);
+            spiWriteBytes(eth + off, chunk);
             off += chunk;
         }
     }
@@ -491,13 +533,13 @@ static bool txFrame(const uint8_t* eth, size_t ethLen) {
             size_t chunk = padLen - off;
             if (chunk > slac::spi_burst_len())
                 chunk = slac::spi_burst_len();
-            g_spi->writeBytes(pad, chunk);
+            spiWriteBytes(pad, chunk);
             off += chunk;
         }
     }
-    g_spi->transfer16(EOF_WORD);
-    digitalWrite(g_cs, HIGH);
-    g_spi->endTransaction();
+    spiTransfer16(EOF_WORD);
+    gpio_set_level(static_cast<gpio_num_t>(g_cs), 1);
+    spiEnd();
     return true;
 }
 
@@ -534,15 +576,15 @@ static void fetchRx() {
         spiWr16_slow(SPI_REG_BFR_SIZE, requested);
 
         static uint8_t buf[V2GTP_BUFFER_SIZE];
-        g_spi->beginTransaction(setFast());
-        digitalWrite(g_cs, LOW);
-        uint16_t first = g_spi->transfer16(cmd16(true, false, 0));
+        spiBegin(setFast());
+        gpio_set_level(static_cast<gpio_num_t>(g_cs), 0);
+        uint16_t first = spiTransfer16(cmd16(true, false, 0));
         buf[0] = first & 0xFF;
         buf[1] = first >> 8;
         for (uint16_t i = 0; i < avail - 2; ++i)
-            buf[i + 2] = g_spi->transfer(0);
-        digitalWrite(g_cs, HIGH);
-        g_spi->endTransaction();
+            buf[i + 2] = spiTransfer(0);
+        gpio_set_level(static_cast<gpio_num_t>(g_cs), 1);
+        spiEnd();
 
         const uint8_t* p = buf;
         uint32_t len = (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
@@ -1180,9 +1222,9 @@ static void process_cause(uint16_t cause) {
     if (cause & (SPI_INT_WRBUF_ERR | SPI_INT_RDBUF_ERR)) {
         if (!hardReset()) {
             if (++g_crash_count >= 3 && g_pwr >= 0) {
-                digitalWrite(g_pwr, LOW);
+                gpio_set_level(static_cast<gpio_num_t>(g_pwr), 0);
                 slac_delay(200);
-                digitalWrite(g_pwr, HIGH);
+                gpio_set_level(static_cast<gpio_num_t>(g_pwr), 1);
                 slac_delay(200);
                 g_crash_count = 0;
             }
@@ -1199,9 +1241,9 @@ static void process_cause(uint16_t cause) {
         g_buferr_ts = now;
         if (g_buferr_count >= 3) {
             if (g_pwr >= 0) {
-                digitalWrite(g_pwr, LOW);
+                gpio_set_level(static_cast<gpio_num_t>(g_pwr), 0);
                 slac_delay(200);
-                digitalWrite(g_pwr, HIGH);
+                gpio_set_level(static_cast<gpio_num_t>(g_pwr), 1);
                 slac_delay(200);
             }
             g_driver_fatal = true;
@@ -1257,7 +1299,7 @@ void qca7000Process() {
     qca7000ProcessSlice(500);
 }
 
-bool qca7000setup(SPIClass* bus, int csPin, int rstPin) {
+bool qca7000setup(spi_device_handle_t bus, int csPin, int rstPin) {
     ESP_LOGI(PLC_TAG, "QCA7000 setup: bus=%p CS=%d RST=%d", bus, csPin, rstPin);
     if (!ring) {
         ring = new (std::nothrow) RxEntry[RING_SIZE];
@@ -1268,18 +1310,11 @@ bool qca7000setup(SPIClass* bus, int csPin, int rstPin) {
     g_cs = csPin;
     g_rst = rstPin;
     g_pwr = PLC_PWR_EN_PIN;
-    if (g_spi) {
-#ifdef LIBSLAC_TESTING
-        g_spi->begin();
-#else
-        g_spi->begin(PLC_SPI_SCK_PIN, PLC_SPI_MISO_PIN, PLC_SPI_MOSI_PIN, -1);
-#endif
-    }
-    pinMode(g_cs, OUTPUT);
-    digitalWrite(g_cs, HIGH);
+    gpio_set_direction(static_cast<gpio_num_t>(g_cs), GPIO_MODE_OUTPUT);
+    gpio_set_level(static_cast<gpio_num_t>(g_cs), 1);
     if (g_pwr >= 0) {
-        pinMode(g_pwr, OUTPUT);
-        digitalWrite(g_pwr, HIGH);
+        gpio_set_direction(static_cast<gpio_num_t>(g_pwr), GPIO_MODE_OUTPUT);
+        gpio_set_level(static_cast<gpio_num_t>(g_pwr), 1);
     }
 
     for (int attempt = 1; attempt <= QCA7000_MAX_RETRIES; ++attempt) {
@@ -1291,9 +1326,9 @@ bool qca7000setup(SPIClass* bus, int csPin, int rstPin) {
         }
         ESP_LOGE(PLC_TAG, "hardReset failed – modem missing");
         if (attempt < QCA7000_MAX_RETRIES && g_pwr >= 0) {
-            digitalWrite(g_pwr, LOW);
+            gpio_set_level(static_cast<gpio_num_t>(g_pwr), 0);
             slac_delay(200);
-            digitalWrite(g_pwr, HIGH);
+            gpio_set_level(static_cast<gpio_num_t>(g_pwr), 1);
             slac_delay(200);
         }
     }
@@ -1302,9 +1337,7 @@ bool qca7000setup(SPIClass* bus, int csPin, int rstPin) {
 
 void qca7000teardown() {
     if (g_spi) {
-#ifndef LIBSLAC_TESTING
-        g_spi->end();
-#endif
+        // bus handle provided externally; nothing to teardown here
     }
     delete[] ring;
     ring = nullptr;
@@ -1343,7 +1376,7 @@ bool qca7000Sleep() {
     memcpy(g_saved_params.evse_id, g_slac_ctx.evse_id, sizeof(g_saved_params.evse_id));
     qca7000LeaveAvln();
     if (g_pwr >= 0)
-        digitalWrite(g_pwr, LOW);
+        gpio_set_level(static_cast<gpio_num_t>(g_pwr), 0);
     g_sleeping = true;
     if (g_link_ready_cb)
         g_link_ready_cb(false, g_link_ready_arg);
@@ -1354,7 +1387,7 @@ bool qca7000Wake() {
     if (!g_sleeping)
         return true;
     if (g_pwr >= 0) {
-        digitalWrite(g_pwr, HIGH);
+        gpio_set_level(static_cast<gpio_num_t>(g_pwr), 1);
         slac_delay(200);
     }
     if (!hardReset())

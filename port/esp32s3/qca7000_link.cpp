@@ -38,11 +38,11 @@ bool Qca7000Link::open() {
     if (initialization_error)
         return false;
 
-    SPIClass* bus = cfg.spi ? cfg.spi : &SPI;
+    spi_device_handle_t bus = cfg.spi;
     int cs = cfg.cs_pin ? cfg.cs_pin : PLC_SPI_CS_PIN;
     int rst = cfg.rst_pin ? cfg.rst_pin : PLC_SPI_RST_PIN;
 
-    if (ETH_FRAME_LEN > V2GTP_BUFFER_SIZE) {
+    if (ETH_FRAME_LEN > V2GTP_BUFFER_SIZE || !bus) {
         initialization_error = true;
         return false;
     }

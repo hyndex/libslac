@@ -4,9 +4,12 @@
 #include "port_config.hpp"
 
 #include "ethernet_defs.hpp"
-#ifdef ARDUINO
-#include <Arduino.h>
-#include <SPI.h>
+#ifdef ESP_PLATFORM
+#include "driver/gpio.h"
+#include "driver/spi_master.h"
+#else
+using spi_device_handle_t = void*;
+using gpio_num_t = int;
 #endif
 #include <slac/channel.hpp>
 #include <stddef.h>
@@ -69,13 +72,14 @@ static_assert(QCA7000_SPI_BURST_LEN <= 512, "Burst length exceeds FIFO");
 
 
 struct qca7000_config {
-    SPIClass* spi;
+    spi_device_handle_t spi;
     int cs_pin;
     int rst_pin{PLC_SPI_RST_PIN};
     const uint8_t* mac_addr{nullptr};
 };
 
-bool qca7000setup(SPIClass* spi, int cs_pin, int rst_pin = PLC_SPI_RST_PIN);
+bool qca7000setup(spi_device_handle_t spi, int cs_pin,
+                  int rst_pin = PLC_SPI_RST_PIN);
 void qca7000teardown();
 bool qca7000ResetAndCheck();
 bool qca7000SoftReset();
