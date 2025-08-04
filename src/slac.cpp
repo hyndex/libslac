@@ -10,7 +10,6 @@
 #include <cstring>
 #include <type_traits>
 
-#include <arpa/inet.h>
 #include <slac/endian.hpp>
 
 #include <hash_library/sha256.h>
@@ -125,7 +124,7 @@ void HomeplugMessage::setup_ethernet_header(const uint8_t dst_mac_addr[ETH_ALEN]
                                             const uint8_t src_mac_addr[ETH_ALEN]) {
 
     // ethernet frame byte order is big endian
-    raw_msg.ethernet_header.ether_type = htons(defs::ETH_P_HOMEPLUG_GREENPHY);
+    raw_msg.ethernet_header.ether_type = slac::htons(defs::ETH_P_HOMEPLUG_GREENPHY);
     if (dst_mac_addr) {
         memcpy(raw_msg.ethernet_header.ether_dhost, dst_mac_addr, ETH_ALEN);
     }

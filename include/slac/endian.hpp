@@ -15,6 +15,10 @@
 #undef htole64
 #undef le64toh
 #endif
+#ifdef htons
+#undef htons
+#undef ntohs
+#endif
 
 #ifndef __LITTLE_ENDIAN
 #define __LITTLE_ENDIAN 1234
@@ -83,6 +87,17 @@ inline constexpr uint64_t htole64(uint64_t v) {
 #endif
 }
 inline constexpr uint64_t le64toh(uint64_t v) { return htole64(v); }
+#endif
+
+#if !defined(ESP_PLATFORM) && !defined(htons)
+inline constexpr uint16_t htons(uint16_t v) {
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+    return bswap16(v);
+#else
+    return v;
+#endif
+}
+inline constexpr uint16_t ntohs(uint16_t v) { return htons(v); }
 #endif
 
 } // namespace slac
