@@ -18,3 +18,14 @@ TEST(Endian, HostLE) {
     EXPECT_EQ(slac::htole64(v64), v64);
     EXPECT_EQ(slac::le64toh(v64), v64);
 }
+
+TEST(Endian, Network) {
+    uint16_t v16 = 0xA1B2u;
+    uint16_t net = slac::htons(v16);
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+    EXPECT_EQ(net, 0xB2A1u);
+#else
+    EXPECT_EQ(net, v16);
+#endif
+    EXPECT_EQ(slac::ntohs(net), v16);
+}

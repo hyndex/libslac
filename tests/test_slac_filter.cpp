@@ -4,7 +4,7 @@
 #include "port/esp32s3/qca7000.hpp"
 #include <slac/slac.hpp>
 #include <slac/config.hpp>
-#include <arpa/inet.h>
+#include <slac/endian.hpp>
 
 extern "C" void mock_receive_frame(const uint8_t*, size_t);
 extern "C" void mock_ring_reset();
@@ -13,7 +13,7 @@ static void send_frame(uint16_t mmtype, const uint8_t src[ETH_ALEN]) {
     uint8_t frame[sizeof(ether_header) + 3]{};
     ether_header* eth = reinterpret_cast<ether_header*>(frame);
     memcpy(eth->ether_shost, src, ETH_ALEN);
-    eth->ether_type = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
+    eth->ether_type = slac::htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
     frame[sizeof(ether_header)] = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
     uint16_t t = slac::htole16(mmtype);
     memcpy(frame + sizeof(ether_header) + 1, &t, 2);
