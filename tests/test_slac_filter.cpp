@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #define ARDUINO
 #include "arduino_stubs.hpp"
-#include "port/esp32s3/qca7000.hpp"
+#include "qca7000.hpp"
 #include <slac/slac.hpp>
 #include <slac/config.hpp>
 #include <slac/endian.hpp>

@@ -2,20 +2,31 @@
 #include <slac/config.hpp>
 #include <slac/slac.hpp>
 #include <esp32s3/qca7000_link.hpp>
-#include <esp32s3/qca7000.hpp>
-#include <esp32s3/port_config.hpp>
 #include <atomic>
 #include <cstdio>
 #include <esp_log.h>
 #include <esp_timer.h>
+#include <esp_system.h>
+#include <esp_random.h>
 #include <driver/gpio.h>
 #include <driver/uart.h>
 #include <driver/spi_master.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include "cp_pwm.h"
-#include "cp_monitor.h"
-#include "cp_state_machine.h"
+
+// Placeholder stubs for control pilot and EVSE state machine logic that would
+// normally interact with hardware. These are kept minimal so the example can
+// be built without the full hardware drivers.
+inline void cpPwmInit() {}
+inline void cpMonitorInit() {}
+inline bool cpPwmIsRunning() { return false; }
+inline bool cpDigitalCommRequested() { return false; }
+inline uint32_t cpGetVoltageMv() { return 0; }
+inline char cpGetStateLetter() { return 'A'; }
+inline void evseStateMachineInit() {}
+inline void evseStateMachineTask(void*) {}
+inline const char* evseStageName(int) { return ""; }
+inline int evseGetStage() { return 0; }
 
 // qca7000ProcessSlice is declared in qca7000.hpp with a default timeout.
 // The extern declaration here must not specify the default again to avoid
@@ -39,7 +50,7 @@ static slac::Channel* g_channel = nullptr;
 volatile bool plc_irq = false;
 std::atomic<uint8_t> g_slac_state{0};
 
-void IRAM_ATTR plc_isr() { plc_irq = true; }
+void IRAM_ATTR plc_isr(void*) { plc_irq = true; }
 // Timestamp for SLAC restart logic
 std::atomic<uint32_t> g_slac_ts{0};
 static bool hlc_running = false;
@@ -87,9 +98,10 @@ static void logTask(void*) {
     const TickType_t period = pdMS_TO_TICKS(1000);
     while (true) {
         uint32_t mv = cpGetVoltageMv();
-        printf("[STAT] CP=%c %u.%03u V Stage=%s SLAC=%u\n",
+        printf("[STAT] CP=%c %lu.%03lu V Stage=%s SLAC=%u\n",
                cpGetStateLetter(),
-               mv / 1000, mv % 1000,
+               static_cast<unsigned long>(mv / 1000),
+               static_cast<unsigned long>(mv % 1000),
                evseStageName(evseGetStage()),
                g_slac_state.load(std::memory_order_relaxed));
         vTaskDelay(period);
@@ -109,13 +121,7 @@ extern "C" void app_main(void) {
     slac::set_cpuon_timeout_ms(QCA7000_CPUON_TIMEOUT_MS);
     slac::set_max_retries(QCA7000_MAX_RETRIES);
 
-    gpio_config_t in_cfg{};
-    in_cfg.mode = GPIO_MODE_INPUT;
-    in_cfg.pull_up_en = GPIO_PULLUP_ENABLE;
-    in_cfg.pin_bit_mask = (1ULL << LOCK_FB_PIN) |
-                          (1ULL << CONTACTOR_FB_PIN) |
-                          (1ULL << ISOLATION_OK_PIN);
-    gpio_config(&in_cfg);
+
 
     spi_bus_config_t buscfg{};
     buscfg.mosi_io_num = PLC_SPI_MOSI_PIN;
