@@ -1,9 +1,9 @@
 #include <slac/channel.hpp>
 #include <slac/config.hpp>
 #include <slac/slac.hpp>
-#include <port/esp32s3/qca7000_link.hpp>
-#include <port/esp32s3/qca7000.hpp>
-#include <port/esp32s3/port_config.hpp>
+#include <esp32s3/qca7000_link.hpp>
+#include <esp32s3/qca7000.hpp>
+#include <esp32s3/port_config.hpp>
 #include <atomic>
 #include <cstdio>
 #include <esp_log.h>

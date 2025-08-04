@@ -2,7 +2,7 @@
 #include "cp_config.h"
 #include "cp_pwm.h"
 #include <atomic>
-#include <port/esp32s3/qca7000.hpp>
+#include <esp32s3/qca7000.hpp>
 #include <esp_log.h>
 #include <esp_timer.h>
 #include <driver/gpio.h>

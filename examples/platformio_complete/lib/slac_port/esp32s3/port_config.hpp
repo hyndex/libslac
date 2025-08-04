@@ -6,7 +6,7 @@
 #define slac_micros slac_micros
 #define slac_noInterrupts slac_noInterrupts
 #define slac_interrupts slac_interrupts
-#include "../port_common.hpp"
+#include <port/port_common.hpp>
 #undef slac_millis
 #undef slac_delay
 #undef slac_micros

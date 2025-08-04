@@ -1,13 +1,13 @@
-#include <port/esp32s3/qca7000.hpp>
-#include "../port_common.hpp"
-#include <port/esp32s3/port_config.hpp>
+#include "qca7000.hpp"
+#include <port/port_common.hpp>
+#include <esp32s3/port_config.hpp>
 #include <slac/config.hpp>
 #ifdef ESP_LOGW
 #pragma push_macro("ESP_LOGW")
 #undef ESP_LOGW
 #define RESTORE_ESP_LOGW
 #endif
-#include "../logging_compat.hpp"
+#include <port/logging_compat.hpp>
 #ifdef RESTORE_ESP_LOGW
 #pragma pop_macro("ESP_LOGW")
 #undef RESTORE_ESP_LOGW
