@@ -1,5 +1,5 @@
 #pragma once
-#include <Arduino.h>
+#include <stdint.h>
 #include "cp_config.h"
 
 enum CpSubState : uint8_t { CP_A, CP_B1, CP_B2, CP_B3, CP_C, CP_D, CP_E, CP_F };

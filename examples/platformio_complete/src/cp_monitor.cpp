@@ -6,6 +6,7 @@
 #ifndef LIBSLAC_TESTING
 #include <freertos/task.h>
 #endif
+#include <esp_timer.h>
 #ifdef ESP_PLATFORM
 #include <port/esp32s3/port_config.hpp>
 #else
@@ -144,7 +145,8 @@ static void process_samples() {
     CpSubState cur = cp_state.load(std::memory_order_relaxed);
     if (stable_cnt >= 3 && ns != cur) {
         cp_state.store(ns, std::memory_order_relaxed);
-        cp_ts.store(slac_millis(), std::memory_order_relaxed);
+        cp_ts.store(static_cast<uint32_t>(esp_timer_get_time() / 1000),
+                    std::memory_order_relaxed);
     }
 }
 
@@ -213,7 +215,8 @@ void cpMonitorInit() {
         cp_mv.store(mv, std::memory_order_relaxed);
         CpSubState ns = mv2state(mv);
         cp_state.store(ns, std::memory_order_relaxed);
-        cp_ts.store(slac_millis(), std::memory_order_relaxed);
+        cp_ts.store(static_cast<uint32_t>(esp_timer_get_time() / 1000),
+                    std::memory_order_relaxed);
         last_raw = cp_vmax;
         stable_cnt = 1;
         if (vout_cnt > 0) {
