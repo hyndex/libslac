@@ -1,7 +1,7 @@
 #include "qca7000_uart.hpp"
 #include "port_config.hpp"
 #include "qca7000.hpp"
-#include "../logging_compat.hpp"
+#include <port/logging_compat.hpp>
 #include <atomic>
 #include <string.h>
 

@@ -8,7 +8,7 @@
 #endif
 #ifdef ESP_PLATFORM
 #include <esp_timer.h>
-#include <port/esp32s3/port_config.hpp>
+#include <esp32s3/port_config.hpp>
 #else
 #include <sys/time.h>
 #include <port/port_common.hpp>
