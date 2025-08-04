@@ -5,6 +5,7 @@
 #include "driver/uart.h"
 #else
 using uart_port_t = int;
+static constexpr uart_port_t UART_NUM_MAX = -1;
 #endif
 
 #include <slac/ethernet_defs.hpp>
