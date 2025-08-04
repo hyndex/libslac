@@ -1,8 +1,8 @@
 #ifndef SLAC_MATCH_LOG_HPP
 #define SLAC_MATCH_LOG_HPP
 
-#include <stdint.h>
 #include <slac/slac.hpp>
+#include <stdint.h>
 
 namespace slac {
 
@@ -24,6 +24,8 @@ match_log_fn_t get_match_log_fn();
 void slac_log_match(const MatchLogInfo& info);
 
 char slac_get_cp_state();
+
+extern const char* SLAC_LOG_TAG;
 
 } // namespace slac
 
