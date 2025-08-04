@@ -3,8 +3,6 @@
 #ifndef SLAC_SLAC_HPP
 #define SLAC_SLAC_HPP
 
-#include "port/port_common.hpp"
-
 #include <cstddef>
 #include <cstdint>
 #include <type_traits>
