@@ -1,0 +1,9 @@
+idf_component_register(
+    SRCS
+        "cp_monitor.cpp"
+        "cp_pwm.cpp"
+        "cp_state_machine.cpp"
+        "main.cpp"
+    INCLUDE_DIRS
+        "."
+)

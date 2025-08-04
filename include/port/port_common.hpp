@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+#ifndef ESP_PLATFORM
 #ifndef slac_millis
 inline __attribute__((weak)) uint32_t slac_millis() { return 0; }
 #endif
@@ -22,5 +23,6 @@ inline __attribute__((weak)) void slac_noInterrupts() {}
 #ifndef slac_interrupts
 inline __attribute__((weak)) void slac_interrupts() {}
 #endif
+#endif // !ESP_PLATFORM
 
 #endif // SLAC_GENERIC_PORT_CONFIG_HPP
