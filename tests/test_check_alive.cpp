@@ -26,4 +26,5 @@ TEST(Qca7000CheckAlive, CpuOff) {
     mock_wrbuf = 0x0C5B;
     mock_intr_cause = 0;
     EXPECT_FALSE(qca7000CheckAlive());
+    mock_intr_cause = SPI_INT_CPU_ON;
 }

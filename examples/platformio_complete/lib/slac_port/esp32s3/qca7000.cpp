@@ -313,8 +313,13 @@ static bool hardReset() {
     ESP_LOGI(PLC_TAG, "Reset probe OK (SIG=0x%04X)", sig);
 
     t0 = slac_millis();
-    while (!(slowRd16(SPI_REG_INTR_CAUSE) & SPI_INT_CPU_ON) && slac_millis() - t0 < slac::cpuon_timeout_ms())
+    while (!(slowRd16(SPI_REG_INTR_CAUSE) & SPI_INT_CPU_ON) &&
+           slac_millis() - t0 < slac::cpuon_timeout_ms())
         ;
+    if (!(slowRd16(SPI_REG_INTR_CAUSE) & SPI_INT_CPU_ON)) {
+        ESP_LOGE(PLC_TAG, "CPU_ON not asserted after hard reset");
+        return false;
+    }
 
     uint16_t cfg = slowRd16(SPI_REG_SPI_CONFIG);
     if (cfg & QCASPI_MULTI_CS_BIT)
@@ -368,8 +373,13 @@ static bool softReset() {
         return false;
 
     t0 = slac_millis();
-    while (!(slowRd16(SPI_REG_INTR_CAUSE) & SPI_INT_CPU_ON) && slac_millis() - t0 < 80)
+    while (!(slowRd16(SPI_REG_INTR_CAUSE) & SPI_INT_CPU_ON) &&
+           slac_millis() - t0 < 80)
         ;
+    if (!(slowRd16(SPI_REG_INTR_CAUSE) & SPI_INT_CPU_ON)) {
+        ESP_LOGE(PLC_TAG, "CPU_ON not asserted after soft reset");
+        return false;
+    }
     cfg = slowRd16(SPI_REG_SPI_CONFIG);
     if (cfg & QCASPI_MULTI_CS_BIT)
         slowWr16(SPI_REG_SPI_CONFIG, cfg & ~QCASPI_MULTI_CS_BIT);
@@ -530,7 +540,16 @@ static void handleRxError(const char* reason) {
     }
     if (!ok) {
         ESP_LOGW(PLC_TAG, "Soft reset failed - performing hard reset");
-        hardReset();
+        ok = hardReset();
+    }
+    if (!ok) {
+        ESP_LOGE(PLC_TAG, "Hard reset failed");
+        g_driver_fatal = true;
+        if (g_err_cb.flag)
+            *g_err_cb.flag = true;
+        if (g_err_cb.cb)
+            g_err_cb.cb(Qca7000ErrorStatus::DriverFatal, g_err_cb.arg);
+        return;
     }
     head.store(0, std::memory_order_relaxed);
     tail.store(0, std::memory_order_relaxed);
@@ -1196,7 +1215,9 @@ static void process_cause(uint16_t cause) {
     }
 
     if (cause & (SPI_INT_WRBUF_ERR | SPI_INT_RDBUF_ERR)) {
-        if (!hardReset()) {
+        bool ok = hardReset();
+        if (!ok) {
+            ESP_LOGE(PLC_TAG, "Hard reset failed after buffer error");
             if (++g_crash_count >= 3 && g_pwr >= 0) {
                 gpio_set_level(static_cast<gpio_num_t>(g_pwr), 0);
                 slac_delay(200);
@@ -1204,11 +1225,12 @@ static void process_cause(uint16_t cause) {
                 slac_delay(200);
                 g_crash_count = 0;
             }
+            g_driver_fatal = true;
         } else {
             g_crash_count = 0;
             qca7000startSlac();
         }
-        bool fatal = false;
+        bool fatal = !ok;
         uint32_t now = slac_millis();
         if (now - g_buferr_ts <= 1000)
             ++g_buferr_count;
@@ -1229,7 +1251,10 @@ static void process_cause(uint16_t cause) {
         if (g_err_cb.flag)
             *g_err_cb.flag = fatal || g_driver_fatal;
         if (g_err_cb.cb)
-            g_err_cb.cb(fatal ? Qca7000ErrorStatus::DriverFatal : Qca7000ErrorStatus::Reset, g_err_cb.arg);
+            g_err_cb.cb((fatal || g_driver_fatal) ?
+                            Qca7000ErrorStatus::DriverFatal :
+                            Qca7000ErrorStatus::Reset,
+                        g_err_cb.arg);
     }
 
     if (cause & SPI_INT_PKT_AVLBL) {
