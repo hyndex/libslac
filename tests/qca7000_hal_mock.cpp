@@ -26,6 +26,8 @@ bool qca7000CheckBcbToggle();
 spi_device_handle_t spi_used = nullptr;
 int spi_cs = -1;
 int spi_rst = -1;
+int spi_int = -1;
+int spi_pwr = -1;
 
 bool reset_called = false;
 bool soft_reset_called = false;
@@ -74,8 +76,17 @@ extern "C" void mock_spi_feed_raw(const uint8_t* d, size_t l) {
     soft_reset_called = false;
 }
 
-bool qca7000setup(spi_device_handle_t spi, int cs, int rst) {
-    spi_used = spi; spi_cs = cs; spi_rst = rst; return true;
+bool qca7000setup(spi_device_handle_t spi,
+                  int cs,
+                  int rst,
+                  int intr,
+                  int pwr) {
+    spi_used = spi;
+    spi_cs = cs;
+    spi_rst = rst;
+    spi_int = intr;
+    spi_pwr = pwr;
+    return true;
 }
 
 void qca7000teardown() { spi_used = nullptr; }

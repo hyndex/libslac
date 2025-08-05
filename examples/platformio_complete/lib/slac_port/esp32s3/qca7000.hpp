@@ -74,11 +74,16 @@ struct qca7000_config {
     spi_device_handle_t spi;
     int cs_pin;
     int rst_pin{PLC_SPI_RST_PIN};
+    int int_pin{PLC_INT_PIN};
+    int pwr_en_pin{PLC_PWR_EN_PIN};
     const uint8_t* mac_addr{nullptr};
 };
 
-bool qca7000setup(spi_device_handle_t spi, int cs_pin,
-                  int rst_pin = PLC_SPI_RST_PIN);
+bool qca7000setup(spi_device_handle_t spi,
+                  int cs_pin,
+                  int rst_pin = PLC_SPI_RST_PIN,
+                  int int_pin = PLC_INT_PIN,
+                  int pwr_en_pin = PLC_PWR_EN_PIN);
 void qca7000teardown();
 bool qca7000ResetAndCheck();
 bool qca7000SoftReset();

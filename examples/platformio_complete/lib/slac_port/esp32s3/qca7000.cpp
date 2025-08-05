@@ -165,11 +165,13 @@ const uint8_t* qca7000GetNmk() {
 spi_device_handle_t g_spi = nullptr;
 int g_cs = -1;
 int g_rst = PLC_SPI_RST_PIN;
+int g_int = PLC_INT_PIN;
 int g_pwr = PLC_PWR_EN_PIN;
 #else
 static spi_device_handle_t g_spi = nullptr;
 static int g_cs = -1;
 static int g_rst = PLC_SPI_RST_PIN;
+static int g_int = PLC_INT_PIN;
 static int g_pwr = PLC_PWR_EN_PIN;
 #endif
 static inline int setSlow() { return slac::spi_slow_hz(); }
@@ -1313,8 +1315,18 @@ void qca7000Process() {
     qca7000ProcessSlice(500);
 }
 
-bool qca7000setup(spi_device_handle_t bus, int csPin, int rstPin) {
-    ESP_LOGI(PLC_TAG, "QCA7000 setup: bus=%p CS=%d RST=%d", bus, csPin, rstPin);
+bool qca7000setup(spi_device_handle_t bus,
+                  int csPin,
+                  int rstPin,
+                  int intPin,
+                  int pwrPin) {
+    ESP_LOGI(PLC_TAG,
+             "QCA7000 setup: bus=%p CS=%d RST=%d INT=%d PWR=%d",
+             bus,
+             csPin,
+             rstPin,
+             intPin,
+             pwrPin);
     if (!ring) {
         ring = new (std::nothrow) RxEntry[RING_SIZE];
         head.store(0, std::memory_order_relaxed);
@@ -1323,7 +1335,8 @@ bool qca7000setup(spi_device_handle_t bus, int csPin, int rstPin) {
     g_spi = bus;
     g_cs = csPin;
     g_rst = rstPin;
-    g_pwr = PLC_PWR_EN_PIN;
+    g_int = intPin;
+    g_pwr = pwrPin;
     gpio_set_direction(static_cast<gpio_num_t>(g_cs), GPIO_MODE_OUTPUT);
     gpio_set_level(static_cast<gpio_num_t>(g_cs), 1);
     if (g_pwr >= 0) {
