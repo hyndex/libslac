@@ -18,6 +18,20 @@ The project pulls `libslac` automatically via `lib_deps`.
 Custom chip select and reset pins for the modem can be configured by
 editing `build_flags` in `platformio.ini`.
 
+### Interrupt edge configuration
+
+The QCA7000 signals new data by pulsing its `INT` line.  Depending on the
+modem or carrier board the pulse can be active-high or active-low.  The
+GPIO interrupt edge is selected with the `PLC_INT_EDGE` build flag and
+defaults to `GPIO_INTR_NEGEDGE`.  Set it to `GPIO_INTR_POSEDGE` if your
+hardware drives the interrupt line low-to-high when data is ready:
+
+```
+build_flags =
+    ...
+    -DPLC_INT_EDGE=GPIO_INTR_POSEDGE
+```
+
 ### Required build flags
 
 `cp_monitor.cpp` uses the ESP-IDF continuous ADC API.  The Arduino core

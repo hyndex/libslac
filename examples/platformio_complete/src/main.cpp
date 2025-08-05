@@ -13,6 +13,7 @@
 #include <driver/spi_master.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include "plc_irq.hpp"
 
 // Placeholder stubs for control pilot and EVSE state machine logic that would
 // normally interact with hardware. These are kept minimal so the example can
@@ -47,10 +48,7 @@ static inline uint32_t get_ms() {
 
 // Global pointer used by the polling loop
 static slac::Channel* g_channel = nullptr;
-volatile bool plc_irq = false;
 std::atomic<uint8_t> g_slac_state{0};
-
-void IRAM_ATTR plc_isr(void*) { plc_irq = true; }
 // Timestamp for SLAC restart logic
 std::atomic<uint32_t> g_slac_ts{0};
 static bool hlc_running = false;
@@ -155,14 +153,7 @@ extern "C" void app_main(void) {
             vTaskDelay(pdMS_TO_TICKS(1000));
     }
 
-    gpio_config_t int_cfg{};
-    int_cfg.pin_bit_mask = 1ULL << PLC_INT_PIN;
-    int_cfg.mode = GPIO_MODE_INPUT;
-    int_cfg.pull_up_en = GPIO_PULLUP_ENABLE;
-    int_cfg.intr_type = GPIO_INTR_NEGEDGE;
-    gpio_config(&int_cfg);
-    gpio_install_isr_service(0);
-    gpio_isr_handler_add(static_cast<gpio_num_t>(PLC_INT_PIN), plc_isr, nullptr);
+    plc_irq_setup();
     // Start with the default NMK to match the PEV
     qca7000SetNmk(nullptr);
 
