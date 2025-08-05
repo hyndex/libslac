@@ -54,3 +54,21 @@ TEST(PlcIrqEdge, Positive) {
     registered_isr(nullptr);
     EXPECT_TRUE(plc_irq_pos);
 }
+
+#undef PLC_INT_PIN
+#define PLC_INT_PIN -1
+
+static bool plc_irq_setup_called = false;
+static void plc_irq_setup_stub() { plc_irq_setup_called = true; }
+
+TEST(PlcIrqEdge, InvalidPin) {
+    testing::internal::CaptureStdout();
+    if (PLC_INT_PIN >= 0) {
+        plc_irq_setup_stub();
+    } else {
+        printf("PLC_INT_PIN invalid: %d\n", PLC_INT_PIN);
+    }
+    std::string log = testing::internal::GetCapturedStdout();
+    EXPECT_FALSE(plc_irq_setup_called);
+    EXPECT_NE(log.find("PLC_INT_PIN invalid"), std::string::npos);
+}

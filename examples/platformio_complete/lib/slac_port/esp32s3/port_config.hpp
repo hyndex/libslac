@@ -65,6 +65,7 @@
 #ifndef PLC_INT_PIN
 #define PLC_INT_PIN -1
 #endif
+static_assert(PLC_INT_PIN >= 0, "PLC_INT_PIN undefined");
 
 #ifndef PLC_SPI_CS_PIN
 static_assert(false, "PLC_SPI_CS_PIN undefined");

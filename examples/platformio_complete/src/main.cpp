@@ -154,7 +154,11 @@ extern "C" void app_main(void) {
             vTaskDelay(pdMS_TO_TICKS(1000));
     }
 
-    plc_irq_setup();
+    if (PLC_INT_PIN >= 0) {
+        plc_irq_setup();
+    } else {
+        ESP_LOGE(TAG, "Invalid PLC_INT_PIN %d; skipping IRQ setup", PLC_INT_PIN);
+    }
     // Start with the default NMK to match the PEV
     qca7000SetNmk(nullptr);
 
