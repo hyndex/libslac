@@ -576,40 +576,49 @@ static void fetchRx() {
         uint16_t first = spiTransfer16(cmd16(true, false, 0));
         buf[0] = first & 0xFF;
         buf[1] = first >> 8;
-        for (uint16_t i = 0; i < avail - 2; ++i)
+        for (uint16_t i = 0; i < requested - 2; ++i)
             buf[i + 2] = spiTransfer(0);
         gpio_set_level(static_cast<gpio_num_t>(g_cs), 1);
         spiEnd();
 
         const uint8_t* p = buf;
-        uint32_t len = (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
-                        ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
-        bool len_excludes_hdr = false;
-        if (len != requested) {
-            if (len + 4 == requested) {
-                len_excludes_hdr = true;
-            } else {
-                ESP_LOGE(PLC_TAG, "RX len mismatch: req=%" PRIu32 " got=%" PRIu32,
-                         static_cast<uint32_t>(requested), len);
-                handleRxError("length mismatch");
+        uint16_t remaining = requested;
+        while (remaining >= RX_HDR + FTR_LEN) {
+            uint32_t len = (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
+                            ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+            if (memcmp(p + 4, "\xAA\xAA\xAA\xAA", 4) != 0) {
+                handleRxError("bad SOF");
+                remaining = 0;
                 break;
             }
+
+            uint16_t fl = slac::le16toh(static_cast<uint16_t>((p[9] << 8) | p[8]));
+            uint16_t frame_total = RX_HDR + fl + FTR_LEN;
+            if (len != frame_total && len + 4 != frame_total) {
+                ESP_LOGE(PLC_TAG,
+                         "RX len mismatch: req=%" PRIu32 " got=%" PRIu32,
+                         static_cast<uint32_t>(frame_total), len);
+                handleRxError("length mismatch");
+                remaining = 0;
+                break;
+            }
+
+            if (frame_total > remaining) {
+                handleRxError("invalid FL");
+                remaining = 0;
+                break;
+            }
+            if (p[RX_HDR + fl] != 0x55 || p[RX_HDR + fl + 1] != 0x55) {
+                handleRxError("bad EOF");
+                remaining = 0;
+                break;
+            }
+
+            ringPush(p + RX_HDR, fl);
+
+            p += frame_total;
+            remaining -= frame_total;
         }
-        if (memcmp(p + 4, "\xAA\xAA\xAA\xAA", 4) != 0) {
-            handleRxError("bad SOF");
-            break;
-        }
-        uint16_t fl = len_excludes_hdr ? static_cast<uint16_t>(len - 10)
-                                       : slac::le16toh(static_cast<uint16_t>((p[9] << 8) | p[8]));
-        if (fl > avail - RX_HDR - FTR_LEN) {
-            handleRxError("invalid FL");
-            break;
-        }
-        if (p[RX_HDR + fl] != 0x55 || p[RX_HDR + fl + 1] != 0x55) {
-            handleRxError("bad EOF");
-            break;
-        }
-        ringPush(p + RX_HDR, fl);
     }
 }
 

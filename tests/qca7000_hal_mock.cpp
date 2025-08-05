@@ -122,44 +122,43 @@ void fetchRx() {
     if (spi_read_len == 0)
         return;
 
-    size_t avail = spi_read_len;
+    size_t remaining = spi_read_len;
     const uint8_t* p = spi_read_buf;
-    if (avail < RX_HDR + FTR_LEN || avail > V2GTP_BUFFER_SIZE) {
+    if (remaining < RX_HDR + FTR_LEN || remaining > V2GTP_BUFFER_SIZE) {
         spi_read_len = 0;
         return;
     }
 
-    uint32_t len = (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
-                    ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
-    bool len_excludes_hdr = false;
-    if (len != avail) {
-        if (len + 4 == avail) {
-            len_excludes_hdr = true;
-        } else {
+    while (remaining >= RX_HDR + FTR_LEN) {
+        uint32_t len = (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
+                        ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+        if (memcmp(p + 4, "\xAA\xAA\xAA\xAA", 4) != 0) {
             qca7000SoftReset();
             spi_read_len = 0;
             return;
         }
-    }
-    if (memcmp(p + 4, "\xAA\xAA\xAA\xAA", 4) != 0) {
-        qca7000SoftReset();
-        spi_read_len = 0;
-        return;
-    }
 
-    uint16_t fl = len_excludes_hdr ? static_cast<uint16_t>(len - 10)
-                                   : slac::le16toh(static_cast<uint16_t>((p[9] << 8) | p[8]));
-    if (fl > avail - RX_HDR - FTR_LEN) {
-        qca7000SoftReset();
-        spi_read_len = 0;
-        return;
+        uint16_t fl = slac::le16toh(static_cast<uint16_t>((p[9] << 8) | p[8]));
+        uint16_t frame_total = RX_HDR + fl + FTR_LEN;
+        if (len != frame_total && len + 4 != frame_total) {
+            qca7000SoftReset();
+            spi_read_len = 0;
+            return;
+        }
+        if (frame_total > remaining) {
+            qca7000SoftReset();
+            spi_read_len = 0;
+            return;
+        }
+        if (p[RX_HDR + fl] != 0x55 || p[RX_HDR + fl + 1] != 0x55) {
+            qca7000SoftReset();
+            spi_read_len = 0;
+            return;
+        }
+        mock_receive_frame(p + RX_HDR, fl);
+        p += frame_total;
+        remaining -= frame_total;
     }
-    if (p[RX_HDR + fl] != 0x55 || p[RX_HDR + fl + 1] != 0x55) {
-        qca7000SoftReset();
-        spi_read_len = 0;
-        return;
-    }
-    mock_receive_frame(p + RX_HDR, fl);
     spi_read_len = 0;
 }
 
