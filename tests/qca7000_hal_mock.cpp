@@ -5,6 +5,7 @@
 #include <slac/endian.hpp>
 #include <cstdint>
 #include <atomic>
+#include <cstdio>
 extern uint32_t g_mock_millis;
 void qca7000ToggleCpEf();
 bool qca7000CheckBcbToggle();
@@ -51,7 +52,7 @@ static std::atomic<uint8_t> head{0}, tail{0};
 
 uint16_t mock_signature = 0;
 uint16_t mock_wrbuf = 0;
-uint16_t mock_intr_cause = 0;
+uint16_t mock_intr_cause = SPI_INT_CPU_ON;
 
 extern "C" void mock_ring_reset() { head.store(0); tail.store(0); }
 extern "C" void mock_receive_frame(const uint8_t* f, size_t l) {
@@ -81,10 +82,23 @@ void qca7000teardown() { spi_used = nullptr; }
 
 bool qca7000ResetAndCheck() {
     reset_called = true;
+    if (mock_signature != 0xAA55 || mock_wrbuf != 0x0C5B) {
+        fprintf(stderr, "Reset probe failed (SIG=%04X BUF=%04X)\n",
+                mock_signature, mock_wrbuf);
+        return false;
+    }
+    if (!(mock_intr_cause & SPI_INT_CPU_ON)) {
+        fprintf(stderr, "CPU_ON not asserted after hard reset\n");
+        return false;
+    }
     return true;
 }
 bool qca7000SoftReset() {
     soft_reset_called = true;
+    if (!(mock_intr_cause & SPI_INT_CPU_ON)) {
+        fprintf(stderr, "CPU_ON not asserted after soft reset\n");
+        return false;
+    }
     return true;
 }
 uint16_t qca7000ReadInternalReg(uint16_t reg) {
