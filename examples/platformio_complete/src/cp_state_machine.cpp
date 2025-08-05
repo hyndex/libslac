@@ -5,6 +5,7 @@
 #include <esp32s3/qca7000.hpp>
 #include <esp_log.h>
 #include <esp_timer.h>
+#include <esp_random.h>
 #include <driver/gpio.h>
 
 extern bool g_use_random_mac;
@@ -68,10 +69,6 @@ static void handleInitialiseB1() {
         }
         if (g_use_random_mac) {
             qca7000SetMac(g_mac_addr);
-            uint8_t nmk[slac::defs::NMK_LEN];
-            for (uint8_t& b : nmk)
-                b = static_cast<uint8_t>(esp_random() & 0xFF);
-            qca7000SetNmk(nmk);
         }
         if (!qca7000startSlac()) {
             stageEnter(EVSE_IDLE_A);
@@ -84,11 +81,21 @@ static void handleInitialiseB1() {
 }
 
 static void handleDigitalReqB2() {
-    if (g_slac_state.load(std::memory_order_relaxed) == 6 && (cpGetSubState() == CP_C || cpGetSubState() == CP_D)) {
+    static bool nmk_switched = false;
+    if (g_slac_state.load(std::memory_order_relaxed) == 6 &&
+        (cpGetSubState() == CP_C || cpGetSubState() == CP_D)) {
+        if (g_use_random_mac && !nmk_switched) {
+            uint8_t nmk[slac::defs::NMK_LEN];
+            for (uint8_t& b : nmk)
+                b = static_cast<uint8_t>(esp_random() & 0xFF);
+            qca7000SetNmk(nmk);
+            nmk_switched = true;
+        }
         stageEnter(EVSE_CABLE_CHECK_C);
         return;
     }
-    if (t_stage.load(std::memory_order_relaxed) > T_HLC_EST_MS && g_slac_state.load(std::memory_order_relaxed) != 6) {
+    if (t_stage.load(std::memory_order_relaxed) > T_HLC_EST_MS &&
+        g_slac_state.load(std::memory_order_relaxed) != 6) {
         stageEnter(EVSE_INITIALISE_B1);
     }
 }

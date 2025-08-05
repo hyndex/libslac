@@ -54,6 +54,7 @@ void IRAM_ATTR plc_isr(void*) { plc_irq = true; }
 // Timestamp for SLAC restart logic
 std::atomic<uint32_t> g_slac_ts{0};
 static bool hlc_running = false;
+static bool nmk_switched = false;
 
 static void hlc_start() {
     ESP_LOGI(TAG, "[HLC] start");
@@ -162,7 +163,8 @@ extern "C" void app_main(void) {
     gpio_config(&int_cfg);
     gpio_install_isr_service(0);
     gpio_isr_handler_add(static_cast<gpio_num_t>(PLC_INT_PIN), plc_isr, nullptr);
-    qca7000SetNmk(EVSE_NMK);
+    // Start with the default NMK to match the PEV
+    qca7000SetNmk(nullptr);
 
     cpPwmInit();
     cpMonitorInit();
@@ -194,6 +196,11 @@ extern "C" void app_main(void) {
         }
 
         g_slac_state.store(qca7000getSlacResult(), std::memory_order_relaxed);
+        if (!nmk_switched && g_slac_state.load(std::memory_order_relaxed) == 6) {
+            if (!g_use_random_mac)
+                qca7000SetNmk(EVSE_NMK);
+            nmk_switched = true;
+        }
         if (!hlc_running && g_slac_state.load(std::memory_order_relaxed) == 6)
             hlc_start();
         if (hlc_running && g_slac_state.load(std::memory_order_relaxed) != 6)
