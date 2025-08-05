@@ -66,6 +66,24 @@ PlatformIO downloads the library and sets up include paths
 automatically.  This keeps the example self contained without copying
 the sources into your project.
 
+Individual pin assignments can be overridden in the same section using
+`-D` flags.  For example:
+
+```ini
+build_flags = \
+    -std=gnu++17 -DESP_PLATFORM \
+    -DPLC_SPI_SCK_PIN=48 \
+    -DPLC_SPI_MISO_PIN=21 \
+    -DPLC_SPI_MOSI_PIN=47 \
+    -DPLC_SPI_CS_PIN=41 \
+    -DPLC_SPI_RST_PIN=40 \
+    -DPLC_INT_PIN=16 \
+    -DPLC_PWR_EN_PIN=15
+```
+
+These macros may also be defined directly in source files before
+including `qca7000.hpp` if you prefer not to modify `platformio.ini`.
+
 ## 5. Example `main.cpp`
 
 The example firmware simply initialises the QCA7000 link and polls the

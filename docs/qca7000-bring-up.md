@@ -4,17 +4,42 @@ This short guide covers basic wiring and verification of a QCA7000-based power l
 
 ## Pin Configuration
 
-The ESP32-S3 port defines default SPI pins in `port/esp32s3/qca7000.hpp`:
+The ESP32‑S3 port defines default pin assignments via compile‑time
+macros in `port/esp32s3/qca7000.hpp`:
 
 | Signal        | Macro                | Default Pin |
-|---------------|---------------------|-------------|
-| SPI MISO      | `PLC_SPI_MISO_PIN`  | 21          |
-| SPI MOSI      | `PLC_SPI_MOSI_PIN`  | 47          |
-| SPI SCK       | `PLC_SPI_SCK_PIN`   | 48          |
-| Chip Select   | `PLC_SPI_CS_PIN`    | 17          |
-| Reset         | `PLC_SPI_RST_PIN`   | 5           |
+|---------------|----------------------|-------------|
+| SPI MISO      | `PLC_SPI_MISO_PIN`   | 21          |
+| SPI MOSI      | `PLC_SPI_MOSI_PIN`   | 47          |
+| SPI SCK       | `PLC_SPI_SCK_PIN`    | 48          |
+| Chip Select   | `PLC_SPI_CS_PIN`     | 17          |
+| Reset         | `PLC_SPI_RST_PIN`    | 5           |
+| Interrupt¹    | `PLC_INT_PIN`        | —           |
+| Power Enable² | `PLC_PWR_EN_PIN`     | —           |
 
-Override these macros or pass explicit values to `qca7000_config` if your wiring differs. The interrupt line is defined by `PLC_INT_PIN` (IO16 in the example configuration) and should be connected so an ISR can call `qca7000ProcessSlice()` when the modem signals new data.
+1. Active‑low open‑drain; add a pull‑up to 3.3 V (10 kΩ typical).
+2. Optional active‑high control; keep low with a pull‑down resistor when
+   unused.
+
+The SPI signals are push‑pull and normally do not require additional
+pull‑ups or pull‑downs.
+
+Override these macros or pass explicit values to `qca7000_config` if your
+wiring differs. For example, in `platformio.ini`:
+
+```ini
+build_flags = \
+    -DPLC_SPI_SCK_PIN=48 \
+    -DPLC_SPI_MISO_PIN=21 \
+    -DPLC_SPI_MOSI_PIN=47 \
+    -DPLC_SPI_CS_PIN=41 \
+    -DPLC_SPI_RST_PIN=40 \
+    -DPLC_INT_PIN=16 \
+    -DPLC_PWR_EN_PIN=15
+```
+
+The interrupt line should be connected so an ISR can call
+`qca7000ProcessSlice()` when the modem signals new data.
 
 ```cpp
 volatile bool plc_irq = false;
