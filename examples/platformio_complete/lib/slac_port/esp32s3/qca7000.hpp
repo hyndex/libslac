@@ -109,6 +109,7 @@ bool qca7000DriverFatal();
 void qca7000SetIds(const uint8_t pev_id[slac::messages::PEV_ID_LEN],
                    const uint8_t evse_id[slac::messages::EVSE_ID_LEN]);
 void qca7000SetNmk(const uint8_t nmk[slac::defs::NMK_LEN]);
+const uint8_t* qca7000GetNmk();
 void qca7000SetMac(const uint8_t mac[ETH_ALEN]);
 const uint8_t* qca7000GetMac();
 

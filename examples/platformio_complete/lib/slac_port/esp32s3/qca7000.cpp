@@ -157,6 +157,10 @@ void qca7000SetNmk(const uint8_t nmk[slac::defs::NMK_LEN]) {
     }
 }
 
+const uint8_t* qca7000GetNmk() {
+    return g_evse_nmk;
+}
+
 #ifdef LIBSLAC_TESTING
 spi_device_handle_t g_spi = nullptr;
 int g_cs = -1;
