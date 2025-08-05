@@ -138,7 +138,8 @@ extern "C" void app_main(void) {
     spi_device_handle_t spi_handle;
     ESP_ERROR_CHECK(spi_bus_add_device(SPI2_HOST, &devcfg, &spi_handle));
 
-    qca7000_config cfg{spi_handle, PLC_SPI_CS_PIN, PLC_SPI_RST_PIN, g_mac_addr};
+    qca7000_config cfg{spi_handle, PLC_SPI_CS_PIN, PLC_SPI_RST_PIN,
+                       PLC_INT_PIN, PLC_PWR_EN_PIN, g_mac_addr};
     static slac::port::Qca7000Link link(cfg);
     link.set_error_callback([](Qca7000ErrorStatus, void*) {
         ESP_LOGI(TAG, "[PLC] Fatal error - driver auto-reset");

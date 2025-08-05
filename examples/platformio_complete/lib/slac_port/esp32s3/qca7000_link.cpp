@@ -41,13 +41,15 @@ bool Qca7000Link::open() {
     spi_device_handle_t bus = cfg.spi;
     int cs = cfg.cs_pin ? cfg.cs_pin : PLC_SPI_CS_PIN;
     int rst = cfg.rst_pin ? cfg.rst_pin : PLC_SPI_RST_PIN;
+    int intr = cfg.int_pin ? cfg.int_pin : PLC_INT_PIN;
+    int pwr = cfg.pwr_en_pin ? cfg.pwr_en_pin : PLC_PWR_EN_PIN;
 
     if (ETH_FRAME_LEN > V2GTP_BUFFER_SIZE || !bus) {
         initialization_error = true;
         return false;
     }
 
-    if (!qca7000setup(bus, cs, rst)) {
+    if (!qca7000setup(bus, cs, rst, intr, pwr)) {
         initialization_error = true;
         return false;
     }
