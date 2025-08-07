@@ -142,7 +142,11 @@ static void handlePowerDown() {
 }
 
 static void handleUnlockB1() {
-    cpPwmStart(CP_PWM_DUTY_5PCT); // hold 9V while waiting for unplug
+    if (t_stage.load(std::memory_order_relaxed) == 0 || !cpPwmIsRunning()) {
+        cpPwmStart(CP_PWM_DUTY_5PCT); // hold 9V while waiting for unplug
+    } else {
+        cpPwmSetDuty(CP_PWM_DUTY_5PCT);
+    }
     if (cpGetSubState() == CP_A) {
         stageEnter(EVSE_IDLE_A);
     }
