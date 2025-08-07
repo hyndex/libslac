@@ -3,8 +3,8 @@
 #include "Arduino.h"
 
 #include "cp_monitor.h"
-#include "esp_adc/adc_continuous.h"
 #include "cp_monitor_mocks.hpp"
+#include "esp_adc/adc_continuous.h"
 
 #include "cp_config.h"
 
@@ -26,11 +26,16 @@ TEST(CpMonitor, DmaPeakDetection) {
     cpMonitorInit();
 
     adc_digi_output_data_t buf[5] = {};
-    buf[0].type1.data = 50;   buf[0].type1.channel = CP_CH;
-    buf[1].type1.data = 1000; buf[1].type1.channel = CP_CH;
-    buf[2].type1.data = 3000; buf[2].type1.channel = CP_CH; // max
-    buf[3].type1.data = 1500; buf[3].type1.channel = CP_CH;
-    buf[4].type1.data = 20;   buf[4].type1.channel = CP_CH;
+    buf[0].type1.data = 50;
+    buf[0].type1.channel = CP_CH;
+    buf[1].type1.data = 1000;
+    buf[1].type1.channel = CP_CH;
+    buf[2].type1.data = 3000;
+    buf[2].type1.channel = CP_CH; // max
+    buf[3].type1.data = 1500;
+    buf[3].type1.channel = CP_CH;
+    buf[4].type1.data = 20;
+    buf[4].type1.channel = CP_CH;
 
     adcMockSetDmaData(buf, 5);
 
@@ -52,10 +57,14 @@ TEST(CpMonitor, VoutMeasurement) {
     cpMonitorInit();
 
     adc_digi_output_data_t buf[4] = {};
-    buf[0].type1.channel = VOUT_CH; buf[0].type1.data = 1000;
-    buf[1].type1.channel = VOUT_CH; buf[1].type1.data = 3000;
-    buf[2].type1.channel = CP_CH;   buf[2].type1.data = 0;
-    buf[3].type1.channel = CP_CH;   buf[3].type1.data = 0;
+    buf[0].type1.channel = VOUT_CH;
+    buf[0].type1.data = 1000;
+    buf[1].type1.channel = VOUT_CH;
+    buf[1].type1.data = 3000;
+    buf[2].type1.channel = CP_CH;
+    buf[2].type1.data = 0;
+    buf[3].type1.channel = CP_CH;
+    buf[3].type1.data = 0;
     adcMockSetDmaData(buf, 4);
 
     cpMonitorTestProcess();
@@ -68,6 +77,14 @@ static void init_monitor() {
     adc_digi_output_data_t initbuf[1] = {};
     initbuf[0].type1.channel = CP_CH;
     initbuf[0].type1.data = 0;
+    adcMockSetDmaData(initbuf, 1);
+    cpMonitorInit();
+}
+
+static void init_monitor_raw(uint16_t raw) {
+    adc_digi_output_data_t initbuf[1] = {};
+    initbuf[0].type1.channel = CP_CH;
+    initbuf[0].type1.data = raw;
     adcMockSetDmaData(initbuf, 1);
     cpMonitorInit();
 }
@@ -156,6 +173,62 @@ TEST(CpMonitor, DutyClassificationC) {
     uint16_t expected = static_cast<uint16_t>((10u << CP_PWM_RES_BITS) / 20u);
     EXPECT_EQ(cpGetMeasuredDuty(), expected);
     EXPECT_EQ(cpGetSubState(), CP_C);
+
+    cpMonitorStop();
+}
+
+TEST(CpMonitor, StateTransitionE) {
+    reset_mocks();
+    init_monitor_raw(3000); // start in state A
+
+    adc_digi_output_data_t buf[20] = {};
+    for (int i = 0; i < 20; ++i) {
+        buf[i].type1.channel = CP_CH;
+        buf[i].type1.data = 1500; // between 1V and 3V
+    }
+    feed_and_process(buf, 20);
+
+    EXPECT_EQ(cpGetSubState(), CP_E);
+
+    for (int i = 0; i < 10; ++i) {
+        buf[i].type1.channel = CP_CH;
+        buf[i].type1.data = 3000;
+    }
+    for (int i = 10; i < 20; ++i) {
+        buf[i].type1.channel = CP_CH;
+        buf[i].type1.data = 0;
+    }
+    feed_and_process(buf, 20);
+
+    EXPECT_EQ(cpGetSubState(), CP_A);
+
+    cpMonitorStop();
+}
+
+TEST(CpMonitor, StateTransitionF) {
+    reset_mocks();
+    init_monitor_raw(3000); // start in state A
+
+    adc_digi_output_data_t buf[20] = {};
+    for (int i = 0; i < 20; ++i) {
+        buf[i].type1.channel = CP_CH;
+        buf[i].type1.data = 0;
+    }
+    feed_and_process(buf, 20);
+
+    EXPECT_EQ(cpGetSubState(), CP_F);
+
+    for (int i = 0; i < 10; ++i) {
+        buf[i].type1.channel = CP_CH;
+        buf[i].type1.data = 3000;
+    }
+    for (int i = 10; i < 20; ++i) {
+        buf[i].type1.channel = CP_CH;
+        buf[i].type1.data = 0;
+    }
+    feed_and_process(buf, 20);
+
+    EXPECT_EQ(cpGetSubState(), CP_A);
 
     cpMonitorStop();
 }
