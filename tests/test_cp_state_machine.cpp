@@ -30,17 +30,20 @@ typedef uint32_t TickType_t;
 static bool pwm_running = false;
 static int pwm_start_calls = 0;
 static int pwm_set_calls = 0;
+static int pwm_stop_calls = 0;
+static int sleep_calls = 0;
+static uint16_t vout_mv = 0;
 
 void cpPwmStartStub(uint16_t, bool) { pwm_running = true; ++pwm_start_calls; }
-void cpPwmStopStub() { pwm_running = false; }
+void cpPwmStopStub() { pwm_running = false; ++pwm_stop_calls; }
 void cpPwmSetDutyStub(uint16_t, bool) { ++pwm_set_calls; }
 bool cpPwmIsRunningStub() { return pwm_running; }
 
 CpSubState g_cp_substate = CP_A;
 CpSubState cpGetSubStateStub() { return g_cp_substate; }
-uint16_t voutGetVoltageMvStub() { return 0; }
+uint16_t voutGetVoltageMvStub() { return vout_mv; }
 
-bool qca7000SleepStub() { return true; }
+bool qca7000SleepStub() { ++sleep_calls; return true; }
 bool qca7000WakeStub() { return true; }
 bool qca7000startSlacStub() { return true; }
 void qca7000SetMacStub(const uint8_t*) {}
@@ -96,11 +99,41 @@ TEST(EvseStateMachine, InitialiseB1Faults) {
     EXPECT_EQ(stage.load(std::memory_order_relaxed), EVSE_IDLE_A);
 }
 
+TEST(EvseStateMachine, InitialiseB1Success) {
+    g_cp_substate = CP_B1;
+    stageEnter(EVSE_INITIALISE_B1);
+    handleInitialiseB1();
+    EXPECT_EQ(stage.load(std::memory_order_relaxed), EVSE_DIGITAL_REQ_B2);
+}
+
 TEST(EvseStateMachine, DigitalReqB2Unplug) {
     g_cp_substate = CP_A;
     stageEnter(EVSE_DIGITAL_REQ_B2);
     handleDigitalReqB2();
     EXPECT_EQ(stage.load(std::memory_order_relaxed), EVSE_IDLE_A);
+}
+
+TEST(EvseStateMachine, DigitalReqB2AdvanceAndFault) {
+    // Successful advance to CableCheckC
+    g_slac_state.store(6, std::memory_order_relaxed);
+    g_cp_substate = CP_C;
+    stageEnter(EVSE_DIGITAL_REQ_B2);
+    handleDigitalReqB2();
+    EXPECT_EQ(stage.load(std::memory_order_relaxed), EVSE_CABLE_CHECK_C);
+
+    // Fault to PowerDown
+    g_cp_substate = CP_E;
+    stageEnter(EVSE_DIGITAL_REQ_B2);
+    handleDigitalReqB2();
+    EXPECT_EQ(stage.load(std::memory_order_relaxed), EVSE_POWER_DOWN);
+
+    // Timeout back to InitialiseB1
+    g_cp_substate = CP_D;
+    g_slac_state.store(0, std::memory_order_relaxed);
+    stageEnter(EVSE_DIGITAL_REQ_B2);
+    t_stage.store(T_HLC_EST_MS + 1, std::memory_order_relaxed);
+    handleDigitalReqB2();
+    EXPECT_EQ(stage.load(std::memory_order_relaxed), EVSE_INITIALISE_B1);
 }
 
 TEST(EvseStateMachine, CableCheckCFault) {
@@ -110,11 +143,34 @@ TEST(EvseStateMachine, CableCheckCFault) {
     EXPECT_EQ(stage.load(std::memory_order_relaxed), EVSE_POWER_DOWN);
 }
 
+TEST(EvseStateMachine, CableCheckCSuccess) {
+    g_cp_substate = CP_C;
+    stageEnter(EVSE_CABLE_CHECK_C);
+    handleCableCheckC();
+    EXPECT_EQ(stage.load(std::memory_order_relaxed), EVSE_PRECHARGE);
+}
+
 TEST(EvseStateMachine, PrechargeUnplug) {
     g_cp_substate = CP_A;
     stageEnter(EVSE_PRECHARGE);
     handlePrecharge();
     EXPECT_EQ(stage.load(std::memory_order_relaxed), EVSE_IDLE_A);
+}
+
+TEST(EvseStateMachine, PrechargeFaultAndComplete) {
+    // Fault to PowerDown
+    g_cp_substate = CP_E;
+    stageEnter(EVSE_PRECHARGE);
+    handlePrecharge();
+    EXPECT_EQ(stage.load(std::memory_order_relaxed), EVSE_POWER_DOWN);
+
+    // Successful completion to EnergyTransfer
+    g_cp_substate = CP_C;
+    vout_mv = 3301;
+    stageEnter(EVSE_PRECHARGE);
+    handlePrecharge();
+    EXPECT_EQ(stage.load(std::memory_order_relaxed), EVSE_ENERGY_TRANSFER);
+    vout_mv = 0;
 }
 
 TEST(EvseStateMachine, EnergyTransferFaultsAndTimeout) {
@@ -133,4 +189,22 @@ TEST(EvseStateMachine, EnergyTransferFaultsAndTimeout) {
     t_stage.store(T_STOP_MAX_MS + 1, std::memory_order_relaxed);
     handleEnergyTransfer();
     EXPECT_EQ(stage.load(std::memory_order_relaxed), EVSE_POWER_DOWN);
+}
+
+TEST(EvseStateMachine, PowerDownUnlockTransition) {
+    stageEnter(EVSE_POWER_DOWN);
+    t_stage.store(T_SAFE_MAX_MS + 1, std::memory_order_relaxed);
+    handlePowerDown();
+    EXPECT_EQ(stage.load(std::memory_order_relaxed), EVSE_UNLOCK_B1);
+}
+
+TEST(EvseStateMachine, IdleATransitionAndSleep) {
+    pwm_stop_calls = sleep_calls = pwm_start_calls = 0;
+    g_cp_substate = CP_B1;
+    stageEnter(EVSE_IDLE_A);
+    handleIdleA();
+    EXPECT_EQ(pwm_stop_calls, 1);
+    EXPECT_EQ(sleep_calls, 1);
+    EXPECT_EQ(pwm_start_calls, 1);
+    EXPECT_EQ(stage.load(std::memory_order_relaxed), EVSE_INITIALISE_B1);
 }

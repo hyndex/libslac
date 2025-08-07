@@ -112,6 +112,12 @@ static CpSubState mv2state(uint16_t mv_max, uint16_t mv_min) {
     return CP_E;
 }
 
+#ifdef LIBSLAC_TESTING
+CpSubState mv2stateTest(uint16_t mv_max, uint16_t mv_min) {
+    return mv2state(mv_max, mv_min);
+}
+#endif
+
 static void restart_adc() {
     if (!adc_handle)
         return;
@@ -320,6 +326,14 @@ uint16_t cpGetLastPwmDuty() {
 uint16_t cpGetMeasuredDuty() {
     return cp_meas_duty.load(std::memory_order_relaxed);
 }
+#ifdef LIBSLAC_TESTING
+void cpSetMeasuredDuty(uint16_t duty) {
+    cp_meas_duty.store(duty, std::memory_order_relaxed);
+}
+void cpSetPrevState(CpSubState s) {
+    cp_state.store(s, std::memory_order_relaxed);
+}
+#endif
 bool cpDigitalCommRequested() {
     CpSubState s = cp_state.load(std::memory_order_relaxed);
     return s == CP_B2 || s == CP_B3;
