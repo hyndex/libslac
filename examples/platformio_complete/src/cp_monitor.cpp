@@ -35,6 +35,7 @@ static inline int64_t esp_timer_get_time() {
 static std::atomic<uint16_t> cp_mv{0};
 static std::atomic<uint16_t> cp_mv_min{0};
 static std::atomic<uint16_t> vout_mv{0};
+static std::atomic<uint16_t> vout_raw{0};
 static std::atomic<uint16_t> cp_duty{0};
 static std::atomic<uint16_t> cp_meas_duty{0};
 static std::atomic<CpSubState> cp_state{CP_A};
@@ -164,6 +165,7 @@ static void process_samples() {
     CpSubState ns = mv2state(mv_max, mv_min);
     if (vout_cnt > 0) {
         uint16_t vraw = static_cast<uint16_t>(vout_sum / vout_cnt);
+        vout_raw.store(vraw, std::memory_order_relaxed);
         vout_mv.store(raw_to_mv(vraw), std::memory_order_relaxed);
     }
 
@@ -266,6 +268,7 @@ void cpMonitorInit() {
         stable_cnt = 1;
         if (vout_cnt > 0) {
             uint16_t vraw = static_cast<uint16_t>(vout_sum / vout_cnt);
+            vout_raw.store(vraw, std::memory_order_relaxed);
             vout_mv.store(raw_to_mv(vraw), std::memory_order_relaxed);
         }
         break;
@@ -298,6 +301,9 @@ uint16_t cpGetVoltageMinMv() {
 }
 uint16_t voutGetVoltageMv() {
     return vout_mv.load(std::memory_order_relaxed);
+}
+uint16_t voutGetVoltageRaw() {
+    return vout_raw.load(std::memory_order_relaxed);
 }
 CpSubState cpGetSubState() {
     return cp_state.load(std::memory_order_relaxed);

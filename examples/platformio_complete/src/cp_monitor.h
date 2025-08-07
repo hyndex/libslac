@@ -19,6 +19,7 @@ void cpMonitorStop();
 uint16_t cpGetVoltageMv();
 uint16_t cpGetVoltageMinMv();
 uint16_t voutGetVoltageMv();
+uint16_t voutGetVoltageRaw();
 CpSubState cpGetSubState();
 char cpGetStateLetter();
 

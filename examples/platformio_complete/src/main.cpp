@@ -6,15 +6,19 @@
 #include <cstdio>
 #include <esp_log.h>
 #include <esp_timer.h>
+#ifndef LIBSLAC_TESTING
 #include <esp_system.h>
 #include <esp_random.h>
 #include <driver/gpio.h>
 #include <driver/uart.h>
 #include <driver/spi_master.h>
+#endif
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include "plc_irq.hpp"
+#include "cp_config.h"
 
+#ifndef LIBSLAC_TESTING
 // Placeholder stubs for control pilot and EVSE state machine logic that would
 // normally interact with hardware. These are kept minimal so the example can
 // be built without the full hardware drivers.
@@ -23,12 +27,20 @@ inline void cpMonitorInit() {}
 inline bool cpPwmIsRunning() { return false; }
 inline bool cpDigitalCommRequested() { return false; }
 inline uint32_t cpGetVoltageMv() { return 0; }
+inline uint16_t cpGetLastPwmDuty() { return 0; }
+inline uint16_t voutGetVoltageMv() { return 0; }
+inline uint16_t voutGetVoltageRaw() { return 0; }
 inline char cpGetStateLetter() { return 'A'; }
 inline void evseStateMachineInit() {}
 inline void evseStateMachineTask(void*) {}
 inline const char* evseStageName(int) { return ""; }
 inline int evseGetStage() { return 0; }
+#endif
 
+static const char* TAG = "MAIN";
+std::atomic<uint8_t> g_slac_state{0};
+
+#ifndef LIBSLAC_TESTING
 // qca7000ProcessSlice is declared in qca7000.hpp with a default timeout.
 // The extern declaration here must not specify the default again to avoid
 // multiple default argument definitions.
@@ -37,7 +49,6 @@ extern void qca7000ProcessSlice(uint32_t max_us);
 // Default MAC address for the modem. Adjust as required.
 uint8_t g_mac_addr[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 bool g_use_random_mac = false;
-static const char* TAG = "MAIN";
 static const uint8_t EVSE_NMK[slac::defs::NMK_LEN] = {
     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
     0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F};
@@ -48,7 +59,6 @@ static inline uint32_t get_ms() {
 
 // Global pointer used by the polling loop
 static slac::Channel* g_channel = nullptr;
-std::atomic<uint8_t> g_slac_state{0};
 // Timestamp for SLAC restart logic
 std::atomic<uint32_t> g_slac_ts{0};
 static bool hlc_running = false;
@@ -92,21 +102,38 @@ static void check_serial_flag() {
     }
     generate_random_mac();
 }
+#endif
+
+void logStatus() {
+    uint32_t cp_mv = cpGetVoltageMv();
+    uint16_t duty_raw = cpGetLastPwmDuty();
+    float duty_pct =
+        100.0f * static_cast<float>(duty_raw) /
+        static_cast<float>((1u << CP_PWM_RES_BITS) - 1u);
+    uint32_t vout_mv = voutGetVoltageMv();
+    uint16_t vout_raw = voutGetVoltageRaw();
+    ESP_LOGI(TAG,
+             "[STAT] CP=%c %lu.%03lu V Duty=%.1f%% Vout=%lu.%03lu V Raw=%u Stage=%s SLAC=%u",
+             cpGetStateLetter(),
+             static_cast<unsigned long>(cp_mv / 1000),
+             static_cast<unsigned long>(cp_mv % 1000),
+             duty_pct,
+             static_cast<unsigned long>(vout_mv / 1000),
+             static_cast<unsigned long>(vout_mv % 1000),
+             static_cast<unsigned>(vout_raw),
+             evseStageName(evseGetStage()),
+             g_slac_state.load(std::memory_order_relaxed));
+}
 
 static void logTask(void*) {
     const TickType_t period = pdMS_TO_TICKS(1000);
     while (true) {
-        uint32_t mv = cpGetVoltageMv();
-        printf("[STAT] CP=%c %lu.%03lu V Stage=%s SLAC=%u\n",
-               cpGetStateLetter(),
-               static_cast<unsigned long>(mv / 1000),
-               static_cast<unsigned long>(mv % 1000),
-               evseStageName(evseGetStage()),
-               g_slac_state.load(std::memory_order_relaxed));
+        logStatus();
         vTaskDelay(period);
     }
 }
 
+#ifndef LIBSLAC_TESTING
 extern "C" void app_main(void) {
     vTaskDelay(pdMS_TO_TICKS(4000));
     ESP_LOGI(TAG, "Starting SLAC modem...");
@@ -218,3 +245,4 @@ extern "C" void app_main(void) {
         vTaskDelay(pdMS_TO_TICKS(1));
     }
 }
+#endif
