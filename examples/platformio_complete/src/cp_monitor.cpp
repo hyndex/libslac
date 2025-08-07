@@ -35,6 +35,7 @@ static inline int64_t esp_timer_get_time() {
 static std::atomic<uint16_t> cp_mv{0};
 static std::atomic<uint16_t> vout_mv{0};
 static std::atomic<uint16_t> cp_duty{0};
+static std::atomic<uint16_t> cp_meas_duty{0};
 static std::atomic<CpSubState> cp_state{CP_A};
 static std::atomic<uint32_t> cp_ts{0};
 static uint16_t last_raw = 0;
@@ -50,6 +51,7 @@ static constexpr size_t DMA_BUF_BYTES = DMA_SAMPLES * sizeof(adc_digi_output_dat
 
 static constexpr uint8_t CP_ADC_CHANNEL   = static_cast<uint8_t>(CP_READ_ADC_PIN - 1);
 static constexpr uint8_t VOUT_ADC_CHANNEL = static_cast<uint8_t>(VOUT_MON_ADC_PIN - 1);
+static constexpr uint16_t CP_LOW_THRESH_MV = (CP_THR_NEG12 + CP_THR_3V_MV) / 2;
 
 static inline uint16_t raw_to_mv(uint16_t raw) {
     return static_cast<uint16_t>((raw * 3300u) / 4095u);
@@ -68,7 +70,7 @@ static char toLetter(CpSubState s) {
 }
 
 static CpSubState mv2state(uint16_t mv) {
-    uint16_t duty = cp_duty.load(std::memory_order_relaxed);
+    uint16_t duty = cp_meas_duty.load(std::memory_order_relaxed);
     uint16_t pct  = (duty * 100) >> CP_PWM_RES_BITS;
     CpSubState prev = cp_state.load(std::memory_order_relaxed);
     if (prev == CP_E) {
@@ -119,6 +121,8 @@ static void process_samples() {
         return;
     size_t n = len / sizeof(adc_digi_output_data_t);
     uint16_t cp_vmax = 0;
+    uint32_t cp_low_cnt = 0;
+    uint32_t cp_tot_cnt = 0;
     uint32_t vout_sum = 0;
     uint16_t vout_cnt = 0;
     for (size_t i = 0; i < n; ++i) {
@@ -127,6 +131,9 @@ static void process_samples() {
         if (d->type1.channel == CP_ADC_CHANNEL) {
             if (raw > cp_vmax)
                 cp_vmax = raw;
+            ++cp_tot_cnt;
+            if (raw_to_mv(raw) < CP_LOW_THRESH_MV)
+                ++cp_low_cnt;
         } else if (d->type1.channel == VOUT_ADC_CHANNEL) {
             vout_sum += raw;
             ++vout_cnt;
@@ -134,6 +141,10 @@ static void process_samples() {
     }
     uint16_t mv = raw_to_mv(cp_vmax);
     cp_mv.store(mv, std::memory_order_relaxed);
+    if (cp_tot_cnt > 0) {
+        uint16_t duty = static_cast<uint16_t>((cp_low_cnt << CP_PWM_RES_BITS) / cp_tot_cnt);
+        cp_meas_duty.store(duty, std::memory_order_relaxed);
+    }
     CpSubState ns = mv2state(mv);
     if (vout_cnt > 0) {
         uint16_t vraw = static_cast<uint16_t>(vout_sum / vout_cnt);
@@ -204,6 +215,8 @@ void cpMonitorInit() {
             continue;
         size_t n = len / sizeof(adc_digi_output_data_t);
         uint16_t cp_vmax = 0;
+        uint32_t cp_low_cnt = 0;
+        uint32_t cp_tot_cnt = 0;
         uint32_t vout_sum = 0;
         uint16_t vout_cnt = 0;
         for (size_t i = 0; i < n; ++i) {
@@ -212,6 +225,9 @@ void cpMonitorInit() {
             if (d->type1.channel == CP_ADC_CHANNEL) {
                 if (raw > cp_vmax)
                     cp_vmax = raw;
+                ++cp_tot_cnt;
+                if (raw_to_mv(raw) < CP_LOW_THRESH_MV)
+                    ++cp_low_cnt;
             } else if (d->type1.channel == VOUT_ADC_CHANNEL) {
                 vout_sum += raw;
                 ++vout_cnt;
@@ -219,6 +235,10 @@ void cpMonitorInit() {
         }
         uint16_t mv = raw_to_mv(cp_vmax);
         cp_mv.store(mv, std::memory_order_relaxed);
+        if (cp_tot_cnt > 0) {
+            uint16_t duty = static_cast<uint16_t>((cp_low_cnt << CP_PWM_RES_BITS) / cp_tot_cnt);
+            cp_meas_duty.store(duty, std::memory_order_relaxed);
+        }
         CpSubState ns = mv2state(mv);
         cp_state.store(ns, std::memory_order_relaxed);
         cp_ts.store(static_cast<uint32_t>(esp_timer_get_time() / 1000),
@@ -257,6 +277,7 @@ CpSubState cpGetSubState() { return cp_state.load(std::memory_order_relaxed); }
 char cpGetStateLetter() { return toLetter(cp_state.load(std::memory_order_relaxed)); }
 void cpSetLastPwmDuty(uint16_t duty) { cp_duty.store(duty, std::memory_order_relaxed); }
 uint16_t cpGetLastPwmDuty() { return cp_duty.load(std::memory_order_relaxed); }
+uint16_t cpGetMeasuredDuty() { return cp_meas_duty.load(std::memory_order_relaxed); }
 bool cpDigitalCommRequested() {
     CpSubState s = cp_state.load(std::memory_order_relaxed);
     return s == CP_B2 || s == CP_B3;

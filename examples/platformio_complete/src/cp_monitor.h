@@ -14,6 +14,7 @@ char     cpGetStateLetter();
 
 void     cpSetLastPwmDuty(uint16_t duty);
 uint16_t cpGetLastPwmDuty();
+uint16_t cpGetMeasuredDuty();
 
 bool     cpDigitalCommRequested();
 
