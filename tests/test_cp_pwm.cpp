@@ -48,3 +48,23 @@ TEST(CpPwm, AcceptsDutyOutsideFivePercent) {
     EXPECT_EQ(g_ledc_last_duty, duty_high);
     EXPECT_EQ(cpGetLastPwmDuty(), duty_high);
 }
+
+TEST(CpPwm, StopSetsInputAndRunningFalse) {
+    cpPwmInit();
+    cpPwmStart(CP_PWM_DUTY_5PCT, true);
+
+    // Stop PWM and verify the line is released
+    cpPwmStop();
+    EXPECT_FALSE(cpPwmIsRunning());
+    EXPECT_EQ(g_last_gpio_mode, GPIO_MODE_INPUT);
+}
+
+TEST(CpPwm, StartSetsOutputAndRunningTrue) {
+    cpPwmInit();
+    cpPwmStop(); // ensure pin is input
+    g_last_gpio_mode = static_cast<gpio_mode_t>(-1);
+
+    cpPwmStart(CP_PWM_DUTY_5PCT, true);
+    EXPECT_TRUE(cpPwmIsRunning());
+    EXPECT_EQ(g_last_gpio_mode, GPIO_MODE_OUTPUT);
+}
