@@ -2,31 +2,35 @@
 
 This example demonstrates how to wire the QCA7000 modem to an
 ESP32-S3 board using PlatformIO. The board uses custom SPI pins and
-it is recommended to connect the interrupt line (`PLC_INT_PIN`, IO16 by
-default) so the driver can react to modem events. QCA7005-based PLC
-Stamp micro modules are fully compatible and can be wired in the same
-way.
+it is recommended to connect the interrupt line (`PLC_INT_PIN`, IO16 in
+this example) so the driver can react to modem events. QCA7005-based
+PLC Stamp micro modules are fully compatible and can be wired in the
+same way.
 
 ## Pin mapping
 
-The ESP32‑S3 port defines default pins via compile‑time macros that can
-be overridden to suit your wiring. All signals use 3.3 V logic levels.
+The ESP32‑S3 port provides default pin macros (`PLC_SPI_CS_PIN`
+defaults to 36, `PLC_SPI_RST_PIN` to 40, `PLC_SPI_SCK_PIN` to 48,
+`PLC_SPI_MISO_PIN` to 21 and `PLC_SPI_MOSI_PIN` to 47). This DevKit
+uses a different chip‑select pin and enables optional interrupt and
+power‑enable signals. The table below lists the pins used in this
+example; all signals use 3.3 V logic levels.
 
-| Signal        | Macro                | Default | Notes |
-|---------------|----------------------|---------|-------|
-| SPI SCK       | `PLC_SPI_SCK_PIN`    | 48      | push‑pull output, no pull‑ups required |
-| SPI MISO      | `PLC_SPI_MISO_PIN`   | 21      | driven by modem, tri‑stated when idle; no pull‑up needed |
-| SPI MOSI      | `PLC_SPI_MOSI_PIN`   | 47      | push‑pull output, no pull‑ups required |
-| Chip Select   | `PLC_SPI_CS_PIN`     | 41      | keep high when idle; optional pull‑up |
-| Reset         | `PLC_SPI_RST_PIN`    | 40      | active low; tie high with resistor if GPIO is high‑Z at boot |
-| Interrupt     | `PLC_INT_PIN`        | 16      | active‑low open‑drain; requires pull‑up (e.g. 10 kΩ) |
-| Power Enable  | `PLC_PWR_EN_PIN`     | 15      | active high; keep low with pull‑down so modem stays off at reset |
+| Signal        | Macro                | Example Pin | Notes |
+|---------------|----------------------|-------------|-------|
+| SPI SCK       | `PLC_SPI_SCK_PIN`    | 48          | push‑pull output, no pull‑ups required |
+| SPI MISO      | `PLC_SPI_MISO_PIN`   | 21          | driven by modem, tri‑stated when idle; no pull‑up needed |
+| SPI MOSI      | `PLC_SPI_MOSI_PIN`   | 47          | push‑pull output, no pull‑ups required |
+| Chip Select   | `PLC_SPI_CS_PIN`     | 41          | keep high when idle; optional pull‑up |
+| Reset         | `PLC_SPI_RST_PIN`    | 40          | active low; tie high with resistor if GPIO is high‑Z at boot |
+| Interrupt     | `PLC_INT_PIN`        | 16          | active‑low open‑drain; requires pull‑up (e.g. 10 kΩ); no default |
+| Power Enable  | `PLC_PWR_EN_PIN`     | 15          | active high; pull‑down to keep modem off at reset; optional |
 
 If your hardware provides external resistors the internal ones of the
 ESP32 can be disabled. Otherwise configure them appropriately with
 `pinMode`.
 
-Override these defaults by defining the macros in your source before
+Override the library defaults by defining the macros in your source before
 including `qca7000.hpp` or by adding `-D` flags in `platformio.ini` as
 shown below.
 
