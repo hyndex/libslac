@@ -1,17 +1,17 @@
 #include "cp_monitor.h"
-#include <atomic>
 #include <algorithm>
+#include <atomic>
 #include <esp_adc/adc_continuous.h>
 #include <freertos/FreeRTOS.h>
 #ifndef LIBSLAC_TESTING
 #include <freertos/task.h>
 #endif
 #ifdef ESP_PLATFORM
-#include <esp_timer.h>
 #include <esp32s3/port_config.hpp>
+#include <esp_timer.h>
 #else
-#include <sys/time.h>
 #include <port/port_common.hpp>
+#include <sys/time.h>
 static inline int64_t esp_timer_get_time() {
     struct timeval tv;
     gettimeofday(&tv, nullptr);
@@ -33,6 +33,7 @@ static inline int64_t esp_timer_get_time() {
 #endif
 
 static std::atomic<uint16_t> cp_mv{0};
+static std::atomic<uint16_t> cp_mv_min{0};
 static std::atomic<uint16_t> vout_mv{0};
 static std::atomic<uint16_t> cp_duty{0};
 static std::atomic<uint16_t> cp_meas_duty{0};
@@ -49,7 +50,7 @@ static constexpr uint32_t DMA_SAMPLE_RATE = 40000; // 40 kS/s total
 static constexpr uint32_t DMA_SAMPLES = DMA_SAMPLE_RATE / CP_PWM_FREQ_HZ;
 static constexpr size_t DMA_BUF_BYTES = DMA_SAMPLES * sizeof(adc_digi_output_data_t);
 
-static constexpr uint8_t CP_ADC_CHANNEL   = static_cast<uint8_t>(CP_READ_ADC_PIN - 1);
+static constexpr uint8_t CP_ADC_CHANNEL = static_cast<uint8_t>(CP_READ_ADC_PIN - 1);
 static constexpr uint8_t VOUT_ADC_CHANNEL = static_cast<uint8_t>(VOUT_MON_ADC_PIN - 1);
 static constexpr uint16_t CP_LOW_THRESH_MV = (CP_THR_NEG12 + CP_THR_3V_MV) / 2;
 
@@ -59,44 +60,54 @@ static inline uint16_t raw_to_mv(uint16_t raw) {
 
 static char toLetter(CpSubState s) {
     switch (s) {
-        case CP_A: return 'A';
-        case CP_B1: case CP_B2: case CP_B3: return 'B';
-        case CP_C: return 'C';
-        case CP_D: return 'D';
-        case CP_E: return 'E';
-        case CP_F: return 'F';
-        default:   return '?';
+    case CP_A:
+        return 'A';
+    case CP_B1:
+    case CP_B2:
+    case CP_B3:
+        return 'B';
+    case CP_C:
+        return 'C';
+    case CP_D:
+        return 'D';
+    case CP_E:
+        return 'E';
+    case CP_F:
+        return 'F';
+    default:
+        return '?';
     }
 }
 
-static CpSubState mv2state(uint16_t mv) {
+static CpSubState mv2state(uint16_t mv_max, uint16_t mv_min) {
     uint16_t duty = cp_meas_duty.load(std::memory_order_relaxed);
-    uint16_t pct  = (duty * 100) >> CP_PWM_RES_BITS;
+    uint16_t pct = (duty * 100) >> CP_PWM_RES_BITS;
     CpSubState prev = cp_state.load(std::memory_order_relaxed);
-    if (prev == CP_E) {
-        if (mv < CP_THR_NEG12_HIGH)
-            return CP_E;
-    } else {
-        if (mv < CP_THR_NEG12_LOW)
-            return CP_E;
-    }
-    if (mv < CP_THR_1V_MV)
+    if (mv_max < CP_THR_1V_MV)
         return CP_F;
-    if (mv > CP_THR_12V_MV)
+    if (mv_max > CP_THR_12V_MV)
         return CP_A;
-    if (mv > CP_THR_9V_MV) {
+    if (mv_max > CP_THR_9V_MV) {
 #ifdef CP_SUPPORT_B3
         return (duty == 0) ? CP_B1 : CP_B3;
 #else
         return CP_B1;
 #endif
     }
-    if (mv > CP_THR_6V_MV) {
-        if (pct >= 3 && pct <= 7) return CP_B2;
+    if (mv_max > CP_THR_6V_MV) {
+        if (pct >= 3 && pct <= 7)
+            return CP_B2;
         return CP_C;
     }
-    if (mv > CP_THR_3V_MV)
+    if (mv_max > CP_THR_3V_MV)
         return CP_D;
+    if (prev == CP_E) {
+        if (mv_min > CP_THR_NEG12_LOW)
+            return CP_E;
+    } else {
+        if (mv_min > CP_THR_NEG12_HIGH)
+            return CP_E;
+    }
     return CP_E;
 }
 
@@ -121,6 +132,7 @@ static void process_samples() {
         return;
     size_t n = len / sizeof(adc_digi_output_data_t);
     uint16_t cp_vmax = 0;
+    uint16_t cp_vmin = UINT16_MAX;
     uint32_t cp_low_cnt = 0;
     uint32_t cp_tot_cnt = 0;
     uint32_t vout_sum = 0;
@@ -131,6 +143,8 @@ static void process_samples() {
         if (d->type1.channel == CP_ADC_CHANNEL) {
             if (raw > cp_vmax)
                 cp_vmax = raw;
+            if (raw < cp_vmin)
+                cp_vmin = raw;
             ++cp_tot_cnt;
             if (raw_to_mv(raw) < CP_LOW_THRESH_MV)
                 ++cp_low_cnt;
@@ -139,13 +153,15 @@ static void process_samples() {
             ++vout_cnt;
         }
     }
-    uint16_t mv = raw_to_mv(cp_vmax);
-    cp_mv.store(mv, std::memory_order_relaxed);
+    uint16_t mv_max = raw_to_mv(cp_vmax);
+    uint16_t mv_min = raw_to_mv(cp_vmin);
+    cp_mv.store(mv_max, std::memory_order_relaxed);
+    cp_mv_min.store(mv_min, std::memory_order_relaxed);
     if (cp_tot_cnt > 0) {
         uint16_t duty = static_cast<uint16_t>((cp_low_cnt << CP_PWM_RES_BITS) / cp_tot_cnt);
         cp_meas_duty.store(duty, std::memory_order_relaxed);
     }
-    CpSubState ns = mv2state(mv);
+    CpSubState ns = mv2state(mv_max, mv_min);
     if (vout_cnt > 0) {
         uint16_t vraw = static_cast<uint16_t>(vout_sum / vout_cnt);
         vout_mv.store(raw_to_mv(vraw), std::memory_order_relaxed);
@@ -162,8 +178,7 @@ static void process_samples() {
     CpSubState cur = cp_state.load(std::memory_order_relaxed);
     if (stable_cnt >= 3 && ns != cur) {
         cp_state.store(ns, std::memory_order_relaxed);
-        cp_ts.store(static_cast<uint32_t>(esp_timer_get_time() / 1000),
-                    std::memory_order_relaxed);
+        cp_ts.store(static_cast<uint32_t>(esp_timer_get_time() / 1000), std::memory_order_relaxed);
     }
 }
 
@@ -185,7 +200,7 @@ void cpMonitorInit() {
     adc_continuous_new_handle(&cfg, &adc_handle);
 
     adc_digi_pattern_config_t patterns[2] = {};
-    for (auto &p : patterns) {
+    for (auto& p : patterns) {
         p.atten = ADC_ATTEN_DB_11;
         p.unit = ADC_UNIT_1;
         p.bit_width = ADC_BITWIDTH_12;
@@ -215,6 +230,7 @@ void cpMonitorInit() {
             continue;
         size_t n = len / sizeof(adc_digi_output_data_t);
         uint16_t cp_vmax = 0;
+        uint16_t cp_vmin = UINT16_MAX;
         uint32_t cp_low_cnt = 0;
         uint32_t cp_tot_cnt = 0;
         uint32_t vout_sum = 0;
@@ -225,6 +241,8 @@ void cpMonitorInit() {
             if (d->type1.channel == CP_ADC_CHANNEL) {
                 if (raw > cp_vmax)
                     cp_vmax = raw;
+                if (raw < cp_vmin)
+                    cp_vmin = raw;
                 ++cp_tot_cnt;
                 if (raw_to_mv(raw) < CP_LOW_THRESH_MV)
                     ++cp_low_cnt;
@@ -233,16 +251,17 @@ void cpMonitorInit() {
                 ++vout_cnt;
             }
         }
-        uint16_t mv = raw_to_mv(cp_vmax);
-        cp_mv.store(mv, std::memory_order_relaxed);
+        uint16_t mv_max = raw_to_mv(cp_vmax);
+        uint16_t mv_min = raw_to_mv(cp_vmin);
+        cp_mv.store(mv_max, std::memory_order_relaxed);
+        cp_mv_min.store(mv_min, std::memory_order_relaxed);
         if (cp_tot_cnt > 0) {
             uint16_t duty = static_cast<uint16_t>((cp_low_cnt << CP_PWM_RES_BITS) / cp_tot_cnt);
             cp_meas_duty.store(duty, std::memory_order_relaxed);
         }
-        CpSubState ns = mv2state(mv);
+        CpSubState ns = mv2state(mv_max, mv_min);
         cp_state.store(ns, std::memory_order_relaxed);
-        cp_ts.store(static_cast<uint32_t>(esp_timer_get_time() / 1000),
-                    std::memory_order_relaxed);
+        cp_ts.store(static_cast<uint32_t>(esp_timer_get_time() / 1000), std::memory_order_relaxed);
         last_raw = cp_vmax;
         stable_cnt = 1;
         if (vout_cnt > 0) {
@@ -271,19 +290,37 @@ void cpMonitorStop() {
     }
 }
 
-uint16_t cpGetVoltageMv() { return cp_mv.load(std::memory_order_relaxed); }
-uint16_t voutGetVoltageMv() { return vout_mv.load(std::memory_order_relaxed); }
-CpSubState cpGetSubState() { return cp_state.load(std::memory_order_relaxed); }
-char cpGetStateLetter() { return toLetter(cp_state.load(std::memory_order_relaxed)); }
-void cpSetLastPwmDuty(uint16_t duty) { cp_duty.store(duty, std::memory_order_relaxed); }
-uint16_t cpGetLastPwmDuty() { return cp_duty.load(std::memory_order_relaxed); }
-uint16_t cpGetMeasuredDuty() { return cp_meas_duty.load(std::memory_order_relaxed); }
+uint16_t cpGetVoltageMv() {
+    return cp_mv.load(std::memory_order_relaxed);
+}
+uint16_t cpGetVoltageMinMv() {
+    return cp_mv_min.load(std::memory_order_relaxed);
+}
+uint16_t voutGetVoltageMv() {
+    return vout_mv.load(std::memory_order_relaxed);
+}
+CpSubState cpGetSubState() {
+    return cp_state.load(std::memory_order_relaxed);
+}
+char cpGetStateLetter() {
+    return toLetter(cp_state.load(std::memory_order_relaxed));
+}
+void cpSetLastPwmDuty(uint16_t duty) {
+    cp_duty.store(duty, std::memory_order_relaxed);
+}
+uint16_t cpGetLastPwmDuty() {
+    return cp_duty.load(std::memory_order_relaxed);
+}
+uint16_t cpGetMeasuredDuty() {
+    return cp_meas_duty.load(std::memory_order_relaxed);
+}
 bool cpDigitalCommRequested() {
     CpSubState s = cp_state.load(std::memory_order_relaxed);
     return s == CP_B2 || s == CP_B3;
 }
 
 #ifdef LIBSLAC_TESTING
-void cpMonitorTestProcess() { process_samples(); }
+void cpMonitorTestProcess() {
+    process_samples();
+}
 #endif
-
