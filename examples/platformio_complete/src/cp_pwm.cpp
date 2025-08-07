@@ -48,7 +48,7 @@ void cpPwmInit() {
     cpPwmStop();
 }
 
-void cpPwmStart(uint16_t duty_raw) {
+void cpPwmStart(uint16_t duty_raw, bool clamp) {
 #ifdef ESP_PLATFORM
     if (cp_pm_lock)
         esp_pm_lock_acquire(cp_pm_lock);
@@ -56,7 +56,8 @@ void cpPwmStart(uint16_t duty_raw) {
     const uint16_t max_duty = (1u << CP_PWM_RES_BITS) - 1;
     if (duty_raw > max_duty)
         duty_raw = max_duty;
-    duty_raw = clamp_5pct(duty_raw);
+    if (clamp)
+        duty_raw = clamp_5pct(duty_raw);
     if (pinWasInput) {
         gpio_set_direction(static_cast<gpio_num_t>(CP_PWM_OUT_PIN), GPIO_MODE_OUTPUT);
         pinWasInput = false;
@@ -67,14 +68,15 @@ void cpPwmStart(uint16_t duty_raw) {
     pwmRunning = true;
 }
 
-void cpPwmSetDuty(uint16_t duty_raw) {
+void cpPwmSetDuty(uint16_t duty_raw, bool clamp) {
     if (!pwmRunning)
-        cpPwmStart(duty_raw);
+        cpPwmStart(duty_raw, clamp);
     else {
         const uint16_t max_duty = (1u << CP_PWM_RES_BITS) - 1;
         if (duty_raw > max_duty)
             duty_raw = max_duty;
-        duty_raw = clamp_5pct(duty_raw);
+        if (clamp)
+            duty_raw = clamp_5pct(duty_raw);
         ledc_set_duty(LEDC_LOW_SPEED_MODE, static_cast<ledc_channel_t>(PWM_CHANNEL), duty_raw);
         ledc_update_duty(LEDC_LOW_SPEED_MODE, static_cast<ledc_channel_t>(PWM_CHANNEL));
         cpSetLastPwmDuty(duty_raw);

@@ -56,7 +56,8 @@ static void handleIdleA() {
     }
     CpSubState s = cpGetSubState();
     if (s == CP_B1 || s == CP_B3) {
-        cpPwmStart(CP_PWM_DUTY_5PCT);
+        // Apply 5% clamping during the initial handshake
+        cpPwmStart(CP_PWM_DUTY_5PCT, true);
         stageEnter(EVSE_INITIALISE_B1);
     }
 }
@@ -143,9 +144,10 @@ static void handlePowerDown() {
 
 static void handleUnlockB1() {
     if (t_stage.load(std::memory_order_relaxed) == 0 || !cpPwmIsRunning()) {
-        cpPwmStart(CP_PWM_DUTY_5PCT); // hold 9V while waiting for unplug
+        // Keep the pilot at 9V while waiting for unplug
+        cpPwmStart(CP_PWM_DUTY_5PCT, true); // clamp as required during handshake
     } else {
-        cpPwmSetDuty(CP_PWM_DUTY_5PCT);
+        cpPwmSetDuty(CP_PWM_DUTY_5PCT, true);
     }
     if (cpGetSubState() == CP_A) {
         stageEnter(EVSE_IDLE_A);

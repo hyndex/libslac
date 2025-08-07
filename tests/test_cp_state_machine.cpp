@@ -31,9 +31,9 @@ static bool pwm_running = false;
 static int pwm_start_calls = 0;
 static int pwm_set_calls = 0;
 
-void cpPwmStartStub(uint16_t) { pwm_running = true; ++pwm_start_calls; }
+void cpPwmStartStub(uint16_t, bool) { pwm_running = true; ++pwm_start_calls; }
 void cpPwmStopStub() { pwm_running = false; }
-void cpPwmSetDutyStub(uint16_t) { ++pwm_set_calls; }
+void cpPwmSetDutyStub(uint16_t, bool) { ++pwm_set_calls; }
 bool cpPwmIsRunningStub() { return pwm_running; }
 
 CpSubState g_cp_substate = CP_A;
