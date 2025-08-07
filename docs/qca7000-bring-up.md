@@ -12,14 +12,13 @@ macros in `port/esp32s3/qca7000.hpp`:
 | SPI MISO      | `PLC_SPI_MISO_PIN`   | 21          |
 | SPI MOSI      | `PLC_SPI_MOSI_PIN`   | 47          |
 | SPI SCK       | `PLC_SPI_SCK_PIN`    | 48          |
-| Chip Select   | `PLC_SPI_CS_PIN`     | 17          |
-| Reset         | `PLC_SPI_RST_PIN`    | 5           |
+| Chip Select   | `PLC_SPI_CS_PIN`     | 36          |
+| Reset         | `PLC_SPI_RST_PIN`    | 40          |
 | Interrupt¹    | `PLC_INT_PIN`        | —           |
 | Power Enable² | `PLC_PWR_EN_PIN`     | —           |
 
-1. Active‑low open‑drain; add a pull‑up to 3.3 V (10 kΩ typical).
-2. Optional active‑high control; keep low with a pull‑down resistor when
-   unused.
+1. Active‑low open‑drain; add a pull‑up to 3.3 V (10 kΩ typical). No default is provided, so `PLC_INT_PIN` must be defined.
+2. Optional active‑high control; keep low with a pull‑down resistor when unused.
 
 The SPI signals are push‑pull and normally do not require additional
 pull‑ups or pull‑downs.
