@@ -117,6 +117,8 @@ void qca7000SetNmk(const uint8_t nmk[slac::defs::NMK_LEN]);
 const uint8_t* qca7000GetNmk();
 void qca7000SetMac(const uint8_t mac[ETH_ALEN]);
 const uint8_t* qca7000GetMac();
+/// Returns the MAC address of the matched PEV, or all zeros when none.
+const uint8_t* qca7000GetMatchedMac();
 
 enum class qca7000_region : uint8_t {
     EU = 0x00,
