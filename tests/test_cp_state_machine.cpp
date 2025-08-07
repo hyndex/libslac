@@ -83,3 +83,54 @@ TEST(EvseStateMachine, UnlockB1ExitToIdle) {
     handleUnlockB1();
     EXPECT_EQ(stage.load(std::memory_order_relaxed), EVSE_IDLE_A);
 }
+
+TEST(EvseStateMachine, InitialiseB1Faults) {
+    g_cp_substate = CP_E;
+    stageEnter(EVSE_INITIALISE_B1);
+    handleInitialiseB1();
+    EXPECT_EQ(stage.load(std::memory_order_relaxed), EVSE_POWER_DOWN);
+
+    g_cp_substate = CP_A;
+    stageEnter(EVSE_INITIALISE_B1);
+    handleInitialiseB1();
+    EXPECT_EQ(stage.load(std::memory_order_relaxed), EVSE_IDLE_A);
+}
+
+TEST(EvseStateMachine, DigitalReqB2Unplug) {
+    g_cp_substate = CP_A;
+    stageEnter(EVSE_DIGITAL_REQ_B2);
+    handleDigitalReqB2();
+    EXPECT_EQ(stage.load(std::memory_order_relaxed), EVSE_IDLE_A);
+}
+
+TEST(EvseStateMachine, CableCheckCFault) {
+    g_cp_substate = CP_F;
+    stageEnter(EVSE_CABLE_CHECK_C);
+    handleCableCheckC();
+    EXPECT_EQ(stage.load(std::memory_order_relaxed), EVSE_POWER_DOWN);
+}
+
+TEST(EvseStateMachine, PrechargeUnplug) {
+    g_cp_substate = CP_A;
+    stageEnter(EVSE_PRECHARGE);
+    handlePrecharge();
+    EXPECT_EQ(stage.load(std::memory_order_relaxed), EVSE_IDLE_A);
+}
+
+TEST(EvseStateMachine, EnergyTransferFaultsAndTimeout) {
+    g_cp_substate = CP_E;
+    stageEnter(EVSE_ENERGY_TRANSFER);
+    handleEnergyTransfer();
+    EXPECT_EQ(stage.load(std::memory_order_relaxed), EVSE_POWER_DOWN);
+
+    g_cp_substate = CP_A;
+    stageEnter(EVSE_ENERGY_TRANSFER);
+    handleEnergyTransfer();
+    EXPECT_EQ(stage.load(std::memory_order_relaxed), EVSE_IDLE_A);
+
+    g_cp_substate = CP_C;
+    stageEnter(EVSE_ENERGY_TRANSFER);
+    t_stage.store(T_STOP_MAX_MS + 1, std::memory_order_relaxed);
+    handleEnergyTransfer();
+    EXPECT_EQ(stage.load(std::memory_order_relaxed), EVSE_POWER_DOWN);
+}

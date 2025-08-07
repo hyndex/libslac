@@ -63,6 +63,15 @@ static void handleIdleA() {
 }
 
 static void handleInitialiseB1() {
+    CpSubState ss = cpGetSubState();
+    if (ss == CP_A) {
+        stageEnter(EVSE_IDLE_A);
+        return;
+    }
+    if (ss == CP_E || ss == CP_F) {
+        stageEnter(EVSE_POWER_DOWN);
+        return;
+    }
     if (t_stage.load(std::memory_order_relaxed) == 0) {
         if (!qca7000Wake()) {
             stageEnter(EVSE_IDLE_A);
@@ -83,8 +92,17 @@ static void handleInitialiseB1() {
 
 static void handleDigitalReqB2() {
     static bool nmk_switched = false;
+    CpSubState ss = cpGetSubState();
+    if (ss == CP_A) {
+        stageEnter(EVSE_IDLE_A);
+        return;
+    }
+    if (ss == CP_E || ss == CP_F) {
+        stageEnter(EVSE_POWER_DOWN);
+        return;
+    }
     if (g_slac_state.load(std::memory_order_relaxed) == 6 &&
-        (cpGetSubState() == CP_C || cpGetSubState() == CP_D)) {
+        (ss == CP_C || ss == CP_D)) {
         if (g_use_random_mac && !nmk_switched) {
             uint8_t nmk[slac::defs::NMK_LEN];
             for (uint8_t& b : nmk)
@@ -102,6 +120,17 @@ static void handleDigitalReqB2() {
 }
 
 static void handleCableCheckC() {
+    CpSubState ss = cpGetSubState();
+    if (ss == CP_A) {
+        cpPwmStop();
+        stageEnter(EVSE_IDLE_A);
+        return;
+    }
+    if (ss == CP_E || ss == CP_F) {
+        cpPwmStop();
+        stageEnter(EVSE_POWER_DOWN);
+        return;
+    }
     if (t_stage.load(std::memory_order_relaxed) == 0) {
         // Placeholder for lock and isolation checks
     }
@@ -115,6 +144,15 @@ static void handleCableCheckC() {
 }
 
 static void handlePrecharge() {
+    CpSubState ss = cpGetSubState();
+    if (ss == CP_A) {
+        stageEnter(EVSE_IDLE_A);
+        return;
+    }
+    if (ss == CP_E || ss == CP_F) {
+        stageEnter(EVSE_POWER_DOWN);
+        return;
+    }
     if (t_stage.load(std::memory_order_relaxed) == 0) {
         // enable HV pre-charge converter
     }
@@ -128,7 +166,16 @@ static void handlePrecharge() {
 }
 
 static void handleEnergyTransfer() {
-    if (cpGetSubState() == CP_B2) {
+    CpSubState ss = cpGetSubState();
+    if (ss == CP_A) {
+        stageEnter(EVSE_IDLE_A);
+        return;
+    }
+    if (ss == CP_E || ss == CP_F || ss == CP_B2) {
+        stageEnter(EVSE_POWER_DOWN);
+        return;
+    }
+    if (t_stage.load(std::memory_order_relaxed) > T_STOP_MAX_MS) {
         stageEnter(EVSE_POWER_DOWN);
     }
 }
