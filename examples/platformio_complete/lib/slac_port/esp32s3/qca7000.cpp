@@ -665,6 +665,10 @@ const uint8_t* qca7000GetMac() {
     return g_src_mac;
 }
 
+const uint8_t* qca7000GetMatchedMac() {
+    return g_slac_ctx.matched_mac;
+}
+
 qca7000_region qca7000GetRegion() {
     return g_region;
 }

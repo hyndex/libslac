@@ -112,8 +112,9 @@ void logStatus() {
         static_cast<float>((1u << CP_PWM_RES_BITS) - 1u);
     uint32_t vout_mv = voutGetVoltageMv();
     uint16_t vout_raw = voutGetVoltageRaw();
+    const uint8_t* ev_mac = qca7000GetMatchedMac();
     ESP_LOGI(TAG,
-             "[STAT] CP=%c %lu.%03lu V Duty=%.1f%% Vout=%lu.%03lu V Raw=%u Stage=%s SLAC=%u",
+             "[STAT] CP=%c %lu.%03lu V Duty=%.1f%% Vout=%lu.%03lu V Raw=%u Stage=%s SLAC=%u EV=%02X:%02X:%02X:%02X:%02X:%02X",
              cpGetStateLetter(),
              static_cast<unsigned long>(cp_mv / 1000),
              static_cast<unsigned long>(cp_mv % 1000),
@@ -122,7 +123,8 @@ void logStatus() {
              static_cast<unsigned long>(vout_mv % 1000),
              static_cast<unsigned>(vout_raw),
              evseStageName(evseGetStage()),
-             g_slac_state.load(std::memory_order_relaxed));
+             g_slac_state.load(std::memory_order_relaxed),
+             ev_mac[0], ev_mac[1], ev_mac[2], ev_mac[3], ev_mac[4], ev_mac[5]);
 }
 
 static void logTask(void*) {
