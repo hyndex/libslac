@@ -9,6 +9,7 @@ typedef enum {
 
 typedef enum {
     GPIO_MODE_INPUT = 0,
+    GPIO_MODE_OUTPUT = 1,
 } gpio_mode_t;
 
 typedef enum {
@@ -19,8 +20,13 @@ typedef enum {
 typedef int gpio_num_t;
 typedef void (*gpio_isr_t)(void*);
 
+#ifndef ESP_ERR_T_DEFINED
 typedef int esp_err_t;
+#define ESP_ERR_T_DEFINED
+#endif
+#ifndef ESP_OK
 #define ESP_OK 0
+#endif
 
 typedef struct {
     uint64_t pin_bit_mask;
@@ -33,6 +39,11 @@ typedef struct {
 static inline esp_err_t gpio_config(const gpio_config_t*) { return ESP_OK; }
 static inline esp_err_t gpio_install_isr_service(int) { return ESP_OK; }
 static inline esp_err_t gpio_isr_handler_add(gpio_num_t, gpio_isr_t, void*) { return ESP_OK; }
+extern gpio_mode_t g_last_gpio_mode;
+static inline esp_err_t gpio_set_direction(gpio_num_t, gpio_mode_t mode) {
+    g_last_gpio_mode = mode;
+    return ESP_OK;
+}
 #else
 static esp_err_t gpio_config(const gpio_config_t* cfg);
 static esp_err_t gpio_install_isr_service(int);

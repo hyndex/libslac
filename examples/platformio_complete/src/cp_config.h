@@ -24,7 +24,9 @@
 #define CP_PWM_FREQ_HZ      1000
 #define CP_PWM_RES_BITS     12
 #define CP_PWM_DUTY_5PCT    ((1u << CP_PWM_RES_BITS) / 20)
+#ifndef CP_IDLE_DRIVE_HIGH
 #define CP_IDLE_DRIVE_HIGH  1   // 1=keep CP driven high when idle, 0=release
+#endif
 #define CP_SUPPORT_B3       1   // enable support for CP state B3
 #define CP_SAMPLE_OFFSET_US \
     ((1000000 / CP_PWM_FREQ_HZ) * CP_PWM_DUTY_5PCT / (1u << CP_PWM_RES_BITS) / 2)

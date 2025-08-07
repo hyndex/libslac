@@ -5,6 +5,7 @@
 #include <driver/gpio.h>
 
 static bool pwmRunning = false;
+static bool pinWasInput = false;
 static constexpr uint8_t PWM_CHANNEL = 0;
 static esp_pm_lock_handle_t cp_pm_lock = nullptr;
 
@@ -56,6 +57,10 @@ void cpPwmStart(uint16_t duty_raw) {
     if (duty_raw > max_duty)
         duty_raw = max_duty;
     duty_raw = clamp_5pct(duty_raw);
+    if (pinWasInput) {
+        gpio_set_direction(static_cast<gpio_num_t>(CP_PWM_OUT_PIN), GPIO_MODE_OUTPUT);
+        pinWasInput = false;
+    }
     ledc_set_duty(LEDC_LOW_SPEED_MODE, static_cast<ledc_channel_t>(PWM_CHANNEL), duty_raw);
     ledc_update_duty(LEDC_LOW_SPEED_MODE, static_cast<ledc_channel_t>(PWM_CHANNEL));
     cpSetLastPwmDuty(duty_raw);
@@ -82,10 +87,12 @@ void cpPwmStop() {
         ledc_set_duty(LEDC_LOW_SPEED_MODE, static_cast<ledc_channel_t>(PWM_CHANNEL), DUTY_FULL);
         ledc_update_duty(LEDC_LOW_SPEED_MODE, static_cast<ledc_channel_t>(PWM_CHANNEL));
         cpSetLastPwmDuty(DUTY_FULL);
+        pinWasInput = false;
     } else {
         ledc_stop(LEDC_LOW_SPEED_MODE, static_cast<ledc_channel_t>(PWM_CHANNEL), 0);
         cpSetLastPwmDuty(0);
         gpio_set_direction(static_cast<gpio_num_t>(CP_PWM_OUT_PIN), GPIO_MODE_INPUT);
+        pinWasInput = true;
     }
     pwmRunning = false;
 #ifdef ESP_PLATFORM
