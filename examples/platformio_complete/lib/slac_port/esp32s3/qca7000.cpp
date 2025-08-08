@@ -97,6 +97,23 @@ static FSMBuffer g_fsm_buf{};
 static SlacContext g_slac_ctx{};
 static FSM g_fsm(g_fsm_buf);
 
+static void clear_slac_state() {
+    memset(g_slac_ctx.run_id, 0, sizeof(g_slac_ctx.run_id));
+    memset(&g_slac_ctx.match_req, 0, sizeof(g_slac_ctx.match_req));
+    memset(g_slac_ctx.match_src_mac, 0, ETH_ALEN);
+    memset(g_slac_ctx.pev_mac, 0, ETH_ALEN);
+    memset(g_slac_ctx.matched_mac, 0, ETH_ALEN);
+    memset(g_slac_ctx.atten_sum, 0, sizeof(g_slac_ctx.atten_sum));
+    g_slac_ctx.atten_count = 0;
+    g_slac_ctx.num_groups = 0;
+    g_slac_ctx.sound_sent = 0;
+    g_slac_ctx.validate_count = 0;
+    g_slac_ctx.retry_count = 0;
+    g_slac_ctx.filter_active = false;
+    g_slac_ctx.validate_success = false;
+    g_slac_ctx.timer = 0;
+}
+
 struct ErrorCallbackCtx {
     qca7000_error_cb_t cb{nullptr};
     void* arg{nullptr};
@@ -1123,7 +1140,12 @@ void qca7000HandleSetKeyReq(slac::messages::HomeplugMessage& msg) {
 void qca7000HandleValidateReq(slac::messages::HomeplugMessage& msg) {
     const auto& req = msg.get_payload<slac::messages::cm_validate_req>();
     send_validate_cnf(msg.get_src_mac(), &req);
-    g_fsm.handle_event(slac::SlacEvent::GotValidateReq);
+    if (req.result == slac::defs::CM_VALIDATE_REQ_RESULT_FAILURE) {
+        clear_slac_state();
+        g_fsm.handle_event(slac::SlacEvent::ValidateFailed);
+    } else {
+        g_fsm.handle_event(slac::SlacEvent::GotValidateReq);
+    }
 }
 
 void qca7000HandleSlacMatchReq(slac::messages::HomeplugMessage& msg) {
@@ -1171,7 +1193,8 @@ struct WaitParmCnfState : public FSM::SimpleStateType {
             ctx.result = SlacState::Sounding;
             return alloc.create_simple<SoundingState>(ctx);
         }
-        if (ev == slac::SlacEvent::Timeout || ev == slac::SlacEvent::Error) {
+        if (ev == slac::SlacEvent::ValidateFailed || ev == slac::SlacEvent::Timeout ||
+            ev == slac::SlacEvent::Error) {
             if (ctx.retry_count > 0) {
                 --ctx.retry_count;
                 qca7000ToggleCpEf();
@@ -1205,7 +1228,8 @@ struct SoundingState : public FSM::SimpleStateType {
             ctx.result = SlacState::WaitSetKey;
             return alloc.create_simple<WaitSetKeyState>(ctx);
         }
-        if (ev == slac::SlacEvent::Timeout || ev == slac::SlacEvent::Error) {
+        if (ev == slac::SlacEvent::ValidateFailed || ev == slac::SlacEvent::Timeout ||
+            ev == slac::SlacEvent::Error) {
             ctx.result = SlacState::Failed;
             return alloc.create_simple<IdleState>(ctx);
         }
@@ -1228,7 +1252,8 @@ struct WaitSetKeyState : public FSM::SimpleStateType {
             ctx.result = SlacState::WaitValidate;
             return alloc.create_simple<WaitValidateState>(ctx);
         }
-        if (ev == slac::SlacEvent::Timeout || ev == slac::SlacEvent::Error) {
+        if (ev == slac::SlacEvent::ValidateFailed || ev == slac::SlacEvent::Timeout ||
+            ev == slac::SlacEvent::Error) {
             ctx.result = SlacState::Failed;
             return alloc.create_simple<IdleState>(ctx);
         }
@@ -1257,6 +1282,10 @@ struct WaitValidateState : public FSM::SimpleStateType {
             }
             return FSM::StateAllocatorType::HANDLED_INTERNALLY;
         }
+        if (ev == slac::SlacEvent::ValidateFailed) {
+            ctx.result = SlacState::Failed;
+            return alloc.create_simple<IdleState>(ctx);
+        }
         if (ev == slac::SlacEvent::Timeout || ev == slac::SlacEvent::Error) {
             ctx.result = SlacState::Failed;
             return alloc.create_simple<IdleState>(ctx);
@@ -1281,7 +1310,8 @@ struct WaitMatchState : public FSM::SimpleStateType {
             ctx.result = SlacState::Matched;
             return alloc.create_simple<IdleState>(ctx);
         }
-        if (ev == slac::SlacEvent::Timeout || ev == slac::SlacEvent::Error) {
+        if (ev == slac::SlacEvent::ValidateFailed || ev == slac::SlacEvent::Timeout ||
+            ev == slac::SlacEvent::Error) {
             ctx.result = SlacState::Failed;
             return alloc.create_simple<IdleState>(ctx);
         }
@@ -1390,7 +1420,12 @@ SlacState qca7000getSlacResult() {
         } else if (mmtype == (slac::defs::MMTYPE_CM_VALIDATE | slac::defs::MMTYPE_MODE_REQ)) {
             const auto* req = reinterpret_cast<const slac::messages::cm_validate_req*>(p + 3);
             send_validate_cnf(eth->ether_shost, req);
-            g_fsm.handle_event(slac::SlacEvent::GotValidateReq);
+            if (req->result == slac::defs::CM_VALIDATE_REQ_RESULT_FAILURE) {
+                clear_slac_state();
+                g_fsm.handle_event(slac::SlacEvent::ValidateFailed);
+            } else {
+                g_fsm.handle_event(slac::SlacEvent::GotValidateReq);
+            }
         } else if (mmtype == (slac::defs::MMTYPE_CM_SLAC_MATCH | slac::defs::MMTYPE_MODE_REQ)) {
             const auto* req = reinterpret_cast<const slac::messages::cm_slac_match_req*>(p + 3);
             if (!memcmp(req->run_id, g_slac_ctx.run_id, sizeof(g_slac_ctx.run_id))) {
