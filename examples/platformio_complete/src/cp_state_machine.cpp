@@ -46,6 +46,8 @@ static const char* TAG = "EVSE";
 static inline void stageEnter(EvseStage s) {
     stage.store(s, std::memory_order_relaxed);
     t_stage.store(0, std::memory_order_relaxed);
+    if (s == EVSE_IDLE_A)
+        g_waiting_for_parm_req.store(false, std::memory_order_relaxed);
     ESP_LOGI(TAG, "Stage -> %s", stageName(s));
 }
 
@@ -84,8 +86,10 @@ static void handleInitialiseB1() {
             stageEnter(EVSE_IDLE_A);
             return;
         }
-        g_slac_ts.store(static_cast<uint32_t>(esp_timer_get_time() / 1000),
-                        std::memory_order_relaxed);
+        auto now_ms = static_cast<uint32_t>(esp_timer_get_time() / 1000);
+        g_slac_ts.store(now_ms, std::memory_order_relaxed);
+        g_slac_init_ts.store(now_ms, std::memory_order_relaxed);
+        g_waiting_for_parm_req.store(true, std::memory_order_relaxed);
         stageEnter(EVSE_DIGITAL_REQ_B2);
     }
 }

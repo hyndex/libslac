@@ -2,6 +2,7 @@
 #include <slac/config.hpp>
 #include <slac/slac.hpp>
 #include <slac/slac_states.hpp>
+#include <slac/iso15118_consts.hpp>
 #include <esp32s3/qca7000_link.hpp>
 #include <atomic>
 #include <cstdio>
@@ -60,6 +61,8 @@ static inline uint32_t get_ms() {
 static slac::Channel* g_channel = nullptr;
 // Timestamp for SLAC restart logic
 std::atomic<uint32_t> g_slac_ts{0};
+std::atomic<uint32_t> g_slac_init_ts{0};
+std::atomic<bool> g_waiting_for_parm_req{false};
 static bool hlc_running = false;
 static bool session_active = false;
 
@@ -218,6 +221,7 @@ extern "C" void app_main(void) {
             switch (msg.get_mmtype()) {
             case slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_REQ:
                 qca7000HandleSlacParmReq(msg);
+                g_waiting_for_parm_req.store(false, std::memory_order_relaxed);
                 break;
             case slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_CNF:
                 qca7000HandleSlacParmCnf(msg);
@@ -255,8 +259,12 @@ extern "C" void app_main(void) {
             qca7000LeaveAvln();
             if (g_use_random_mac)
                 qca7000SetMac(g_mac_addr);
-            if (qca7000startSlac())
-                g_slac_ts.store(get_ms(), std::memory_order_relaxed);
+            if (qca7000startSlac()) {
+                auto now = get_ms();
+                g_slac_ts.store(now, std::memory_order_relaxed);
+                g_slac_init_ts.store(now, std::memory_order_relaxed);
+                g_waiting_for_parm_req.store(true, std::memory_order_relaxed);
+            }
         }
 
         g_slac_state.store(qca7000getSlacResult(), std::memory_order_relaxed);
@@ -282,10 +290,23 @@ extern "C" void app_main(void) {
                     qca7000SetMac(g_mac_addr);
                 if (!qca7000startSlac())
                     ESP_LOGI(TAG, "startSlac failed");
-                g_slac_ts.store(get_ms(), std::memory_order_relaxed);
+                auto now = get_ms();
+                g_slac_ts.store(now, std::memory_order_relaxed);
+                g_slac_init_ts.store(now, std::memory_order_relaxed);
+                g_waiting_for_parm_req.store(true, std::memory_order_relaxed);
             }
         } else {
             g_slac_ts.store(get_ms(), std::memory_order_relaxed);
+        }
+
+        if (g_waiting_for_parm_req.load(std::memory_order_relaxed) &&
+            get_ms() - g_slac_init_ts.load(std::memory_order_relaxed) >
+                slac::defs::TT_EVSE_SLAC_INIT_MS) {
+            ESP_LOGI(TAG, "Timeout waiting for CM_SLAC_PARM.REQ");
+            hlc_stop();
+            qca7000LeaveAvln();
+            g_slac_state.store(SlacState::Idle, std::memory_order_relaxed);
+            g_waiting_for_parm_req.store(false, std::memory_order_relaxed);
         }
 
         vTaskDelay(pdMS_TO_TICKS(1));
