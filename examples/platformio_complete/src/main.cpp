@@ -210,6 +210,9 @@ extern "C" void app_main(void) {
         slac::messages::HomeplugMessage msg;
         if (g_channel && g_channel->poll(msg)) {
             switch (msg.get_mmtype()) {
+            case slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_REQ:
+                qca7000HandleSlacParmReq(msg);
+                break;
             case slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_CNF:
                 qca7000HandleSlacParmCnf(msg);
                 break;

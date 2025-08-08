@@ -71,6 +71,7 @@ static constexpr uint16_t INTR_MASK = SPI_INT_CPU_ON | SPI_INT_PKT_AVLBL | SPI_I
 
 using FSMBuffer = slac::fsm::buffer::SwapBuffer<64, 0, 1>;
 using FSM = slac::fsm::FSM<slac::SlacEvent, int, FSMBuffer>;
+struct SoundingState;
 
 struct SlacContext {
     uint8_t run_id[slac::defs::RUN_ID_LEN]{};
@@ -690,6 +691,10 @@ static bool send_atten_char_rsp(const SlacContext& ctx, const uint8_t* dst,
                                 const slac::messages::cm_atten_char_ind* ind);
 static bool send_set_key_cnf(const SlacContext& ctx, const uint8_t* dst, const slac::messages::cm_set_key_req* req);
 static bool send_parm_req(const SlacContext& ctx);
+static bool send_parm_cnf(const SlacContext& ctx, const uint8_t* dst,
+                          const slac::messages::cm_slac_parm_req& req);
+static bool send_parm_cnf(const SlacContext& ctx, const uint8_t* dst,
+                          const slac::messages::cm_slac_parm_req& req);
 
 static bool send_parm_req(const SlacContext& ctx) {
     struct __attribute__((packed)) {
@@ -713,6 +718,36 @@ static bool send_parm_req(const SlacContext& ctx) {
         msg.req.application_type = 0x00;
     msg.req.security_type = slac::defs::COMMON_SECURITY_TYPE;
     memcpy(msg.req.run_id, ctx.run_id, sizeof(ctx.run_id));
+
+    return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+}
+
+static bool send_parm_cnf(const SlacContext& ctx, const uint8_t* dst,
+                          const slac::messages::cm_slac_parm_req& req) {
+    struct __attribute__((packed)) {
+        ether_header eth;
+        struct {
+            uint8_t mmv;
+            uint16_t mmtype;
+        } hp;
+        slac::messages::cm_slac_parm_cnf cnf;
+    } msg{};
+
+    memset(&msg, 0, sizeof(msg));
+    memcpy(msg.eth.ether_dhost, dst, ETH_ALEN);
+    memcpy(msg.eth.ether_shost, qca7000GetMac(), ETH_ALEN);
+    msg.eth.ether_type = slac::htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
+    msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
+    msg.hp.mmtype =
+        slac::htole16(slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_CNF);
+    memset(msg.cnf.m_sound_target, 0xFF, sizeof(msg.cnf.m_sound_target));
+    msg.cnf.num_sounds = slac::defs::CM_SLAC_PARM_CNF_NUM_SOUNDS;
+    msg.cnf.timeout = slac::defs::CM_SLAC_PARM_CNF_TIMEOUT;
+    msg.cnf.resp_type = slac::defs::CM_SLAC_PARM_CNF_RESP_TYPE;
+    memcpy(msg.cnf.forwarding_sta, qca7000GetMac(), ETH_ALEN);
+    msg.cnf.application_type = req.application_type;
+    msg.cnf.security_type = req.security_type;
+    memcpy(msg.cnf.run_id, ctx.run_id, sizeof(ctx.run_id));
 
     return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
 }
@@ -943,6 +978,41 @@ static bool send_match_cnf(const SlacContext& ctx) {
 }
 
 // Handle SLAC messages polled by the application
+void qca7000HandleSlacParmReq(slac::messages::HomeplugMessage& msg) {
+    const auto& req = msg.get_payload<slac::messages::cm_slac_parm_req>();
+    uint8_t expected_app =
+        (g_region == qca7000_region::NA) ? 0x01 : slac::defs::COMMON_APPLICATION_TYPE;
+    if (req.application_type != expected_app ||
+        req.security_type != slac::defs::COMMON_SECURITY_TYPE) {
+        ESP_LOGW(PLC_TAG, "Invalid CM_SLAC_PARM.REQ app/security %u/%u",
+                 req.application_type, req.security_type);
+        return;
+    }
+    bool duplicate =
+        memcmp(req.run_id, g_slac_ctx.run_id, sizeof(g_slac_ctx.run_id)) == 0;
+    memcpy(g_slac_ctx.run_id, req.run_id, sizeof(g_slac_ctx.run_id));
+    g_slac_ctx.timer = slac_millis();
+    g_slac_ctx.retry_count = slac::defs::C_EV_MATCH_RETRY;
+    g_slac_ctx.sound_sent = 0;
+    g_slac_ctx.validate_count = 0;
+    g_slac_ctx.atten_count = 0;
+    memset(g_slac_ctx.atten_sum, 0, sizeof(g_slac_ctx.atten_sum));
+    g_slac_ctx.num_groups = 0;
+    memset(&g_slac_ctx.match_req, 0, sizeof(g_slac_ctx.match_req));
+    memset(g_slac_ctx.match_src_mac, 0, ETH_ALEN);
+    memset(g_slac_ctx.matched_mac, 0, ETH_ALEN);
+    g_slac_ctx.filter_active = false;
+    g_slac_ctx.validate_success = false;
+
+    if (duplicate)
+        ESP_LOGI(PLC_TAG, "Restarting SLAC after duplicate CM_SLAC_PARM.REQ");
+
+    send_parm_cnf(g_slac_ctx, msg.get_src_mac(), req);
+    send_start_atten_char(g_slac_ctx);
+    g_slac_ctx.timer = slac_millis();
+    g_fsm.reset<SoundingState>(g_slac_ctx);
+}
+
 void qca7000HandleSlacParmCnf(slac::messages::HomeplugMessage& msg) {
     const auto& cnf = msg.get_payload<slac::messages::cm_slac_parm_cnf>();
     if (memcmp(cnf.run_id, g_slac_ctx.run_id, sizeof(g_slac_ctx.run_id)) == 0) {
