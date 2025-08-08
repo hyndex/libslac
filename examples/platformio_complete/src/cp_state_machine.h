@@ -23,5 +23,7 @@ const char* evseStageName(EvseStage);
 
 extern std::atomic<SlacState> g_slac_state;
 extern std::atomic<uint32_t> g_slac_ts;
+extern std::atomic<uint32_t> g_slac_init_ts;
+extern std::atomic<bool> g_waiting_for_parm_req;
 extern bool g_use_random_mac;
 extern uint8_t g_mac_addr[ETH_ALEN];

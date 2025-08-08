@@ -57,6 +57,8 @@ void vTaskDelay(int) {}
 bool g_use_random_mac = false;
 uint8_t g_mac_addr[ETH_ALEN] = {};
 std::atomic<uint32_t> g_slac_ts{0};
+std::atomic<uint32_t> g_slac_init_ts{0};
+std::atomic<bool> g_waiting_for_parm_req{false};
 std::atomic<SlacState> g_slac_state{SlacState::Idle};
 
 #include "../examples/platformio_complete/src/cp_state_machine.cpp"
