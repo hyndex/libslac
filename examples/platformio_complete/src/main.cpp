@@ -205,7 +205,33 @@ extern "C" void app_main(void) {
 
         slac::messages::HomeplugMessage msg;
         if (g_channel && g_channel->poll(msg)) {
-            // Handle incoming SLAC messages here
+            switch (msg.get_mmtype()) {
+            case slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_CNF:
+                qca7000HandleSlacParmCnf(msg);
+                break;
+            case slac::defs::MMTYPE_CM_START_ATTEN_CHAR | slac::defs::MMTYPE_MODE_IND:
+                qca7000HandleStartAttenCharInd(msg);
+                break;
+            case slac::defs::MMTYPE_CM_ATTEN_PROFILE | slac::defs::MMTYPE_MODE_IND:
+                qca7000HandleAttenProfileInd(msg);
+                break;
+            case slac::defs::MMTYPE_CM_ATTEN_CHAR | slac::defs::MMTYPE_MODE_IND:
+                qca7000HandleAttenCharInd(msg);
+                break;
+            case slac::defs::MMTYPE_CM_SET_KEY | slac::defs::MMTYPE_MODE_REQ:
+                qca7000HandleSetKeyReq(msg);
+                break;
+            case slac::defs::MMTYPE_CM_VALIDATE | slac::defs::MMTYPE_MODE_REQ:
+                qca7000HandleValidateReq(msg);
+                break;
+            case slac::defs::MMTYPE_CM_SLAC_MATCH | slac::defs::MMTYPE_MODE_REQ:
+                qca7000HandleSlacMatchReq(msg);
+                break;
+            default:
+                ESP_LOGW(TAG, "[PLC] Unhandled mmtype 0x%04X", msg.get_mmtype());
+                break;
+            }
+            g_slac_state.store(qca7000getSlacResult(), std::memory_order_relaxed);
         }
 
         if (cpPwmIsRunning() &&

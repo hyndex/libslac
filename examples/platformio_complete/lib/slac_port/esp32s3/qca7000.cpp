@@ -928,7 +928,74 @@ static bool send_match_cnf(const SlacContext& ctx) {
 
     slac::slac_log_match(info);
 
-    return ok;
+  return ok;
+}
+
+// Handle SLAC messages polled by the application
+void qca7000HandleSlacParmCnf(slac::messages::HomeplugMessage& msg) {
+    const auto& cnf = msg.get_payload<slac::messages::cm_slac_parm_cnf>();
+    if (memcmp(cnf.run_id, g_slac_ctx.run_id, sizeof(g_slac_ctx.run_id)) == 0) {
+        g_fsm.handle_event(slac::SlacEvent::GotParmCnf);
+    } else {
+        ESP_LOGW(PLC_TAG, "CM_SLAC_PARM.CNF run_id mismatch");
+        g_fsm.handle_event(slac::SlacEvent::Error);
+    }
+}
+
+void qca7000HandleStartAttenCharInd(slac::messages::HomeplugMessage&) {
+    ESP_LOGW(PLC_TAG, "Unexpected CM_START_ATTEN_CHAR.IND");
+}
+
+void qca7000HandleAttenProfileInd(slac::messages::HomeplugMessage& msg) {
+    const auto& prof = msg.get_payload<slac::messages::cm_atten_profile_ind>();
+    if (g_slac_ctx.atten_count == 0) {
+        memset(g_slac_ctx.atten_sum, 0, sizeof(g_slac_ctx.atten_sum));
+        g_slac_ctx.num_groups = prof.num_groups;
+        memcpy(g_slac_ctx.pev_mac, prof.pev_mac, ETH_ALEN);
+    }
+    for (uint8_t i = 0; i < prof.num_groups && i < slac::defs::AAG_LIST_LEN; ++i) {
+        g_slac_ctx.atten_sum[i] += prof.aag[i];
+    }
+    if (++g_slac_ctx.atten_count >= slac::defs::C_EV_MATCH_MNBC) {
+        send_atten_char_ind(g_slac_ctx);
+        g_slac_ctx.atten_count = 0;
+    }
+}
+
+void qca7000HandleAttenCharInd(slac::messages::HomeplugMessage& msg) {
+    const auto& ind = msg.get_payload<slac::messages::cm_atten_char_ind>();
+    uint8_t* src = msg.get_src_mac();
+    if (memcmp(ind.run_id, g_slac_ctx.run_id, sizeof(g_slac_ctx.run_id)) == 0) {
+        send_atten_char_rsp(g_slac_ctx, src, &ind);
+        g_fsm.handle_event(slac::SlacEvent::GotAttenCharInd);
+    } else {
+        ESP_LOGW(PLC_TAG, "CM_ATTEN_CHAR.IND run_id mismatch");
+        g_fsm.handle_event(slac::SlacEvent::Error);
+    }
+}
+
+void qca7000HandleSetKeyReq(slac::messages::HomeplugMessage& msg) {
+    const auto& req = msg.get_payload<slac::messages::cm_set_key_req>();
+    send_set_key_cnf(g_slac_ctx, msg.get_src_mac(), &req);
+    g_fsm.handle_event(slac::SlacEvent::GotSetKeyReq);
+}
+
+void qca7000HandleValidateReq(slac::messages::HomeplugMessage& msg) {
+    const auto& req = msg.get_payload<slac::messages::cm_validate_req>();
+    send_validate_cnf(msg.get_src_mac(), &req);
+    g_fsm.handle_event(slac::SlacEvent::GotValidateReq);
+}
+
+void qca7000HandleSlacMatchReq(slac::messages::HomeplugMessage& msg) {
+    const auto& req = msg.get_payload<slac::messages::cm_slac_match_req>();
+    if (memcmp(req.run_id, g_slac_ctx.run_id, sizeof(g_slac_ctx.run_id)) == 0) {
+        memcpy(&g_slac_ctx.match_req, &req, sizeof(g_slac_ctx.match_req));
+        memcpy(g_slac_ctx.match_src_mac, msg.get_src_mac(), ETH_ALEN);
+        g_fsm.handle_event(slac::SlacEvent::GotMatchReq);
+    } else {
+        ESP_LOGW(PLC_TAG, "CM_SLAC_MATCH.REQ run_id mismatch");
+        g_fsm.handle_event(slac::SlacEvent::Error);
+    }
 }
 
 // FSM state implementations

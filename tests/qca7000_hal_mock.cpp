@@ -316,3 +316,32 @@ bool qca7000CheckBcbToggle() {
     }
     return false;
 }
+
+void qca7000HandleSlacParmCnf(slac::messages::HomeplugMessage& msg) {
+    handle_frame(reinterpret_cast<const uint8_t*>(msg.get_raw_message_ptr()),
+                 msg.get_raw_msg_len());
+}
+void qca7000HandleStartAttenCharInd(slac::messages::HomeplugMessage& msg) {
+    handle_frame(reinterpret_cast<const uint8_t*>(msg.get_raw_message_ptr()),
+                 msg.get_raw_msg_len());
+}
+void qca7000HandleAttenProfileInd(slac::messages::HomeplugMessage& msg) {
+    handle_frame(reinterpret_cast<const uint8_t*>(msg.get_raw_message_ptr()),
+                 msg.get_raw_msg_len());
+}
+void qca7000HandleAttenCharInd(slac::messages::HomeplugMessage& msg) {
+    handle_frame(reinterpret_cast<const uint8_t*>(msg.get_raw_message_ptr()),
+                 msg.get_raw_msg_len());
+}
+void qca7000HandleSetKeyReq(slac::messages::HomeplugMessage& msg) {
+    handle_frame(reinterpret_cast<const uint8_t*>(msg.get_raw_message_ptr()),
+                 msg.get_raw_msg_len());
+}
+void qca7000HandleValidateReq(slac::messages::HomeplugMessage& msg) {
+    handle_frame(reinterpret_cast<const uint8_t*>(msg.get_raw_message_ptr()),
+                 msg.get_raw_msg_len());
+}
+void qca7000HandleSlacMatchReq(slac::messages::HomeplugMessage& msg) {
+    handle_frame(reinterpret_cast<const uint8_t*>(msg.get_raw_message_ptr()),
+                 msg.get_raw_msg_len());
+}
