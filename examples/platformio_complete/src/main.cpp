@@ -40,6 +40,7 @@ inline int evseGetStage() { return 0; }
 
 static const char* TAG = "MAIN";
 std::atomic<SlacState> g_slac_state{SlacState::Idle};
+static TaskHandle_t qca7000_irq_task_handle = nullptr;
 
 #ifndef LIBSLAC_TESTING
 // qca7000ProcessSlice is declared in qca7000.hpp with a default timeout.
@@ -133,6 +134,15 @@ static void logTask(void*) {
     }
 }
 
+static void qca7000_irq_task(void*) {
+    while (true) {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        do {
+            qca7000ProcessSlice(500);
+        } while (qca7000ReadInternalReg(SPI_REG_RDBUF_BYTE_AVA) > 0);
+    }
+}
+
 #ifndef LIBSLAC_TESTING
 extern "C" void app_main(void) {
     vTaskDelay(pdMS_TO_TICKS(4000));
@@ -182,7 +192,14 @@ extern "C" void app_main(void) {
     }
 
     if (PLC_INT_PIN >= 0) {
-        plc_irq_setup();
+        xTaskCreatePinnedToCore(qca7000_irq_task,
+                                "qca7000_irq",
+                                4096,
+                                nullptr,
+                                configMAX_PRIORITIES - 1,
+                                &qca7000_irq_task_handle,
+                                1);
+        plc_irq_setup(qca7000_irq_task_handle);
     } else {
         ESP_LOGE(TAG, "Invalid PLC_INT_PIN %d; skipping IRQ setup", PLC_INT_PIN);
     }
@@ -196,11 +213,6 @@ extern "C" void app_main(void) {
     xTaskCreatePinnedToCore(logTask, "log", 4096, nullptr, 1, nullptr, 1);
 
     while (true) {
-        if (plc_irq) {
-            plc_irq = false;
-            qca7000ProcessSlice(500);
-        }
-
         slac::messages::HomeplugMessage msg;
         if (g_channel && g_channel->poll(msg)) {
             switch (msg.get_mmtype()) {

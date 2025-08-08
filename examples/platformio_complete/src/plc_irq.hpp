@@ -2,19 +2,28 @@
 #define PLC_IRQ_HPP
 
 #include <driver/gpio.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 #ifndef IRAM_ATTR
 #define IRAM_ATTR
 #endif
 
-inline volatile bool plc_irq = false;
-static inline void IRAM_ATTR plc_isr(void*) { plc_irq = true; }
+inline TaskHandle_t plc_irq_task_handle = nullptr;
+static inline void IRAM_ATTR plc_isr(void*) {
+    BaseType_t higher_woken = pdFALSE;
+    if (plc_irq_task_handle)
+        vTaskNotifyGiveFromISR(plc_irq_task_handle, &higher_woken);
+    if (higher_woken == pdTRUE)
+        portYIELD_FROM_ISR();
+}
 
 #ifndef PLC_INT_EDGE
 #define PLC_INT_EDGE GPIO_INTR_NEGEDGE
 #endif
 
-inline void plc_irq_setup() {
+inline void plc_irq_setup(TaskHandle_t task_to_notify) {
+    plc_irq_task_handle = task_to_notify;
     gpio_config_t int_cfg{};
     int_cfg.pin_bit_mask = 1ULL << PLC_INT_PIN;
     int_cfg.mode = GPIO_MODE_INPUT;

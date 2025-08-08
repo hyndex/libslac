@@ -16,6 +16,11 @@
 #define evseGetStage evseGetStage_stub
 
 #define g_slac_state g_slac_state_main
+#define qca7000ProcessSlice qca7000ProcessSlice_stub
+#define qca7000ReadInternalReg qca7000ReadInternalReg_stub
+
+void qca7000ProcessSlice_stub(uint32_t) {}
+uint16_t qca7000ReadInternalReg_stub(uint16_t) { return 0; }
 
 uint32_t cpGetVoltageMv_stub() { return 0; }
 uint16_t cpGetLastPwmDuty_stub() { return ((1u << CP_PWM_RES_BITS) - 1u) / 2u; }
