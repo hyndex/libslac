@@ -147,6 +147,9 @@ static uint8_t g_evse_nmk[slac::defs::NMK_LEN]{};
 static uint8_t g_evse_nid[slac::defs::NID_LEN]{};
 static qca7000_region g_region = qca7000_region::EU;
 
+static bool send_cm_set_key_req_local(const uint8_t nmk[slac::defs::NMK_LEN],
+                                      const uint8_t nid[slac::defs::NID_LEN]);
+
 void qca7000SetNmk(const uint8_t nmk[slac::defs::NMK_LEN]) {
     if (nmk) {
         memcpy(g_evse_nmk, nmk, sizeof(g_evse_nmk));
@@ -157,6 +160,8 @@ void qca7000SetNmk(const uint8_t nmk[slac::defs::NMK_LEN]) {
         memset(g_evse_nmk, 0, sizeof(g_evse_nmk));
         memset(g_evse_nid, 0, sizeof(g_evse_nid));
     }
+
+    send_cm_set_key_req_local(g_evse_nmk, g_evse_nid);
 }
 
 const uint8_t* qca7000GetNmk() {
@@ -685,6 +690,38 @@ qca7000_region qca7000GetRegion() {
     return g_region;
 }
 
+static bool send_cm_set_key_req_local(const uint8_t nmk[slac::defs::NMK_LEN],
+                                      const uint8_t nid[slac::defs::NID_LEN]) {
+    struct __attribute__((packed)) {
+        ether_header eth;
+        struct {
+            uint8_t mmv;
+            uint16_t mmtype;
+        } hp;
+        slac::messages::cm_set_key_req req;
+    } msg{};
+
+    memset(&msg, 0, sizeof(msg));
+    memset(msg.eth.ether_dhost, 0xFF, ETH_ALEN);
+    memcpy(msg.eth.ether_shost, qca7000GetMac(), ETH_ALEN);
+    msg.eth.ether_type = slac::htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
+    msg.hp.mmv = static_cast<uint8_t>(slac::defs::MMV::AV_1_0);
+    msg.hp.mmtype =
+        slac::htole16(slac::defs::MMTYPE_CM_SET_KEY | slac::defs::MMTYPE_MODE_REQ);
+    msg.req.key_type = slac::defs::CM_SET_KEY_REQ_KEY_TYPE_NMK;
+    msg.req.my_nonce = 0;
+    msg.req.your_nonce = 0;
+    msg.req.pid = slac::defs::CM_SET_KEY_REQ_PID_HLE;
+    msg.req.prn = slac::htole16(slac::defs::CM_SET_KEY_REQ_PRN_UNUSED);
+    msg.req.pmn = slac::defs::CM_SET_KEY_REQ_PMN_UNUSED;
+    msg.req.cco_capability = slac::defs::CM_SET_KEY_REQ_CCO_CAP_NONE;
+    memcpy(msg.req.nid, nid, sizeof(msg.req.nid));
+    msg.req.new_eks = slac::defs::CM_SET_KEY_REQ_PEKS_NMK_KNOWN_TO_STA;
+    memcpy(msg.req.new_key, nmk, slac::defs::NMK_LEN);
+
+    return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+}
+
 static bool send_start_atten_char(const SlacContext& ctx);
 static bool send_mnbc_sound(const SlacContext& ctx, uint8_t remaining);
 static bool send_atten_char_rsp(const SlacContext& ctx, const uint8_t* dst,
@@ -934,6 +971,17 @@ static bool send_match_cnf(const SlacContext& ctx) {
         slac::messages::cm_slac_match_cnf cnf;
     } msg{};
 
+    // Generate a fresh NMK and corresponding NID for this session
+#ifdef ESP_PLATFORM
+    esp_fill_random(g_evse_nmk, sizeof(g_evse_nmk));
+#else
+    for (auto& b : g_evse_nmk)
+        b = static_cast<uint8_t>(esp_random() & 0xFF);
+#endif
+    slac::utils::generate_nid_from_nmk(
+        g_evse_nid, g_evse_nmk,
+        slac::defs::NID_SECURITY_LEVEL_SIMPLE_CONNECT);
+
     memset(&msg, 0, sizeof(msg));
     memcpy(msg.eth.ether_dhost, ctx.match_src_mac, ETH_ALEN);
     memcpy(msg.eth.ether_shost, qca7000GetMac(), ETH_ALEN);
@@ -952,6 +1000,8 @@ static bool send_match_cnf(const SlacContext& ctx) {
     memcpy(msg.cnf.nmk, g_evse_nmk, sizeof(msg.cnf.nmk));
 
     bool ok = txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+    if (ok)
+        qca7000SetNmk(g_evse_nmk);
 
     slac::MatchLogInfo info{};
     memcpy(info.pev_mac, ctx.match_req.pev_mac, ETH_ALEN);
