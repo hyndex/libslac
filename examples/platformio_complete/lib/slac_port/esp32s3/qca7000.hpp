@@ -153,6 +153,7 @@ extern size_t myethreceivelen;
   bool qca7000Wake();
 
   // Helpers for SLAC message handling
+  void qca7000HandleSlacParmReq(slac::messages::HomeplugMessage& msg);
   void qca7000HandleSlacParmCnf(slac::messages::HomeplugMessage& msg);
   void qca7000HandleStartAttenCharInd(slac::messages::HomeplugMessage& msg);
   void qca7000HandleAttenProfileInd(slac::messages::HomeplugMessage& msg);
