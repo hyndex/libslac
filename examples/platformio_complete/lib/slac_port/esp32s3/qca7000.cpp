@@ -991,6 +991,7 @@ void qca7000HandleSlacParmReq(slac::messages::HomeplugMessage& msg) {
     bool duplicate =
         memcmp(req.run_id, g_slac_ctx.run_id, sizeof(g_slac_ctx.run_id)) == 0;
     memcpy(g_slac_ctx.run_id, req.run_id, sizeof(g_slac_ctx.run_id));
+    memcpy(g_slac_ctx.pev_mac, msg.get_src_mac(), ETH_ALEN);
     g_slac_ctx.timer = slac_millis();
     g_slac_ctx.retry_count = slac::defs::C_EV_MATCH_RETRY;
     g_slac_ctx.sound_sent = 0;
@@ -1029,17 +1030,25 @@ void qca7000HandleStartAttenCharInd(slac::messages::HomeplugMessage&) {
 
 void qca7000HandleAttenProfileInd(slac::messages::HomeplugMessage& msg) {
     const auto& prof = msg.get_payload<slac::messages::cm_atten_profile_ind>();
+    uint8_t* src = msg.get_src_mac();
+    if (memcmp(src, g_slac_ctx.pev_mac, ETH_ALEN) != 0 ||
+        memcmp(prof.pev_mac, g_slac_ctx.pev_mac, ETH_ALEN) != 0)
+        return;
     if (g_slac_ctx.atten_count == 0) {
         memset(g_slac_ctx.atten_sum, 0, sizeof(g_slac_ctx.atten_sum));
         g_slac_ctx.num_groups = prof.num_groups;
-        memcpy(g_slac_ctx.pev_mac, prof.pev_mac, ETH_ALEN);
+        g_slac_ctx.timer = slac_millis();
     }
     for (uint8_t i = 0; i < prof.num_groups && i < slac::defs::AAG_LIST_LEN; ++i) {
         g_slac_ctx.atten_sum[i] += prof.aag[i];
     }
-    if (++g_slac_ctx.atten_count >= slac::defs::C_EV_MATCH_MNBC) {
+    ++g_slac_ctx.atten_count;
+    uint32_t now = slac_millis();
+    if (now - g_slac_ctx.timer >= slac::defs::TT_EVSE_MATCH_MNBC_MS ||
+        g_slac_ctx.atten_count >= slac::defs::C_EV_MATCH_MNBC) {
         send_atten_char_ind(g_slac_ctx);
         g_slac_ctx.atten_count = 0;
+        g_slac_ctx.timer = 0;
     }
 }
 
@@ -1290,19 +1299,32 @@ SlacState qca7000getSlacResult() {
                 g_fsm.handle_event(slac::SlacEvent::Error);
             }
         } else if (mmtype == (slac::defs::MMTYPE_CM_ATTEN_PROFILE | slac::defs::MMTYPE_MODE_IND)) {
+            if (memcmp(eth->ether_shost, g_slac_ctx.pev_mac, ETH_ALEN) != 0)
+                continue;
             const auto* prof = reinterpret_cast<const slac::messages::cm_atten_profile_ind*>(p + 3);
+            if (memcmp(prof->pev_mac, g_slac_ctx.pev_mac, ETH_ALEN) != 0)
+                continue;
             if (g_slac_ctx.atten_count == 0) {
                 memset(g_slac_ctx.atten_sum, 0, sizeof(g_slac_ctx.atten_sum));
                 g_slac_ctx.num_groups = prof->num_groups;
-                memcpy(g_slac_ctx.pev_mac, prof->pev_mac, ETH_ALEN);
+                g_slac_ctx.timer = slac_millis();
             }
             for (uint8_t i = 0; i < prof->num_groups && i < slac::defs::AAG_LIST_LEN; ++i) {
                 g_slac_ctx.atten_sum[i] += prof->aag[i];
             }
-            if (++g_slac_ctx.atten_count >= slac::defs::C_EV_MATCH_MNBC) {
+            ++g_slac_ctx.atten_count;
+            uint32_t tnow = slac_millis();
+            if (tnow - g_slac_ctx.timer >= slac::defs::TT_EVSE_MATCH_MNBC_MS ||
+                g_slac_ctx.atten_count >= slac::defs::C_EV_MATCH_MNBC) {
                 send_atten_char_ind(g_slac_ctx);
                 g_slac_ctx.atten_count = 0;
+                g_slac_ctx.timer = 0;
             }
+        } else if (mmtype == (slac::defs::MMTYPE_CM_MNBC_SOUND | slac::defs::MMTYPE_MODE_IND)) {
+            if (memcmp(eth->ether_shost, g_slac_ctx.pev_mac, ETH_ALEN) != 0)
+                continue;
+            if (g_slac_ctx.atten_count == 0)
+                g_slac_ctx.timer = slac_millis();
         } else if (mmtype == (slac::defs::MMTYPE_CM_ATTEN_CHAR | slac::defs::MMTYPE_MODE_IND)) {
             const auto* ind = reinterpret_cast<const slac::messages::cm_atten_char_ind*>(p + 3);
             if (!memcmp(ind->run_id, g_slac_ctx.run_id, sizeof(g_slac_ctx.run_id))) {
@@ -1338,6 +1360,12 @@ SlacState qca7000getSlacResult() {
             g_slac_ctx.timer = now;
             if (g_slac_ctx.sound_sent == slac::defs::C_EV_MATCH_MNBC)
                 g_slac_ctx.timer = now; // start wait for ATTEN_CHAR
+        }
+        if (g_slac_ctx.atten_count > 0 &&
+            now - g_slac_ctx.timer > slac::defs::TT_EVSE_MATCH_MNBC_MS) {
+            send_atten_char_ind(g_slac_ctx);
+            g_slac_ctx.atten_count = 0;
+            g_slac_ctx.timer = 0;
         }
         if (g_slac_ctx.sound_sent == slac::defs::C_EV_MATCH_MNBC &&
             now - g_slac_ctx.timer > slac::defs::TT_EV_ATTEN_RESULTS_MS)
