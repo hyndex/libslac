@@ -12,6 +12,7 @@ using spi_device_handle_t = void*;
 using gpio_num_t = int;
 #endif
 #include <slac/channel.hpp>
+#include <slac/slac.hpp>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -142,9 +143,18 @@ extern uint8_t myethtransmitbuffer[V2GTP_BUFFER_SIZE];
 extern size_t myethtransmitlen;
 extern uint8_t myethreceivebuffer[V2GTP_BUFFER_SIZE];
 extern size_t myethreceivelen;
-extern const char* PLC_TAG;
+  extern const char* PLC_TAG;
 
-typedef void (*qca7000_link_ready_cb_t)(bool ready, void* arg);
-void qca7000SetLinkReadyCallback(qca7000_link_ready_cb_t cb, void* arg);
-bool qca7000Sleep();
-bool qca7000Wake();
+  typedef void (*qca7000_link_ready_cb_t)(bool ready, void* arg);
+  void qca7000SetLinkReadyCallback(qca7000_link_ready_cb_t cb, void* arg);
+  bool qca7000Sleep();
+  bool qca7000Wake();
+
+  // Helpers for SLAC message handling
+  void qca7000HandleSlacParmCnf(slac::messages::HomeplugMessage& msg);
+  void qca7000HandleStartAttenCharInd(slac::messages::HomeplugMessage& msg);
+  void qca7000HandleAttenProfileInd(slac::messages::HomeplugMessage& msg);
+  void qca7000HandleAttenCharInd(slac::messages::HomeplugMessage& msg);
+  void qca7000HandleSetKeyReq(slac::messages::HomeplugMessage& msg);
+  void qca7000HandleValidateReq(slac::messages::HomeplugMessage& msg);
+  void qca7000HandleSlacMatchReq(slac::messages::HomeplugMessage& msg);
