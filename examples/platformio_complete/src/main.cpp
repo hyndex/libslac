@@ -50,7 +50,6 @@ extern void qca7000ProcessSlice(uint32_t max_us);
 // Default MAC address for the modem. Adjust as required.
 uint8_t g_mac_addr[ETH_ALEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 bool g_use_random_mac = false;
-static uint8_t session_nmk[slac::defs::NMK_LEN] = {};
 
 static inline uint32_t get_ms() {
     return static_cast<uint32_t>(esp_timer_get_time() / 1000);
@@ -61,7 +60,7 @@ static slac::Channel* g_channel = nullptr;
 // Timestamp for SLAC restart logic
 std::atomic<uint32_t> g_slac_ts{0};
 static bool hlc_running = false;
-static bool nmk_switched = false;
+static bool session_active = false;
 
 static void hlc_start() {
     ESP_LOGI(TAG, "[HLC] start");
@@ -84,11 +83,6 @@ static void generate_random_mac() {
     g_mac_addr[0] = 0x02; // locally administered, unicast
     for (int i = 1; i < ETH_ALEN; ++i)
         g_mac_addr[i] = static_cast<uint8_t>(esp_random() & 0xFF);
-}
-
-static void generate_random_nmk(uint8_t* nmk) {
-    for (int i = 0; i < slac::defs::NMK_LEN; ++i)
-        nmk[i] = static_cast<uint8_t>(esp_random() & 0xFF);
 }
 
 static void check_serial_flag() {
@@ -254,17 +248,13 @@ extern "C" void app_main(void) {
         }
 
         g_slac_state.store(qca7000getSlacResult(), std::memory_order_relaxed);
-        if (!nmk_switched &&
+        if (!session_active &&
             g_slac_state.load(std::memory_order_relaxed) == SlacState::Matched) {
-            generate_random_nmk(session_nmk);
-            qca7000SetNmk(session_nmk);
-            nmk_switched = true;
+            session_active = true;
         }
-        if (nmk_switched && cpGetStateLetter() == 'A') {
+        if (session_active && cpGetStateLetter() == 'A') {
             qca7000SetNmk(nullptr);
-            for (int i = 0; i < slac::defs::NMK_LEN; ++i)
-                session_nmk[i] = 0;
-            nmk_switched = false;
+            session_active = false;
         }
         if (!hlc_running &&
             g_slac_state.load(std::memory_order_relaxed) == SlacState::Matched)
