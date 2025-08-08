@@ -1,6 +1,7 @@
 #include <slac/channel.hpp>
 #include <slac/config.hpp>
 #include <slac/slac.hpp>
+#include <slac/slac_states.hpp>
 #include <esp32s3/qca7000_link.hpp>
 #include <atomic>
 #include <cstdio>
@@ -38,7 +39,7 @@ inline int evseGetStage() { return 0; }
 #endif
 
 static const char* TAG = "MAIN";
-std::atomic<uint8_t> g_slac_state{0};
+std::atomic<SlacState> g_slac_state{SlacState::Idle};
 
 #ifndef LIBSLAC_TESTING
 // qca7000ProcessSlice is declared in qca7000.hpp with a default timeout.
@@ -126,7 +127,7 @@ void logStatus() {
              static_cast<unsigned long>(vout_mv % 1000),
              static_cast<unsigned>(vout_raw),
              evseStageName(evseGetStage()),
-             g_slac_state.load(std::memory_order_relaxed),
+             static_cast<unsigned>(g_slac_state.load(std::memory_order_relaxed)),
              ev_mac[0], ev_mac[1], ev_mac[2], ev_mac[3], ev_mac[4], ev_mac[5]);
 }
 
@@ -250,7 +251,8 @@ extern "C" void app_main(void) {
         }
 
         g_slac_state.store(qca7000getSlacResult(), std::memory_order_relaxed);
-        if (!nmk_switched && g_slac_state.load(std::memory_order_relaxed) == 6) {
+        if (!nmk_switched &&
+            g_slac_state.load(std::memory_order_relaxed) == SlacState::Matched) {
             generate_random_nmk(session_nmk);
             qca7000SetNmk(session_nmk);
             nmk_switched = true;
@@ -261,12 +263,14 @@ extern "C" void app_main(void) {
                 session_nmk[i] = 0;
             nmk_switched = false;
         }
-        if (!hlc_running && g_slac_state.load(std::memory_order_relaxed) == 6)
+        if (!hlc_running &&
+            g_slac_state.load(std::memory_order_relaxed) == SlacState::Matched)
             hlc_start();
-        if (hlc_running && g_slac_state.load(std::memory_order_relaxed) != 6)
+        if (hlc_running &&
+            g_slac_state.load(std::memory_order_relaxed) != SlacState::Matched)
             hlc_stop();
-        if (g_slac_state.load(std::memory_order_relaxed) != 0 &&
-            g_slac_state.load(std::memory_order_relaxed) != 5) {
+        if (g_slac_state.load(std::memory_order_relaxed) != SlacState::Idle &&
+            g_slac_state.load(std::memory_order_relaxed) != SlacState::WaitMatch) {
             if (get_ms() - g_slac_ts.load(std::memory_order_relaxed) > 60000) {
                 ESP_LOGI(TAG, "Restarting SLAC handshake");
                 if (g_use_random_mac)

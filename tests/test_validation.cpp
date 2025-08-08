@@ -23,11 +23,11 @@ static void send_frame(uint16_t mmtype, const uint8_t src[ETH_ALEN]) {
 
 static void goto_validate(const uint8_t mac[ETH_ALEN]) {
     send_frame(slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_CNF, mac);
-    EXPECT_EQ(qca7000getSlacResult(), 2);
+    EXPECT_EQ(qca7000getSlacResult(), SlacState::Sounding);
     send_frame(slac::defs::MMTYPE_CM_ATTEN_CHAR | slac::defs::MMTYPE_MODE_IND, mac);
-    EXPECT_EQ(qca7000getSlacResult(), 3);
+    EXPECT_EQ(qca7000getSlacResult(), SlacState::WaitSetKey);
     send_frame(slac::defs::MMTYPE_CM_SET_KEY | slac::defs::MMTYPE_MODE_REQ, mac);
-    EXPECT_EQ(qca7000getSlacResult(), 4);
+    EXPECT_EQ(qca7000getSlacResult(), SlacState::WaitValidate);
 }
 
 TEST(Validation, Success) {
@@ -35,11 +35,11 @@ TEST(Validation, Success) {
     slac::set_validation_disabled(false);
     mock_ring_reset();
     ASSERT_TRUE(qca7000startSlac());
-    EXPECT_EQ(qca7000getSlacResult(), 1);
+    EXPECT_EQ(qca7000getSlacResult(), SlacState::WaitParmCnf);
     goto_validate(mac);
     mock_bcb_toggle = true;
     send_frame(slac::defs::MMTYPE_CM_VALIDATE | slac::defs::MMTYPE_MODE_REQ, mac);
-    EXPECT_EQ(qca7000getSlacResult(), 5);
+    EXPECT_EQ(qca7000getSlacResult(), SlacState::WaitMatch);
 }
 
 TEST(Validation, Failure) {
@@ -47,9 +47,9 @@ TEST(Validation, Failure) {
     slac::set_validation_disabled(false);
     mock_ring_reset();
     ASSERT_TRUE(qca7000startSlac());
-    EXPECT_EQ(qca7000getSlacResult(), 1);
+    EXPECT_EQ(qca7000getSlacResult(), SlacState::WaitParmCnf);
     goto_validate(mac);
     mock_bcb_toggle = false;
     send_frame(slac::defs::MMTYPE_CM_VALIDATE | slac::defs::MMTYPE_MODE_REQ, mac);
-    EXPECT_EQ(qca7000getSlacResult(), 0xFF);
+    EXPECT_EQ(qca7000getSlacResult(), SlacState::Failed);
 }

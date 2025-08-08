@@ -201,14 +201,14 @@ bool spiQCA7000SendEthFrame(const uint8_t* f, size_t l) {
 }
 static uint8_t mock_retry = 0;
 static uint32_t mock_timer = 0;
-static uint8_t mock_result = 0;
+static SlacState mock_result = SlacState::Idle;
 static uint8_t matched_mac[ETH_ALEN] = {};
 static bool filter_active = false;
 
 bool qca7000startSlac() {
     mock_retry = slac::defs::C_EV_MATCH_RETRY;
     mock_timer = g_mock_millis;
-    mock_result = 1;
+    mock_result = SlacState::WaitParmCnf;
     filter_active = false;
     memset(matched_mac, 0, sizeof(matched_mac));
     return true;
@@ -217,7 +217,7 @@ bool qca7000startSlac() {
 bool qca7000LeaveAvln() {
     filter_active = false;
     memset(matched_mac, 0, sizeof(matched_mac));
-    mock_result = 0;
+    mock_result = SlacState::Idle;
     return true;
 }
 
@@ -236,29 +236,29 @@ static void handle_frame(const uint8_t* d, size_t l) {
         return;
 
     switch (mock_result) {
-    case 1:
+    case SlacState::WaitParmCnf:
         if (mmtype == (slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_CNF))
-            mock_result = 2;
+            mock_result = SlacState::Sounding;
         break;
-    case 2:
+    case SlacState::Sounding:
         if (mmtype == (slac::defs::MMTYPE_CM_ATTEN_CHAR | slac::defs::MMTYPE_MODE_IND))
-            mock_result = 3;
+            mock_result = SlacState::WaitSetKey;
         break;
-    case 3:
+    case SlacState::WaitSetKey:
         if (mmtype == (slac::defs::MMTYPE_CM_SET_KEY | slac::defs::MMTYPE_MODE_REQ))
-            mock_result = 4;
+            mock_result = SlacState::WaitValidate;
         break;
-    case 4:
+    case SlacState::WaitValidate:
         if (mmtype == (slac::defs::MMTYPE_CM_VALIDATE | slac::defs::MMTYPE_MODE_REQ)) {
             if (slac::validation_disabled() || qca7000CheckBcbToggle())
-                mock_result = 5;
+                mock_result = SlacState::WaitMatch;
             else
-                mock_result = 0xFF;
+                mock_result = SlacState::Failed;
         }
         break;
-    case 5:
+    case SlacState::WaitMatch:
         if (mmtype == (slac::defs::MMTYPE_CM_SLAC_MATCH | slac::defs::MMTYPE_MODE_REQ)) {
-            mock_result = 6;
+            mock_result = SlacState::Matched;
             memcpy(matched_mac, eth->ether_shost, ETH_ALEN);
             filter_active = true;
         }
@@ -268,16 +268,17 @@ static void handle_frame(const uint8_t* d, size_t l) {
     }
 }
 
-uint8_t qca7000getSlacResult() {
-    if (mock_result == 1 && g_mock_millis - mock_timer > slac::defs::TT_EVSE_SLAC_INIT_MS) {
+SlacState qca7000getSlacResult() {
+    if (mock_result == SlacState::WaitParmCnf &&
+        g_mock_millis - mock_timer > slac::defs::TT_EVSE_SLAC_INIT_MS) {
         if (mock_retry > 0) {
             --mock_retry;
             mock_timer = g_mock_millis;
             qca7000ToggleCpEf();
             if (mock_retry == 0)
-                mock_result = 0xFF;
+                mock_result = SlacState::Failed;
         } else {
-            mock_result = 0xFF;
+            mock_result = SlacState::Failed;
         }
     }
 
