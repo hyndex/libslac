@@ -101,7 +101,7 @@ static void handleDigitalReqB2() {
         stageEnter(EVSE_POWER_DOWN);
         return;
     }
-    if (g_slac_state.load(std::memory_order_relaxed) == 6 &&
+    if (g_slac_state.load(std::memory_order_relaxed) == SlacState::Matched &&
         (ss == CP_C || ss == CP_D)) {
         if (g_use_random_mac && !nmk_switched) {
             uint8_t nmk[slac::defs::NMK_LEN];
@@ -114,7 +114,7 @@ static void handleDigitalReqB2() {
         return;
     }
     if (t_stage.load(std::memory_order_relaxed) > T_HLC_EST_MS &&
-        g_slac_state.load(std::memory_order_relaxed) != 6) {
+        g_slac_state.load(std::memory_order_relaxed) != SlacState::Matched) {
         stageEnter(EVSE_INITIALISE_B1);
     }
 }

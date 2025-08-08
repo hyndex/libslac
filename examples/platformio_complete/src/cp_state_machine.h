@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <atomic>
 #include <slac/ethernet_defs.hpp>
+#include <slac/slac_states.hpp>
 #include "cp_monitor.h"
 
 enum EvseStage : uint8_t {
@@ -20,7 +21,7 @@ void evseStateMachineTask(void*);
 EvseStage evseGetStage();
 const char* evseStageName(EvseStage);
 
-extern std::atomic<uint8_t> g_slac_state;
+extern std::atomic<SlacState> g_slac_state;
 extern std::atomic<uint32_t> g_slac_ts;
 extern bool g_use_random_mac;
 extern uint8_t g_mac_addr[ETH_ALEN];

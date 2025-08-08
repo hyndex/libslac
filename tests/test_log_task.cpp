@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <atomic>
+#include <slac/slac_states.hpp>
 #define LIBSLAC_TESTING
 #include "esp_log.h"
 #undef ESP_LOGI
@@ -26,10 +27,10 @@ int evseGetStage_stub() { return 0; }
 
 #include "../examples/platformio_complete/src/main.cpp"
 #undef g_slac_state
-extern std::atomic<uint8_t> g_slac_state_main;
+extern std::atomic<SlacState> g_slac_state_main;
 
 TEST(LogTask, PrintsDutyAndVout) {
-    g_slac_state_main.store(7, std::memory_order_relaxed);
+    g_slac_state_main.store(SlacState::Matched, std::memory_order_relaxed);
     testing::internal::CaptureStdout();
     logStatus();
     std::string out = testing::internal::GetCapturedStdout();

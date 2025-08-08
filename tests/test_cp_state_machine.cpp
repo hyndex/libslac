@@ -57,7 +57,7 @@ void vTaskDelay(int) {}
 bool g_use_random_mac = false;
 uint8_t g_mac_addr[ETH_ALEN] = {};
 std::atomic<uint32_t> g_slac_ts{0};
-std::atomic<uint8_t> g_slac_state{0};
+std::atomic<SlacState> g_slac_state{SlacState::Idle};
 
 #include "../examples/platformio_complete/src/cp_state_machine.cpp"
 
@@ -115,7 +115,7 @@ TEST(EvseStateMachine, DigitalReqB2Unplug) {
 
 TEST(EvseStateMachine, DigitalReqB2AdvanceAndFault) {
     // Successful advance to CableCheckC
-    g_slac_state.store(6, std::memory_order_relaxed);
+    g_slac_state.store(SlacState::Matched, std::memory_order_relaxed);
     g_cp_substate = CP_C;
     stageEnter(EVSE_DIGITAL_REQ_B2);
     handleDigitalReqB2();
@@ -129,7 +129,7 @@ TEST(EvseStateMachine, DigitalReqB2AdvanceAndFault) {
 
     // Timeout back to InitialiseB1
     g_cp_substate = CP_D;
-    g_slac_state.store(0, std::memory_order_relaxed);
+    g_slac_state.store(SlacState::Idle, std::memory_order_relaxed);
     stageEnter(EVSE_DIGITAL_REQ_B2);
     t_stage.store(T_HLC_EST_MS + 1, std::memory_order_relaxed);
     handleDigitalReqB2();

@@ -13,6 +13,7 @@ using gpio_num_t = int;
 #endif
 #include <slac/channel.hpp>
 #include <slac/slac.hpp>
+#include <slac/slac_states.hpp>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -100,7 +101,7 @@ bool qca7000CheckAlive();
 size_t spiQCA7000checkForReceivedData(uint8_t* dst, size_t maxLen);
 bool spiQCA7000SendEthFrame(const uint8_t* frame, size_t len);
 bool qca7000startSlac();
-uint8_t qca7000getSlacResult();
+SlacState qca7000getSlacResult();
 void qca7000ToggleCpEf();
 // Poll the modem for events and service the RX ring.
 // If a CPU_ON or buffer error interrupt is detected the driver

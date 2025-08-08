@@ -7,17 +7,17 @@
 #include <slac/endian.hpp>
 #include <cstring>
 
-static uint8_t mock_state = 0;
+static SlacState mock_state = SlacState::Idle;
 static uint8_t current_nmk[slac::defs::NMK_LEN]{};
 
 bool qca7000startSlac() {
-    mock_state = 1;
+    mock_state = SlacState::WaitParmCnf;
     return true;
 }
 
-uint8_t qca7000getSlacResult() { return mock_state; }
+SlacState qca7000getSlacResult() { return mock_state; }
 
-void mock_ring_reset() { mock_state = 0; }
+void mock_ring_reset() { mock_state = SlacState::Idle; }
 
 void mock_receive_frame(const uint8_t* f, size_t) {
     const uint8_t* p = f + sizeof(ether_header);
@@ -25,25 +25,25 @@ void mock_receive_frame(const uint8_t* f, size_t) {
     memcpy(&mmtype, p + 1, 2);
     mmtype = slac::le16toh(mmtype);
     switch (mock_state) {
-    case 1:
+    case SlacState::WaitParmCnf:
         if (mmtype == (slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_CNF))
-            mock_state = 2;
+            mock_state = SlacState::Sounding;
         break;
-    case 2:
+    case SlacState::Sounding:
         if (mmtype == (slac::defs::MMTYPE_CM_ATTEN_CHAR | slac::defs::MMTYPE_MODE_IND))
-            mock_state = 3;
+            mock_state = SlacState::WaitSetKey;
         break;
-    case 3:
+    case SlacState::WaitSetKey:
         if (mmtype == (slac::defs::MMTYPE_CM_SET_KEY | slac::defs::MMTYPE_MODE_REQ))
-            mock_state = 4;
+            mock_state = SlacState::WaitValidate;
         break;
-    case 4:
+    case SlacState::WaitValidate:
         if (mmtype == (slac::defs::MMTYPE_CM_VALIDATE | slac::defs::MMTYPE_MODE_REQ))
-            mock_state = 5;
+            mock_state = SlacState::WaitMatch;
         break;
-    case 5:
+    case SlacState::WaitMatch:
         if (mmtype == (slac::defs::MMTYPE_CM_SLAC_MATCH | slac::defs::MMTYPE_MODE_REQ))
-            mock_state = 6;
+            mock_state = SlacState::Matched;
         break;
     default:
         break;
@@ -72,15 +72,15 @@ static void send_frame(uint16_t mmtype, const uint8_t src[ETH_ALEN]) {
 
 static void run_match_sequence(const uint8_t mac[ETH_ALEN]) {
     send_frame(slac::defs::MMTYPE_CM_SLAC_PARAM | slac::defs::MMTYPE_MODE_CNF, mac);
-    ASSERT_EQ(qca7000getSlacResult(), 2);
+    ASSERT_EQ(qca7000getSlacResult(), SlacState::Sounding);
     send_frame(slac::defs::MMTYPE_CM_ATTEN_CHAR | slac::defs::MMTYPE_MODE_IND, mac);
-    ASSERT_EQ(qca7000getSlacResult(), 3);
+    ASSERT_EQ(qca7000getSlacResult(), SlacState::WaitSetKey);
     send_frame(slac::defs::MMTYPE_CM_SET_KEY | slac::defs::MMTYPE_MODE_REQ, mac);
-    ASSERT_EQ(qca7000getSlacResult(), 4);
+    ASSERT_EQ(qca7000getSlacResult(), SlacState::WaitValidate);
     send_frame(slac::defs::MMTYPE_CM_VALIDATE | slac::defs::MMTYPE_MODE_REQ, mac);
-    ASSERT_EQ(qca7000getSlacResult(), 5);
+    ASSERT_EQ(qca7000getSlacResult(), SlacState::WaitMatch);
     send_frame(slac::defs::MMTYPE_CM_SLAC_MATCH | slac::defs::MMTYPE_MODE_REQ, mac);
-    ASSERT_EQ(qca7000getSlacResult(), 6);
+    ASSERT_EQ(qca7000getSlacResult(), SlacState::Matched);
 }
 
 TEST(SlacNmk, DefaultThenEvse) {
@@ -92,12 +92,12 @@ TEST(SlacNmk, DefaultThenEvse) {
     qca7000SetNmk(nullptr);
     mock_ring_reset();
     ASSERT_TRUE(qca7000startSlac());
-    EXPECT_EQ(qca7000getSlacResult(), 1);
+    EXPECT_EQ(qca7000getSlacResult(), SlacState::WaitParmCnf);
     const uint8_t* cur = qca7000GetNmk();
     for (size_t i = 0; i < slac::defs::NMK_LEN; ++i)
         EXPECT_EQ(cur[i], 0u);
     run_match_sequence(pev_mac);
-    EXPECT_EQ(qca7000getSlacResult(), 6);
+    EXPECT_EQ(qca7000getSlacResult(), SlacState::Matched);
     cur = qca7000GetNmk();
     for (size_t i = 0; i < slac::defs::NMK_LEN; ++i)
         EXPECT_EQ(cur[i], 0u);
