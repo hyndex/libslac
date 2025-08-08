@@ -221,6 +221,7 @@ static constexpr uint8_t RING_SIZE = CONFIG_RX_RING_SIZE;
 static constexpr uint8_t RING_MASK = RING_SIZE - 1;
 static RxEntry* ring = nullptr;
 static std::atomic<uint8_t> head{0}, tail{0};
+static std::atomic<uint32_t> g_rx_overflow_count{0};
 
 inline bool ringEmpty() {
     return head.load(std::memory_order_acquire) == tail.load(std::memory_order_acquire);
@@ -236,6 +237,7 @@ inline void ringPush(const uint8_t* d, size_t l) {
     uint8_t next = (h + 1) & RING_MASK;
     if (next == t) {
         ESP_LOGW(PLC_TAG, "RX ring full - dropping frame");
+        g_rx_overflow_count.fetch_add(1, std::memory_order_relaxed);
         return;
     }
     memcpy(ring[h].data, d, l);
@@ -254,8 +256,16 @@ inline bool ringPop(const uint8_t** d, size_t* l) {
     tail.store((t + 1) & RING_MASK, std::memory_order_release);
     return true;
 }
+
+uint32_t qca7000GetRxOverflowCount() {
+    return g_rx_overflow_count.load(std::memory_order_relaxed);
+}
 #ifdef LIBSLAC_TESTING
-extern "C" void mock_ring_reset() { head.store(0); tail.store(0); }
+extern "C" void mock_ring_reset() {
+    head.store(0);
+    tail.store(0);
+    g_rx_overflow_count.store(0, std::memory_order_relaxed);
+}
 extern "C" void mock_receive_frame(const uint8_t* f, size_t l) { ringPush(f, l); }
 #endif
 } // namespace
@@ -1402,6 +1412,7 @@ bool qca7000setup(spi_device_handle_t bus,
         ring = new (std::nothrow) RxEntry[RING_SIZE];
         head.store(0, std::memory_order_relaxed);
         tail.store(0, std::memory_order_relaxed);
+        g_rx_overflow_count.store(0, std::memory_order_relaxed);
     }
     g_spi = bus;
     g_cs = csPin;

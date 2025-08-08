@@ -46,26 +46,38 @@ const char* PLC_TAG = "mock";
 
 namespace {
 struct RxEntry { size_t len; uint8_t data[V2GTP_BUFFER_SIZE]; };
-static constexpr uint8_t RING_SIZE = 8;
+static constexpr uint8_t RING_SIZE = CONFIG_RX_RING_SIZE;
 static constexpr uint8_t RING_MASK = RING_SIZE - 1;
 static RxEntry ring[RING_SIZE];
 static std::atomic<uint8_t> head{0}, tail{0};
+static std::atomic<uint32_t> rx_overflow_count{0};
 }
 
 uint16_t mock_signature = 0;
 uint16_t mock_wrbuf = 0;
 uint16_t mock_intr_cause = SPI_INT_CPU_ON;
 
-extern "C" void mock_ring_reset() { head.store(0); tail.store(0); }
+extern "C" void mock_ring_reset() {
+    head.store(0);
+    tail.store(0);
+    rx_overflow_count.store(0, std::memory_order_relaxed);
+}
 extern "C" void mock_receive_frame(const uint8_t* f, size_t l) {
     if (l > V2GTP_BUFFER_SIZE) l = V2GTP_BUFFER_SIZE;
     uint8_t h = head.load();
     uint8_t t = tail.load();
     uint8_t next = (h + 1) & RING_MASK;
-    if (next == t) return;
+    if (next == t) {
+        rx_overflow_count.fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
     memcpy(ring[h].data, f, l);
     ring[h].len = l;
     head.store(next);
+}
+
+uint32_t qca7000GetRxOverflowCount() {
+    return rx_overflow_count.load(std::memory_order_relaxed);
 }
 
 extern "C" void mock_spi_feed_raw(const uint8_t* d, size_t l) {
