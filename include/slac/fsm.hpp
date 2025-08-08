@@ -16,6 +16,7 @@ enum class SlacEvent {
     GotAttenCharInd,
     GotSetKeyReq,
     GotValidateReq,
+    ValidateFailed,
     GotMatchReq,
     Timeout,
     Error
