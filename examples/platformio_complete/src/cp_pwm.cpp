@@ -83,6 +83,10 @@ void cpPwmSetDuty(uint16_t duty_raw, bool clamp) {
     }
 }
 
+void cpPwmHandshake() {
+    cpPwmSetDuty(CP_PWM_DUTY_5PCT, true);
+}
+
 void cpPwmStop() {
     if (CP_IDLE_DRIVE_HIGH) {
         constexpr uint16_t DUTY_FULL = (1u << CP_PWM_RES_BITS) - 1;

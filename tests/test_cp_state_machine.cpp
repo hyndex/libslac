@@ -9,6 +9,7 @@
 #define cpPwmStart cpPwmStartStub
 #define cpPwmStop cpPwmStopStub
 #define cpPwmSetDuty cpPwmSetDutyStub
+#define cpPwmHandshake cpPwmHandshakeStub
 #define cpPwmIsRunning cpPwmIsRunningStub
 #define cpGetSubState cpGetSubStateStub
 #define voutGetVoltageMv voutGetVoltageMvStub
@@ -37,6 +38,7 @@ static uint16_t vout_mv = 0;
 void cpPwmStartStub(uint16_t, bool) { pwm_running = true; ++pwm_start_calls; }
 void cpPwmStopStub() { pwm_running = false; ++pwm_stop_calls; }
 void cpPwmSetDutyStub(uint16_t, bool) { ++pwm_set_calls; }
+void cpPwmHandshakeStub() { ++pwm_set_calls; }
 bool cpPwmIsRunningStub() { return pwm_running; }
 
 CpSubState g_cp_substate = CP_A;

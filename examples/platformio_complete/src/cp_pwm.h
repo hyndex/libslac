@@ -11,4 +11,6 @@ void cpPwmStop();
 // Update the CP PWM duty cycle. Behaviour is identical to cpPwmStart with
 // respect to the `clamp_5pct` flag.
 void cpPwmSetDuty(uint16_t duty_raw, bool clamp_5pct = false);
+// Convenience helper to drive the PWM handshake at 5 % duty
+void cpPwmHandshake();
 bool cpPwmIsRunning();

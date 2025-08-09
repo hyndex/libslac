@@ -73,6 +73,15 @@ Control Pilot Monitoring
 
 The example firmware samples the Control Pilot voltage using the ESP32-S3 ADC in continuous mode with DMA. Samples are collected at 50 kS/s into a ring buffer and a background task selects the peak value for each PWM cycle to update the library's Control Pilot state. This approach removes the timing jitter of one-shot conversions and provides accurate peak detection with minimal CPU load.
 
+Deterministic PWM Handshake
+---------------------------
+
+Before starting the SLAC handshake the Control Pilot should briefly be driven
+at a 5\% duty cycle. Call :func:`cpPwmHandshake()` to clamp the PWM output to
+the required 4.5–5.5\% window using :func:`cpPwmSetDuty`. Waiting for
+``T_PLC_INIT_MS`` (700 ms by default) after invoking this helper ensures that
+the EV and EVSE transition to high level communication at a predictable time.
+
 After changing any of these options run ``platformio run`` to verify that the project still builds correctly.
 
 
