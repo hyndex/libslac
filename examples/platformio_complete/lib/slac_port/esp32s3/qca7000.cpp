@@ -241,9 +241,12 @@ struct RxEntry {
     size_t len;
     uint8_t data[V2GTP_BUFFER_SIZE];
 };
+static_assert(CONFIG_RX_RING_SIZE &&
+                  ((CONFIG_RX_RING_SIZE & (CONFIG_RX_RING_SIZE - 1)) == 0),
+              "CONFIG_RX_RING_SIZE must be a power of two");
 static constexpr uint8_t RING_SIZE = CONFIG_RX_RING_SIZE;
 static constexpr uint8_t RING_MASK = RING_SIZE - 1;
-static RxEntry* ring = nullptr;
+static RxEntry ring[RING_SIZE];
 static std::atomic<uint8_t> head{0}, tail{0};
 static std::atomic<uint32_t> g_rx_overflow_count{0};
 
@@ -252,8 +255,6 @@ inline bool ringEmpty() {
 }
 
 inline void ringPush(const uint8_t* d, size_t l) {
-    if (!ring)
-        return;
     if (l > V2GTP_BUFFER_SIZE)
         l = V2GTP_BUFFER_SIZE;
     auto h = head.load(std::memory_order_acquire);
@@ -270,8 +271,6 @@ inline void ringPush(const uint8_t* d, size_t l) {
 }
 
 inline bool ringPop(const uint8_t** d, size_t* l) {
-    if (!ring)
-        return false;
     auto t = tail.load(std::memory_order_acquire);
     if (head.load(std::memory_order_acquire) == t)
         return false;
@@ -1589,9 +1588,9 @@ void qca7000Process() {
 
 bool qca7000setup(spi_device_handle_t bus,
                   int csPin,
-                  int rstPin,
-                  int intPin,
-                  int pwrPin) {
+                 int rstPin,
+                 int intPin,
+                 int pwrPin) {
     ESP_LOGI(PLC_TAG,
              "QCA7000 setup: bus=%p CS=%d RST=%d INT=%d PWR=%d",
              bus,
@@ -1599,12 +1598,9 @@ bool qca7000setup(spi_device_handle_t bus,
              rstPin,
              intPin,
              pwrPin);
-    if (!ring) {
-        ring = new (std::nothrow) RxEntry[RING_SIZE];
-        head.store(0, std::memory_order_relaxed);
-        tail.store(0, std::memory_order_relaxed);
-        g_rx_overflow_count.store(0, std::memory_order_relaxed);
-    }
+    head.store(0, std::memory_order_relaxed);
+    tail.store(0, std::memory_order_relaxed);
+    g_rx_overflow_count.store(0, std::memory_order_relaxed);
     g_spi = bus;
     g_cs = csPin;
     g_rst = rstPin;
@@ -1639,8 +1635,6 @@ void qca7000teardown() {
     if (g_spi) {
         // bus handle provided externally; nothing to teardown here
     }
-    delete[] ring;
-    ring = nullptr;
     head.store(0, std::memory_order_relaxed);
     tail.store(0, std::memory_order_relaxed);
     g_spi = nullptr;
