@@ -18,6 +18,8 @@
 #ifdef ESP_PLATFORM
 #include <esp_random.h>
 #include <esp_idf_version.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 #else
 static inline uint32_t esp_random() {
     return 0x12345678u;
@@ -201,8 +203,18 @@ static int g_pwr = PLC_PWR_EN_PIN;
 #endif
 
 #ifdef ESP_PLATFORM
-static inline void spiBegin() { spi_device_acquire_bus(g_spi, portMAX_DELAY); }
-static inline void spiEnd() { spi_device_release_bus(g_spi); }
+static SemaphoreHandle_t g_spi_mutex = nullptr;
+static inline void spiBegin() {
+    if (!g_spi_mutex)
+        g_spi_mutex = xSemaphoreCreateMutex();
+    xSemaphoreTake(g_spi_mutex, portMAX_DELAY);
+    spi_device_acquire_bus(g_spi, portMAX_DELAY);
+}
+static inline void spiEnd() {
+    spi_device_release_bus(g_spi);
+    if (g_spi_mutex)
+        xSemaphoreGive(g_spi_mutex);
+}
 static inline uint16_t spiTransfer16(uint16_t data, int hz) {
     spi_transaction_t t{};
     t.flags = SPI_TRANS_USE_TXDATA | SPI_TRANS_USE_RXDATA;
@@ -1633,6 +1645,10 @@ bool qca7000setup(spi_device_handle_t bus,
     g_rst = rstPin;
     g_int = intPin;
     g_pwr = pwrPin;
+#ifdef ESP_PLATFORM
+    if (!g_spi_mutex)
+        g_spi_mutex = xSemaphoreCreateMutex();
+#endif
     gpio_set_direction(static_cast<gpio_num_t>(g_cs), GPIO_MODE_OUTPUT);
     gpio_set_level(static_cast<gpio_num_t>(g_cs), 1);
     if (g_pwr >= 0) {
