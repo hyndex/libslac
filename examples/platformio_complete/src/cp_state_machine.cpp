@@ -82,6 +82,7 @@ static void handleInitialiseB1() {
         if (g_use_random_mac) {
             qca7000SetMac(g_mac_addr);
         }
+        cpPwmHandshake();
         if (!qca7000startSlac()) {
             stageEnter(EVSE_IDLE_A);
             return;

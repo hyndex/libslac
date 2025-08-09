@@ -21,6 +21,7 @@
 #include <freertos/task.h>
 #include "plc_irq.hpp"
 #include "cp_config.h"
+#include "cp_pwm.h"
 
 #ifndef LIBSLAC_TESTING
 // Placeholder stubs for control pilot and EVSE state machine logic that would
@@ -28,6 +29,7 @@
 // be built without the full hardware drivers.
 inline void cpPwmInit() {}
 inline void cpMonitorInit() {}
+inline void cpPwmHandshake() {}
 inline bool cpPwmIsRunning() { return false; }
 inline bool cpDigitalCommRequested() { return false; }
 inline uint32_t cpGetVoltageMv() { return 0; }
@@ -265,6 +267,7 @@ extern "C" void app_main(void) {
             qca7000LeaveAvln();
             if (g_use_random_mac)
                 qca7000SetMac(g_mac_addr);
+            cpPwmHandshake();
             if (qca7000startSlac()) {
                 auto now = get_ms();
                 g_slac_ts.store(now, std::memory_order_relaxed);
@@ -294,6 +297,7 @@ extern "C" void app_main(void) {
                 ESP_LOGI(TAG, "Restarting SLAC handshake");
                 if (g_use_random_mac)
                     qca7000SetMac(g_mac_addr);
+                cpPwmHandshake();
                 if (!qca7000startSlac())
                     ESP_LOGI(TAG, "startSlac failed");
                 auto now = get_ms();
