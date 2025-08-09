@@ -181,7 +181,6 @@ extern "C" void app_main(void) {
     devcfg.mode = 3;
     devcfg.spics_io_num = -1;
     devcfg.queue_size = 3;
-    devcfg.flags = SPI_DEVICE_HALFDUPLEX;
     spi_device_handle_t spi_handle;
     ESP_ERROR_CHECK(spi_bus_add_device(SPI2_HOST, &devcfg, &spi_handle));
 
