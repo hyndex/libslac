@@ -356,8 +356,8 @@ static bool hardReset() {
     slac_delay(slac::hardreset_low_ms());
     gpio_set_level(static_cast<gpio_num_t>(g_rst), 1);
     slac_delay(slac::hardreset_high_ms());
-    // Wait 200 ms (datasheet recommends 200–500 ms) before probing the modem
-    slac_delay(200);
+    // Wait before probing the modem (datasheet recommends 200–500 ms)
+    slac_delay(QCA7000_POST_RESET_DELAY_MS);
 
     auto slowRd16 = [&](uint16_t reg) -> uint16_t {
         spiBegin();
@@ -380,7 +380,7 @@ static bool hardReset() {
         if (sig == SIG && buf == WRBUF_RST)
             break;
         slac_delay(5);
-    } while (slac_millis() - t0 < 200);
+    } while (slac_millis() - t0 < QCA7000_RESET_TIMEOUT_MS);
 
     if (sig != SIG || buf != WRBUF_RST) {
         ESP_LOGE(PLC_TAG, "Reset probe failed (SIG=0x%04X BUF=0x%04X)", sig, buf);
@@ -445,14 +445,14 @@ static bool softReset() {
         if (sig == SIG && buf == WRBUF_RST)
             break;
         slac_delay(5);
-    } while (slac_millis() - t0 < 200);
+    } while (slac_millis() - t0 < QCA7000_RESET_TIMEOUT_MS);
 
     if (sig != SIG || buf != WRBUF_RST)
         return false;
 
     t0 = slac_millis();
     while (!(slowRd16(SPI_REG_INTR_CAUSE) & SPI_INT_CPU_ON) &&
-           slac_millis() - t0 < 80)
+           slac_millis() - t0 < slac::cpuon_timeout_ms())
         ;
     if (!(slowRd16(SPI_REG_INTR_CAUSE) & SPI_INT_CPU_ON)) {
         ESP_LOGE(PLC_TAG, "CPU_ON not asserted after soft reset");
@@ -476,7 +476,7 @@ static void initialSetup() {
         if (sig == SIG)
             break;
         slac_delay(5);
-    } while (slac_millis() - t0 < 200);
+    } while (slac_millis() - t0 < QCA7000_RESET_TIMEOUT_MS);
     uint16_t cfg = spiRd16_slow(SPI_REG_SPI_CONFIG);
     if (cfg & QCASPI_MULTI_CS_BIT)
         spiWr16_slow(SPI_REG_SPI_CONFIG, cfg & ~QCASPI_MULTI_CS_BIT);
@@ -1533,6 +1533,13 @@ SlacState qca7000getSlacResult() {
 static inline uint32_t get_us() { return slac_micros(); }
 
 static void process_cause(uint16_t cause) {
+    uint16_t snapshot_cause = spiRd16_slow(SPI_REG_INTR_CAUSE);
+    uint16_t intr_en = spiRd16_slow(SPI_REG_INTR_ENABLE);
+    uint16_t wrbuf = spiRd16_slow(SPI_REG_WRBUF_SPC_AVA);
+    uint16_t rdbuf = spiRd16_slow(SPI_REG_RDBUF_BYTE_AVA);
+    ESP_LOGW(PLC_TAG,
+             "IRQ cause=0x%04X snap=0x%04X en=0x%04X wr=0x%04X rd=0x%04X",
+             cause, snapshot_cause, intr_en, wrbuf, rdbuf);
     if (cause & SPI_INT_CPU_ON) {
         initialSetup();
         if (g_err_cb.cb)
@@ -1543,11 +1550,11 @@ static void process_cause(uint16_t cause) {
         bool ok = hardReset();
         if (!ok) {
             ESP_LOGE(PLC_TAG, "Hard reset failed after buffer error");
-            if (++g_crash_count >= 3 && g_pwr >= 0) {
+            if (++g_crash_count >= QCA7000_CRASH_MAX_COUNT && g_pwr >= 0) {
                 gpio_set_level(static_cast<gpio_num_t>(g_pwr), 0);
-                slac_delay(200);
+                slac_delay(QCA7000_POWER_CYCLE_DELAY_MS);
                 gpio_set_level(static_cast<gpio_num_t>(g_pwr), 1);
-                slac_delay(200);
+                slac_delay(QCA7000_POWER_CYCLE_DELAY_MS);
                 g_crash_count = 0;
             }
             g_driver_fatal = true;
@@ -1557,17 +1564,17 @@ static void process_cause(uint16_t cause) {
         }
         bool fatal = !ok;
         uint32_t now = slac_millis();
-        if (now - g_buferr_ts <= 1000)
+        if (now - g_buferr_ts <= QCA7000_BUFERR_WINDOW_MS)
             ++g_buferr_count;
         else
             g_buferr_count = 1;
         g_buferr_ts = now;
-        if (g_buferr_count >= 3) {
+        if (g_buferr_count >= QCA7000_BUFERR_MAX_COUNT) {
             if (g_pwr >= 0) {
                 gpio_set_level(static_cast<gpio_num_t>(g_pwr), 0);
-                slac_delay(200);
+                slac_delay(QCA7000_POWER_CYCLE_DELAY_MS);
                 gpio_set_level(static_cast<gpio_num_t>(g_pwr), 1);
-                slac_delay(200);
+                slac_delay(QCA7000_POWER_CYCLE_DELAY_MS);
             }
             g_driver_fatal = true;
             fatal = true;
@@ -1609,7 +1616,7 @@ void qca7000ProcessSlice(uint32_t max_us) {
             break;
 
         process_cause(cause);
-        if (++loops > 32)
+        if (++loops > QCA7000_PROCESS_MAX_LOOPS)
             break;
         if (get_us() - t0 > max_us)
             break;
@@ -1665,9 +1672,9 @@ bool qca7000setup(spi_device_handle_t bus,
         }
         if (attempt < static_cast<int>(slac::max_retries()) && g_pwr >= 0) {
             gpio_set_level(static_cast<gpio_num_t>(g_pwr), 0);
-            slac_delay(200);
+            slac_delay(QCA7000_POWER_CYCLE_DELAY_MS);
             gpio_set_level(static_cast<gpio_num_t>(g_pwr), 1);
-            slac_delay(200);
+            slac_delay(QCA7000_POWER_CYCLE_DELAY_MS);
         }
     }
     ESP_LOGE(PLC_TAG, "modem missing after %u setup attempts", static_cast<unsigned>(slac::max_retries()));
@@ -1725,7 +1732,7 @@ bool qca7000Wake() {
         return true;
     if (g_pwr >= 0) {
         gpio_set_level(static_cast<gpio_num_t>(g_pwr), 1);
-        slac_delay(200);
+        slac_delay(QCA7000_POWER_CYCLE_DELAY_MS);
     }
     if (!hardReset())
         return false;
