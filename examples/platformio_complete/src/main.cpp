@@ -12,7 +12,9 @@
 #include <esp_system.h>
 #include <esp_random.h>
 #include <driver/gpio.h>
+#ifdef USE_UART_CONSOLE
 #include <driver/uart.h>
+#endif
 #include <driver/spi_master.h>
 #endif
 #include <freertos/FreeRTOS.h>
@@ -88,7 +90,7 @@ static void generate_random_mac() {
     for (int i = 1; i < ETH_ALEN; ++i)
         g_mac_addr[i] = static_cast<uint8_t>(esp_random() & 0xFF);
 }
-
+#ifdef USE_UART_CONSOLE
 static void check_serial_flag() {
     printf("Press 'R' for random MAC\n");
     int64_t start = esp_timer_get_time();
@@ -104,6 +106,7 @@ static void check_serial_flag() {
     }
     generate_random_mac();
 }
+#endif
 #endif
 
 void logStatus() {
@@ -150,7 +153,11 @@ static void qca7000_irq_task(void*) {
 extern "C" void app_main(void) {
     vTaskDelay(pdMS_TO_TICKS(4000));
     ESP_LOGI(TAG, "Starting SLAC modem...");
+#ifdef USE_UART_CONSOLE
     check_serial_flag();
+#else
+    generate_random_mac();
+#endif
 
     slac::set_spi_fast_hz(QCA7000_SPI_FAST_HZ);
     slac::set_spi_slow_hz(PLC_SPI_SLOW_HZ);
