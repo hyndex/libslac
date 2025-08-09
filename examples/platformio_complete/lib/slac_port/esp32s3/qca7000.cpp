@@ -323,6 +323,8 @@ static bool hardReset() {
     slac_delay(slac::hardreset_low_ms());
     gpio_set_level(static_cast<gpio_num_t>(g_rst), 1);
     slac_delay(slac::hardreset_high_ms());
+    // Wait 200 ms (datasheet recommends 200–500 ms) before probing the modem
+    slac_delay(200);
 
     auto slowRd16 = [&](uint16_t reg) -> uint16_t {
         spiBegin(setSlow());
@@ -1622,7 +1624,6 @@ bool qca7000setup(spi_device_handle_t bus,
             ESP_LOGI(PLC_TAG, "QCA7000 ready (region %u)", static_cast<unsigned>(g_region));
             return true;
         }
-        ESP_LOGE(PLC_TAG, "hardReset failed – modem missing");
         if (attempt < static_cast<int>(slac::max_retries()) && g_pwr >= 0) {
             gpio_set_level(static_cast<gpio_num_t>(g_pwr), 0);
             slac_delay(200);
@@ -1630,6 +1631,7 @@ bool qca7000setup(spi_device_handle_t bus,
             slac_delay(200);
         }
     }
+    ESP_LOGE(PLC_TAG, "modem missing after %u setup attempts", static_cast<unsigned>(slac::max_retries()));
     return false;
 }
 
