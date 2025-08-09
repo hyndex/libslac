@@ -17,6 +17,7 @@
 #include <inttypes.h>
 #ifdef ESP_PLATFORM
 #include <esp_random.h>
+#include <esp_idf_version.h>
 #else
 static inline uint32_t esp_random() {
     return 0x12345678u;
@@ -198,42 +199,61 @@ static int g_rst = PLC_SPI_RST_PIN;
 static int g_int = PLC_INT_PIN;
 static int g_pwr = PLC_PWR_EN_PIN;
 #endif
-static inline int setSlow() { return slac::spi_slow_hz(); }
-static inline int setFast() { return slac::spi_fast_hz(); }
 
 #ifdef ESP_PLATFORM
-static inline void spiBegin(int) { spi_device_acquire_bus(g_spi, portMAX_DELAY); }
+static inline void spiBegin() { spi_device_acquire_bus(g_spi, portMAX_DELAY); }
 static inline void spiEnd() { spi_device_release_bus(g_spi); }
-static inline uint16_t spiTransfer16(uint16_t data) {
+static inline uint16_t spiTransfer16(uint16_t data, int hz) {
     spi_transaction_t t{};
     t.flags = SPI_TRANS_USE_TXDATA | SPI_TRANS_USE_RXDATA;
     t.length = 16;
     t.tx_data[0] = data >> 8;
     t.tx_data[1] = data & 0xFF;
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 5, 0)
+    t.override_freq_hz = hz;
+#elif ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 4, 0) || defined(LIBSLAC_TESTING)
+    t.clock_speed_hz = hz;
+#else
+    (void)hz;
+#endif
     spi_device_polling_transmit(g_spi, &t);
     return (static_cast<uint16_t>(t.rx_data[0]) << 8) | t.rx_data[1];
 }
-static inline uint8_t spiTransfer(uint8_t data) {
+static inline uint8_t spiTransfer(uint8_t data, int hz) {
     spi_transaction_t t{};
     t.flags = SPI_TRANS_USE_TXDATA | SPI_TRANS_USE_RXDATA;
     t.length = 8;
     t.tx_data[0] = data;
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 5, 0)
+    t.override_freq_hz = hz;
+#elif ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 4, 0) || defined(LIBSLAC_TESTING)
+    t.clock_speed_hz = hz;
+#else
+    (void)hz;
+#endif
     spi_device_polling_transmit(g_spi, &t);
     return t.rx_data[0];
 }
-static inline void spiWriteBytes(const uint8_t* d, size_t l) {
+static inline void spiWriteBytes(const uint8_t* d, size_t l, int hz) {
     if (!l) return;
     spi_transaction_t t{};
     t.length = l * 8;
     t.tx_buffer = d;
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 5, 0)
+    t.override_freq_hz = hz;
+#elif ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 4, 0) || defined(LIBSLAC_TESTING)
+    t.clock_speed_hz = hz;
+#else
+    (void)hz;
+#endif
     spi_device_polling_transmit(g_spi, &t);
 }
 #else
-static inline void spiBegin(int) {}
+static inline void spiBegin() {}
 static inline void spiEnd() {}
-static inline uint16_t spiTransfer16(uint16_t) { return 0; }
-static inline uint8_t spiTransfer(uint8_t) { return 0; }
-static inline void spiWriteBytes(const uint8_t*, size_t) {}
+static inline uint16_t spiTransfer16(uint16_t, int) { return 0; }
+static inline uint8_t spiTransfer(uint8_t, int) { return 0; }
+static inline void spiWriteBytes(const uint8_t*, size_t, int) {}
 #endif
 
 namespace {
@@ -298,20 +318,22 @@ static inline uint16_t cmd16(bool rd, bool intr, uint16_t reg) {
 }
 
 static uint16_t spiRd16_slow(uint16_t reg) {
-    spiBegin(setSlow());
+    spiBegin();
+    int hz = slac::spi_slow_hz();
     gpio_set_level(static_cast<gpio_num_t>(g_cs), 0);
-    spiTransfer16(cmd16(true, true, reg));
-    uint16_t v = spiTransfer16(0);
+    spiTransfer16(cmd16(true, true, reg), hz);
+    uint16_t v = spiTransfer16(0, hz);
     gpio_set_level(static_cast<gpio_num_t>(g_cs), 1);
     spiEnd();
     return v;
 }
 
 static void spiWr16_slow(uint16_t reg, uint16_t val) {
-    spiBegin(setSlow());
+    spiBegin();
+    int hz = slac::spi_slow_hz();
     gpio_set_level(static_cast<gpio_num_t>(g_cs), 0);
-    spiTransfer16(cmd16(false, true, reg));
-    spiTransfer16(val);
+    spiTransfer16(cmd16(false, true, reg), hz);
+    spiTransfer16(val, hz);
     gpio_set_level(static_cast<gpio_num_t>(g_cs), 1);
     spiEnd();
 }
@@ -326,10 +348,11 @@ static bool hardReset() {
     slac_delay(200);
 
     auto slowRd16 = [&](uint16_t reg) -> uint16_t {
-        spiBegin(setSlow());
+        spiBegin();
+        int hz = slac::spi_slow_hz();
         gpio_set_level(static_cast<gpio_num_t>(g_cs), 0);
-        spiTransfer16(cmd16(true, true, reg));
-        uint16_t v = spiTransfer16(0);
+        spiTransfer16(cmd16(true, true, reg), hz);
+        uint16_t v = spiTransfer16(0, hz);
         gpio_set_level(static_cast<gpio_num_t>(g_cs), 1);
         spiEnd();
         return v;
@@ -377,19 +400,21 @@ static bool hardReset() {
 
 static bool softReset() {
     auto slowRd16 = [&](uint16_t reg) -> uint16_t {
-        spiBegin(setSlow());
+        spiBegin();
+        int hz = slac::spi_slow_hz();
         gpio_set_level(static_cast<gpio_num_t>(g_cs), 0);
-        spiTransfer16(cmd16(true, true, reg));
-        uint16_t v = spiTransfer16(0);
+        spiTransfer16(cmd16(true, true, reg), hz);
+        uint16_t v = spiTransfer16(0, hz);
         gpio_set_level(static_cast<gpio_num_t>(g_cs), 1);
         spiEnd();
         return v;
     };
     auto slowWr16 = [&](uint16_t reg, uint16_t val) {
-        spiBegin(setSlow());
+        spiBegin();
+        int hz = slac::spi_slow_hz();
         gpio_set_level(static_cast<gpio_num_t>(g_cs), 0);
-        spiTransfer16(cmd16(false, true, reg));
-        spiTransfer16(val);
+        spiTransfer16(cmd16(false, true, reg), hz);
+        spiTransfer16(val, hz);
         gpio_set_level(static_cast<gpio_num_t>(g_cs), 1);
         spiEnd();
     };
@@ -535,20 +560,21 @@ static bool txFrame(const uint8_t* eth, size_t ethLen) {
 
     spiWr16_slow(SPI_REG_BFR_SIZE, spiLen);
 
-    spiBegin(setFast());
+    spiBegin();
+    int hz = slac::spi_fast_hz();
     gpio_set_level(static_cast<gpio_num_t>(g_cs), 0);
-    spiTransfer16(cmd16(false, false, 0));
-    spiTransfer16(SOF_WORD);
-    spiTransfer16(SOF_WORD);
-    spiTransfer16(slac::htole16(static_cast<uint16_t>(frameLen)));
-    spiTransfer16(0);
+    spiTransfer16(cmd16(false, false, 0), hz);
+    spiTransfer16(SOF_WORD, hz);
+    spiTransfer16(SOF_WORD, hz);
+    spiTransfer16(slac::htole16(static_cast<uint16_t>(frameLen)), hz);
+    spiTransfer16(0, hz);
     if (ethLen) {
         size_t off = 0;
         while (off < ethLen) {
             size_t chunk = ethLen - off;
             if (chunk > slac::spi_burst_len())
                 chunk = slac::spi_burst_len();
-            spiWriteBytes(eth + off, chunk);
+            spiWriteBytes(eth + off, chunk, hz);
             off += chunk;
         }
     }
@@ -560,11 +586,11 @@ static bool txFrame(const uint8_t* eth, size_t ethLen) {
             size_t chunk = padLen - off;
             if (chunk > slac::spi_burst_len())
                 chunk = slac::spi_burst_len();
-            spiWriteBytes(pad, chunk);
+            spiWriteBytes(pad, chunk, hz);
             off += chunk;
         }
     }
-    spiTransfer16(EOF_WORD);
+    spiTransfer16(EOF_WORD, hz);
     gpio_set_level(static_cast<gpio_num_t>(g_cs), 1);
     spiEnd();
     return true;
@@ -612,13 +638,14 @@ static void fetchRx() {
         spiWr16_slow(SPI_REG_BFR_SIZE, requested);
 
         static uint8_t buf[V2GTP_BUFFER_SIZE];
-        spiBegin(setFast());
+        spiBegin();
+        int hz = slac::spi_fast_hz();
         gpio_set_level(static_cast<gpio_num_t>(g_cs), 0);
-        uint16_t first = spiTransfer16(cmd16(true, false, 0));
+        uint16_t first = spiTransfer16(cmd16(true, false, 0), hz);
         buf[0] = first & 0xFF;
         buf[1] = first >> 8;
         for (uint16_t i = 0; i < requested - 2; ++i)
-            buf[i + 2] = spiTransfer(0);
+            buf[i + 2] = spiTransfer(0, hz);
         gpio_set_level(static_cast<gpio_num_t>(g_cs), 1);
         spiEnd();
 
