@@ -1,3 +1,5 @@
+#ifdef CONFIG_SLAC_USE_UART
+
 #include "qca7000_uart.hpp"
 #include "port_config.hpp"
 #include "qca7000.hpp"
@@ -304,3 +306,5 @@ const uint8_t* Qca7000UartLink::mac() const {
 
 } // namespace port
 } // namespace slac
+
+#endif // CONFIG_SLAC_USE_UART
