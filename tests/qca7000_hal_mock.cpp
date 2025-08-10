@@ -170,23 +170,24 @@ esp_err_t fetchRx() {
         if (len != frame_total && len + 4 != frame_total) {
             qca7000SoftReset();
             spi_read_len = 0;
-            return;
+            return ESP_OK;
         }
         if (frame_total > remaining) {
             qca7000SoftReset();
             spi_read_len = 0;
-            return;
+            return ESP_OK;
         }
         if (p[RX_HDR + fl] != 0x55 || p[RX_HDR + fl + 1] != 0x55) {
             qca7000SoftReset();
             spi_read_len = 0;
-            return;
+            return ESP_OK;
         }
         mock_receive_frame(p + RX_HDR, fl);
         p += frame_total;
         remaining -= frame_total;
     }
     spi_read_len = 0;
+    return ESP_OK;
 }
 
 size_t spiQCA7000checkForReceivedData(uint8_t* dst, size_t len) {
@@ -271,7 +272,6 @@ static void handle_frame(const uint8_t* d, size_t l) {
         break;
     }
     spi_read_len = 0;
-    return ESP_OK;
 }
 
 SlacState qca7000getSlacResult() {
