@@ -12,7 +12,8 @@ bool qca7000setup(spi_device_handle_t spi,
                   int cs,
                   int rst,
                   int intr,
-                  int pwr) {
+                  int pwr,
+                  bool /*auto_irq*/) {
     last_spi = spi;
     last_cs = cs;
     last_rst = rst;
