@@ -79,6 +79,8 @@ struct qca7000_config {
     int int_pin{PLC_INT_PIN};
     int pwr_en_pin{PLC_PWR_EN_PIN};
     const uint8_t* mac_addr{nullptr};
+    /// Maximum time in microseconds spent servicing modem events when polling
+    uint32_t process_slice_us{500};
 };
 
 bool qca7000setup(spi_device_handle_t spi,

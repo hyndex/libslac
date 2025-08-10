@@ -208,6 +208,8 @@ Polling Operation
 ``libslac`` does not require the QCA7000 interrupt pin. Calling
 ``qca7000ProcessSlice()`` from an IRQ-driven loop keeps the main thread
 responsive while processing at most 500 µs of modem activity per call.
+``Qca7000Link::read`` also invokes ``qca7000ProcessSlice`` while polling so
+that modem events are serviced even when waiting for new data.
 
 UART Mode
 ---------
