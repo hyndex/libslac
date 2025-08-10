@@ -39,6 +39,7 @@ public:
 
     bool open() override;
     bool write(const uint8_t* b, size_t l, uint32_t timeout_ms) override;
+    /// Poll for a frame and service modem events while waiting
     transport::LinkError read(uint8_t* b, size_t l, size_t* out, uint32_t timeout_ms) override;
     const uint8_t* mac() const override;
 

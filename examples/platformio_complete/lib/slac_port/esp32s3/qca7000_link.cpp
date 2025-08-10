@@ -4,6 +4,8 @@
 #include "qca7000.hpp"
 #include <cstring>
 
+extern void qca7000ProcessSlice(uint32_t max_us);
+
 namespace slac {
 namespace port {
 
@@ -87,6 +89,10 @@ transport::LinkError Qca7000Link::read(uint8_t* b, size_t l, size_t* out, uint32
         }
         if (timeout_ms == 0)
             break;
+        if (initialized)
+            // Service modem events while waiting for a frame
+            qca7000ProcessSlice(cfg.process_slice_us);
+        // Sleep briefly while polling for data
         slac_delay(1);
     } while (slac_millis() - start < timeout_ms);
     *out = 0;
