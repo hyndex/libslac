@@ -125,32 +125,35 @@ bool qca7000SoftReset() {
     }
     return true;
 }
-uint16_t qca7000ReadInternalReg(uint16_t reg) {
+esp_err_t qca7000ReadInternalReg(uint16_t reg, uint16_t* out) {
     if (reg == SPI_REG_SIGNATURE)
-        return mock_signature;
-    if (reg == SPI_REG_WRBUF_SPC_AVA)
-        return mock_wrbuf;
-    if (reg == SPI_REG_INTR_CAUSE)
-        return mock_intr_cause;
-    return 0;
+        *out = mock_signature;
+    else if (reg == SPI_REG_WRBUF_SPC_AVA)
+        *out = mock_wrbuf;
+    else if (reg == SPI_REG_INTR_CAUSE)
+        *out = mock_intr_cause;
+    else
+        *out = 0;
+    return ESP_OK;
 }
 bool qca7000CheckAlive() {
-    uint16_t sig = qca7000ReadInternalReg(SPI_REG_SIGNATURE);
-    (void)qca7000ReadInternalReg(SPI_REG_WRBUF_SPC_AVA);
-    uint16_t cause = qca7000ReadInternalReg(SPI_REG_INTR_CAUSE);
+    uint16_t sig = 0, cause = 0, dummy = 0;
+    qca7000ReadInternalReg(SPI_REG_SIGNATURE, &sig);
+    qca7000ReadInternalReg(SPI_REG_WRBUF_SPC_AVA, &dummy);
+    qca7000ReadInternalReg(SPI_REG_INTR_CAUSE, &cause);
     return sig == 0xAA55 && (cause & SPI_INT_CPU_ON);
 }
 bool qca7000ReadSignature(uint16_t* sig, uint16_t* ver) { if(sig) *sig = 0xAA55; if(ver) *ver=1; return true; }
 
-void fetchRx() {
+esp_err_t fetchRx() {
     if (spi_read_len == 0)
-        return;
+        return ESP_OK;
 
     size_t remaining = spi_read_len;
     const uint8_t* p = spi_read_buf;
     if (remaining < RX_HDR + FTR_LEN || remaining > V2GTP_BUFFER_SIZE) {
         spi_read_len = 0;
-        return;
+        return ESP_OK;
     }
 
     while (remaining >= RX_HDR + FTR_LEN) {
@@ -159,7 +162,7 @@ void fetchRx() {
         if (memcmp(p + 4, "\xAA\xAA\xAA\xAA", 4) != 0) {
             qca7000SoftReset();
             spi_read_len = 0;
-            return;
+            return ESP_OK;
         }
 
         uint16_t fl = slac::le16toh(static_cast<uint16_t>((p[9] << 8) | p[8]));
@@ -267,6 +270,8 @@ static void handle_frame(const uint8_t* d, size_t l) {
     default:
         break;
     }
+    spi_read_len = 0;
+    return ESP_OK;
 }
 
 SlacState qca7000getSlacResult() {

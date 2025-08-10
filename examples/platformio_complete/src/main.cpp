@@ -145,9 +145,11 @@ static void logTask(void*) {
 static void qca7000_irq_task(void*) {
     while (true) {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        uint16_t avail = 0;
         do {
             qca7000ProcessSlice(500);
-        } while (qca7000ReadInternalReg(SPI_REG_RDBUF_BYTE_AVA) > 0);
+            qca7000ReadInternalReg(SPI_REG_RDBUF_BYTE_AVA, &avail);
+        } while (avail > 0);
     }
 }
 
