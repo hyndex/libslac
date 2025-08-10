@@ -7,9 +7,14 @@
 #ifdef ESP_PLATFORM
 #include "driver/gpio.h"
 #include "driver/spi_master.h"
+#include "esp_err.h"
 #else
 using spi_device_handle_t = void*;
 using gpio_num_t = int;
+using esp_err_t = int;
+#ifndef ESP_OK
+#define ESP_OK 0
+#endif
 #endif
 #include <slac/channel.hpp>
 #include <slac/slac.hpp>
@@ -104,7 +109,7 @@ bool qca7000ResetAndCheck();
 bool qca7000SoftReset();
 // Leave the current AVLN and reset internal state.
 bool qca7000LeaveAvln();
-uint16_t qca7000ReadInternalReg(uint16_t reg);
+esp_err_t qca7000ReadInternalReg(uint16_t reg, uint16_t* val);
 bool qca7000ReadSignature(uint16_t* sig = nullptr, uint16_t* ver = nullptr);
 // Poll a few internal registers to verify that the modem is responsive.
 // Returns ``true`` when ``SPI_REG_SIGNATURE`` matches 0xAA55 and the

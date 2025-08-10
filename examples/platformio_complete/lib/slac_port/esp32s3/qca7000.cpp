@@ -20,6 +20,7 @@
 #include <esp_idf_version.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
+#include <esp_err.h>
 #else
 static inline uint32_t esp_random() {
     return 0x12345678u;
@@ -28,6 +29,10 @@ using gpio_num_t = int;
 static inline void gpio_set_level(gpio_num_t, int) {}
 static inline void gpio_set_direction(gpio_num_t, int) {}
 #define GPIO_MODE_OUTPUT 0
+using esp_err_t = int;
+#ifndef ESP_OK
+#define ESP_OK 0
+#endif
 #endif
 #ifndef IRAM_ATTR
 #define IRAM_ATTR
@@ -68,7 +73,7 @@ uint8_t myethreceivebuffer[V2GTP_BUFFER_SIZE]{};
 size_t myethreceivelen = 0;
 
 // Forward declarations
-static bool txFrame(const uint8_t* eth, size_t ethLen);
+static esp_err_t txFrame(const uint8_t* eth, size_t ethLen);
 void qca7000ProcessSlice(uint32_t max_us);
 
 static constexpr uint16_t SIG = 0xAA55;
@@ -230,7 +235,7 @@ static inline void spiEnd() {
     if (g_spi_mutex)
         xSemaphoreGive(g_spi_mutex);
 }
-static inline uint16_t spiTransfer16(uint16_t data, int hz) {
+static inline esp_err_t spiTransfer16(uint16_t data, int hz, uint16_t* out) {
     spi_transaction_t t{};
     t.flags = SPI_TRANS_USE_TXDATA | SPI_TRANS_USE_RXDATA;
     t.length = 16;
@@ -243,10 +248,14 @@ static inline uint16_t spiTransfer16(uint16_t data, int hz) {
 #else
     (void)hz;
 #endif
-    spi_device_polling_transmit(g_spi, &t);
-    return (static_cast<uint16_t>(t.rx_data[0]) << 8) | t.rx_data[1];
+    esp_err_t err = spi_device_polling_transmit(g_spi, &t);
+    if (err != ESP_OK)
+        ESP_LOGE(PLC_TAG, "spi_device_polling_transmit failed: %s", esp_err_to_name(err));
+    if (out)
+        *out = (static_cast<uint16_t>(t.rx_data[0]) << 8) | t.rx_data[1];
+    return err;
 }
-static inline uint8_t spiTransfer(uint8_t data, int hz) {
+static inline esp_err_t spiTransfer(uint8_t data, int hz, uint8_t* out) {
     spi_transaction_t t{};
     t.flags = SPI_TRANS_USE_TXDATA | SPI_TRANS_USE_RXDATA;
     t.length = 8;
@@ -258,11 +267,15 @@ static inline uint8_t spiTransfer(uint8_t data, int hz) {
 #else
     (void)hz;
 #endif
-    spi_device_polling_transmit(g_spi, &t);
-    return t.rx_data[0];
+    esp_err_t err = spi_device_polling_transmit(g_spi, &t);
+    if (err != ESP_OK)
+        ESP_LOGE(PLC_TAG, "spi_device_polling_transmit failed: %s", esp_err_to_name(err));
+    if (out)
+        *out = t.rx_data[0];
+    return err;
 }
-static inline void spiWriteBytes(const uint8_t* d, size_t l, int hz) {
-    if (!l) return;
+static inline esp_err_t spiWriteBytes(const uint8_t* d, size_t l, int hz) {
+    if (!l) return ESP_OK;
     spi_transaction_t t{};
     t.length = l * 8;
     t.tx_buffer = d;
@@ -273,14 +286,23 @@ static inline void spiWriteBytes(const uint8_t* d, size_t l, int hz) {
 #else
     (void)hz;
 #endif
-    spi_device_polling_transmit(g_spi, &t);
+    esp_err_t err = spi_device_polling_transmit(g_spi, &t);
+    if (err != ESP_OK)
+        ESP_LOGE(PLC_TAG, "spi_device_polling_transmit failed: %s", esp_err_to_name(err));
+    return err;
 }
 #else
 static inline void spiBegin() {}
 static inline void spiEnd() {}
-static inline uint16_t spiTransfer16(uint16_t, int) { return 0; }
-static inline uint8_t spiTransfer(uint8_t, int) { return 0; }
-static inline void spiWriteBytes(const uint8_t*, size_t, int) {}
+static inline esp_err_t spiTransfer16(uint16_t, int, uint16_t* out) {
+    if (out) *out = 0;
+    return ESP_OK;
+}
+static inline esp_err_t spiTransfer(uint8_t, int, uint8_t* out) {
+    if (out) *out = 0;
+    return ESP_OK;
+}
+static inline esp_err_t spiWriteBytes(const uint8_t*, size_t, int) { return ESP_OK; }
 #endif
 
 namespace {
@@ -344,25 +366,28 @@ static inline uint16_t cmd16(bool rd, bool intr, uint16_t reg) {
     return (rd ? 0x8000u : 0) | (intr ? 0x4000u : 0) | (reg & 0x3FFFu);
 }
 
-static uint16_t spiRd16_slow(uint16_t reg) {
+static esp_err_t spiRd16_slow(uint16_t reg, uint16_t* out) {
     spiBegin();
     int hz = slac::spi_slow_hz();
     gpio_set_level(static_cast<gpio_num_t>(g_cs), 0);
-    spiTransfer16(cmd16(true, true, reg), hz);
-    uint16_t v = spiTransfer16(0, hz);
+    esp_err_t err = spiTransfer16(cmd16(true, true, reg), hz, nullptr);
+    if (err == ESP_OK)
+        err = spiTransfer16(0, hz, out);
     gpio_set_level(static_cast<gpio_num_t>(g_cs), 1);
     spiEnd();
-    return v;
+    return err;
 }
 
-static void spiWr16_slow(uint16_t reg, uint16_t val) {
+static esp_err_t spiWr16_slow(uint16_t reg, uint16_t val) {
     spiBegin();
     int hz = slac::spi_slow_hz();
     gpio_set_level(static_cast<gpio_num_t>(g_cs), 0);
-    spiTransfer16(cmd16(false, true, reg), hz);
-    spiTransfer16(val, hz);
+    esp_err_t err = spiTransfer16(cmd16(false, true, reg), hz, nullptr);
+    if (err == ESP_OK)
+        err = spiTransfer16(val, hz, nullptr);
     gpio_set_level(static_cast<gpio_num_t>(g_cs), 1);
     spiEnd();
+    return err;
 }
 
 static bool hardReset() {
@@ -374,24 +399,28 @@ static bool hardReset() {
     // Wait before probing the modem (datasheet recommends 200–500 ms)
     slac_delay(QCA7000_POST_RESET_DELAY_MS);
 
-    auto slowRd16 = [&](uint16_t reg) -> uint16_t {
+    auto slowRd16 = [&](uint16_t reg, uint16_t* out) -> esp_err_t {
         spiBegin();
         int hz = slac::spi_slow_hz();
         gpio_set_level(static_cast<gpio_num_t>(g_cs), 0);
-        spiTransfer16(cmd16(true, true, reg), hz);
-        uint16_t v = spiTransfer16(0, hz);
+        esp_err_t err = spiTransfer16(cmd16(true, true, reg), hz, nullptr);
+        if (err == ESP_OK)
+            err = spiTransfer16(0, hz, out);
         gpio_set_level(static_cast<gpio_num_t>(g_cs), 1);
         spiEnd();
-        return v;
+        return err;
     };
 
-    (void)slowRd16(SPI_REG_SIGNATURE); // dummy read as recommended
+    uint16_t dummy;
+    if (slowRd16(SPI_REG_SIGNATURE, &dummy) != ESP_OK)
+        return false; // dummy read as recommended
 
     uint32_t t0 = slac_millis();
     uint16_t sig = 0, buf = 0;
     do {
-        sig = slowRd16(SPI_REG_SIGNATURE);
-        buf = slowRd16(SPI_REG_WRBUF_SPC_AVA);
+        if (slowRd16(SPI_REG_SIGNATURE, &sig) != ESP_OK ||
+            slowRd16(SPI_REG_WRBUF_SPC_AVA, &buf) != ESP_OK)
+            return false;
         if (sig == SIG && buf == WRBUF_RST)
             break;
         slac_delay(5);
@@ -404,59 +433,75 @@ static bool hardReset() {
     ESP_LOGI(PLC_TAG, "Reset probe OK (SIG=0x%04X)", sig);
 
     t0 = slac_millis();
-    while (!(slowRd16(SPI_REG_INTR_CAUSE) & SPI_INT_CPU_ON) &&
-           slac_millis() - t0 < slac::cpuon_timeout_ms())
-        ;
-    if (!(slowRd16(SPI_REG_INTR_CAUSE) & SPI_INT_CPU_ON)) {
+    uint16_t cause = 0;
+    while (true) {
+        if (slowRd16(SPI_REG_INTR_CAUSE, &cause) != ESP_OK)
+            return false;
+        if (cause & SPI_INT_CPU_ON)
+            break;
+        if (slac_millis() - t0 >= slac::cpuon_timeout_ms())
+            break;
+    }
+    if (!(cause & SPI_INT_CPU_ON)) {
         ESP_LOGE(PLC_TAG, "CPU_ON not asserted after hard reset");
         return false;
     }
 
-    uint16_t cfg = slowRd16(SPI_REG_SPI_CONFIG);
+    uint16_t cfg = 0;
+    if (slowRd16(SPI_REG_SPI_CONFIG, &cfg) != ESP_OK)
+        return false;
     if (cfg & QCASPI_MULTI_CS_BIT)
         spiWr16_slow(SPI_REG_SPI_CONFIG, cfg & ~QCASPI_MULTI_CS_BIT);
 
     spiWr16_slow(SPI_REG_INTR_CAUSE, 0xFFFF);
     // Read signature twice before enabling interrupts as recommended by
     // the datasheet to ensure the modem is ready to accept new commands.
-    (void)slowRd16(SPI_REG_SIGNATURE);
-    (void)slowRd16(SPI_REG_SIGNATURE);
+    slowRd16(SPI_REG_SIGNATURE, &dummy);
+    slowRd16(SPI_REG_SIGNATURE, &dummy);
     spiWr16_slow(SPI_REG_INTR_ENABLE, INTR_MASK);
     return true;
 }
 
 static bool softReset() {
-    auto slowRd16 = [&](uint16_t reg) -> uint16_t {
+    auto slowRd16 = [&](uint16_t reg, uint16_t* out) -> esp_err_t {
         spiBegin();
         int hz = slac::spi_slow_hz();
         gpio_set_level(static_cast<gpio_num_t>(g_cs), 0);
-        spiTransfer16(cmd16(true, true, reg), hz);
-        uint16_t v = spiTransfer16(0, hz);
+        esp_err_t err = spiTransfer16(cmd16(true, true, reg), hz, nullptr);
+        if (err == ESP_OK)
+            err = spiTransfer16(0, hz, out);
         gpio_set_level(static_cast<gpio_num_t>(g_cs), 1);
         spiEnd();
-        return v;
+        return err;
     };
-    auto slowWr16 = [&](uint16_t reg, uint16_t val) {
+    auto slowWr16 = [&](uint16_t reg, uint16_t val) -> esp_err_t {
         spiBegin();
         int hz = slac::spi_slow_hz();
         gpio_set_level(static_cast<gpio_num_t>(g_cs), 0);
-        spiTransfer16(cmd16(false, true, reg), hz);
-        spiTransfer16(val, hz);
+        esp_err_t err = spiTransfer16(cmd16(false, true, reg), hz, nullptr);
+        if (err == ESP_OK)
+            err = spiTransfer16(val, hz, nullptr);
         gpio_set_level(static_cast<gpio_num_t>(g_cs), 1);
         spiEnd();
+        return err;
     };
 
-    uint16_t cfg = slowRd16(SPI_REG_SPI_CONFIG);
-    slowWr16(SPI_REG_SPI_CONFIG, cfg | QCASPI_SLAVE_RESET_BIT);
+    uint16_t cfg = 0;
+    if (slowRd16(SPI_REG_SPI_CONFIG, &cfg) != ESP_OK)
+        return false;
+    if (slowWr16(SPI_REG_SPI_CONFIG, cfg | QCASPI_SLAVE_RESET_BIT) != ESP_OK)
+        return false;
     slac_delay(10);
 
-    (void)slowRd16(SPI_REG_SIGNATURE); // dummy read
+    uint16_t dummy;
+    slowRd16(SPI_REG_SIGNATURE, &dummy); // dummy read
 
     uint32_t t0 = slac_millis();
     uint16_t sig = 0, buf = 0;
     do {
-        sig = slowRd16(SPI_REG_SIGNATURE);
-        buf = slowRd16(SPI_REG_WRBUF_SPC_AVA);
+        if (slowRd16(SPI_REG_SIGNATURE, &sig) != ESP_OK ||
+            slowRd16(SPI_REG_WRBUF_SPC_AVA, &buf) != ESP_OK)
+            return false;
         if (sig == SIG && buf == WRBUF_RST)
             break;
         slac_delay(5);
@@ -466,14 +511,21 @@ static bool softReset() {
         return false;
 
     t0 = slac_millis();
-    while (!(slowRd16(SPI_REG_INTR_CAUSE) & SPI_INT_CPU_ON) &&
-           slac_millis() - t0 < slac::cpuon_timeout_ms())
-        ;
-    if (!(slowRd16(SPI_REG_INTR_CAUSE) & SPI_INT_CPU_ON)) {
+    uint16_t cause = 0;
+    while (true) {
+        if (slowRd16(SPI_REG_INTR_CAUSE, &cause) != ESP_OK)
+            return false;
+        if (cause & SPI_INT_CPU_ON)
+            break;
+        if (slac_millis() - t0 >= slac::cpuon_timeout_ms())
+            break;
+    }
+    if (!(cause & SPI_INT_CPU_ON)) {
         ESP_LOGE(PLC_TAG, "CPU_ON not asserted after soft reset");
         return false;
     }
-    cfg = slowRd16(SPI_REG_SPI_CONFIG);
+    if (slowRd16(SPI_REG_SPI_CONFIG, &cfg) != ESP_OK)
+        return false;
     if (cfg & QCASPI_MULTI_CS_BIT)
         slowWr16(SPI_REG_SPI_CONFIG, cfg & ~QCASPI_MULTI_CS_BIT);
 
@@ -483,27 +535,34 @@ static bool softReset() {
 }
 
 static void initialSetup() {
-    (void)spiRd16_slow(SPI_REG_SIGNATURE);
+    uint16_t dummy;
+    spiRd16_slow(SPI_REG_SIGNATURE, &dummy);
     uint32_t t0 = slac_millis();
     uint16_t sig = 0;
     do {
-        sig = spiRd16_slow(SPI_REG_SIGNATURE);
+        if (spiRd16_slow(SPI_REG_SIGNATURE, &sig) != ESP_OK)
+            return;
         if (sig == SIG)
             break;
         slac_delay(5);
     } while (slac_millis() - t0 < QCA7000_RESET_TIMEOUT_MS);
-    uint16_t cfg = spiRd16_slow(SPI_REG_SPI_CONFIG);
+    uint16_t cfg = 0;
+    if (spiRd16_slow(SPI_REG_SPI_CONFIG, &cfg) != ESP_OK)
+        return;
     if (cfg & QCASPI_MULTI_CS_BIT)
         spiWr16_slow(SPI_REG_SPI_CONFIG, cfg & ~QCASPI_MULTI_CS_BIT);
     spiWr16_slow(SPI_REG_INTR_CAUSE, 0xFFFF);
     spiWr16_slow(SPI_REG_INTR_ENABLE, INTR_MASK);
 }
 
-uint16_t qca7000ReadInternalReg(uint16_t r) {
-    return spiRd16_slow(r);
+esp_err_t qca7000ReadInternalReg(uint16_t r, uint16_t* out) {
+    return spiRd16_slow(r, out);
 }
 bool qca7000ReadSignature(uint16_t* s, uint16_t* v) {
-    uint16_t sig = qca7000ReadInternalReg(SPI_REG_SIGNATURE), ver = qca7000ReadInternalReg(0x1B00);
+    uint16_t sig = 0, ver = 0;
+    if (qca7000ReadInternalReg(SPI_REG_SIGNATURE, &sig) != ESP_OK ||
+        qca7000ReadInternalReg(0x1B00, &ver) != ESP_OK)
+        return false;
     if (s)
         *s = sig;
     if (v)
@@ -512,9 +571,10 @@ bool qca7000ReadSignature(uint16_t* s, uint16_t* v) {
 }
 
 bool qca7000CheckAlive() {
-    uint16_t sig = qca7000ReadInternalReg(SPI_REG_SIGNATURE);
-    (void)qca7000ReadInternalReg(SPI_REG_WRBUF_SPC_AVA);
-    uint16_t cause = qca7000ReadInternalReg(SPI_REG_INTR_CAUSE);
+    uint16_t sig = 0, cause = 0, dummy = 0;
+    qca7000ReadInternalReg(SPI_REG_SIGNATURE, &sig);
+    qca7000ReadInternalReg(SPI_REG_WRBUF_SPC_AVA, &dummy);
+    qca7000ReadInternalReg(SPI_REG_INTR_CAUSE, &cause);
     return sig == SIG && (cause & SPI_INT_CPU_ON);
 }
 
@@ -537,7 +597,7 @@ static bool read_region_code(qca7000_region* region) {
         slac::htole16(slac::defs::qualcomm::MMTYPE_OP_ATTR |
                       slac::defs::MMTYPE_MODE_REQ);
 
-    if (!txFrame(reinterpret_cast<uint8_t*>(&req_msg), sizeof(req_msg)))
+    if (txFrame(reinterpret_cast<uint8_t*>(&req_msg), sizeof(req_msg)) != ESP_OK)
         return false;
 
     uint32_t start = slac_millis();
@@ -572,62 +632,72 @@ static bool read_region_code(qca7000_region* region) {
 }
 
 #ifdef LIBSLAC_TESTING
-bool txFrame(const uint8_t* eth, size_t ethLen) {
+esp_err_t txFrame(const uint8_t* eth, size_t ethLen) {
 #else
-static bool txFrame(const uint8_t* eth, size_t ethLen) {
+static esp_err_t txFrame(const uint8_t* eth, size_t ethLen) {
 #endif
     if (ethLen > 1522)
-        return false;
+        return ESP_FAIL;
     size_t frameLen = ethLen;
     if (frameLen < 60)
         frameLen = 60;
     uint16_t spiLen = TX_HDR + frameLen + FTR_LEN;
-    if (spiRd16_slow(SPI_REG_WRBUF_SPC_AVA) < spiLen)
-        return false;
+    uint16_t avail = 0;
+    if (spiRd16_slow(SPI_REG_WRBUF_SPC_AVA, &avail) != ESP_OK || avail < spiLen)
+        return ESP_FAIL;
 
-    spiWr16_slow(SPI_REG_BFR_SIZE, spiLen);
+    if (spiWr16_slow(SPI_REG_BFR_SIZE, spiLen) != ESP_OK)
+        return ESP_FAIL;
 
     spiBegin();
     int hz = slac::spi_fast_hz();
     gpio_set_level(static_cast<gpio_num_t>(g_cs), 0);
-    spiTransfer16(cmd16(false, false, 0), hz);
-    spiTransfer16(SOF_WORD, hz);
-    spiTransfer16(SOF_WORD, hz);
-    spiTransfer16(slac::htole16(static_cast<uint16_t>(frameLen)), hz);
-    spiTransfer16(0, hz);
-    if (ethLen) {
+    esp_err_t err = ESP_OK;
+    if (err == ESP_OK)
+        err = spiTransfer16(cmd16(false, false, 0), hz, nullptr);
+    if (err == ESP_OK)
+        err = spiTransfer16(SOF_WORD, hz, nullptr);
+    if (err == ESP_OK)
+        err = spiTransfer16(SOF_WORD, hz, nullptr);
+    if (err == ESP_OK)
+        err = spiTransfer16(slac::htole16(static_cast<uint16_t>(frameLen)), hz, nullptr);
+    if (err == ESP_OK)
+        err = spiTransfer16(0, hz, nullptr);
+    if (err == ESP_OK && ethLen) {
         size_t off = 0;
-        while (off < ethLen) {
+        while (off < ethLen && err == ESP_OK) {
             size_t chunk = ethLen - off;
             if (chunk > slac::spi_burst_len())
                 chunk = slac::spi_burst_len();
-            spiWriteBytes(eth + off, chunk, hz);
+            err = spiWriteBytes(eth + off, chunk, hz);
             off += chunk;
         }
     }
-    if (frameLen > ethLen) {
+    if (err == ESP_OK && frameLen > ethLen) {
         uint8_t pad[60]{};
         size_t padLen = frameLen - ethLen;
         size_t off = 0;
-        while (off < padLen) {
+        while (off < padLen && err == ESP_OK) {
             size_t chunk = padLen - off;
             if (chunk > slac::spi_burst_len())
                 chunk = slac::spi_burst_len();
-            spiWriteBytes(pad, chunk, hz);
+            err = spiWriteBytes(pad, chunk, hz);
             off += chunk;
         }
     }
-    spiTransfer16(EOF_WORD, hz);
+    if (err == ESP_OK)
+        err = spiTransfer16(EOF_WORD, hz, nullptr);
     gpio_set_level(static_cast<gpio_num_t>(g_cs), 1);
     spiEnd();
-    return true;
+    return err;
 }
 
 static void handleRxError(const char* reason) {
     ESP_LOGW(PLC_TAG, "RX error: %s - resetting", reason);
     spiWr16_slow(SPI_REG_INTR_ENABLE, 0);
     bool ok = qca7000SoftReset();
-    uint16_t cfg = spiRd16_slow(SPI_REG_SPI_CONFIG);
+    uint16_t cfg = 0;
+    spiRd16_slow(SPI_REG_SPI_CONFIG, &cfg);
     if (cfg & QCASPI_MULTI_CS_BIT) {
         ESP_LOGW(PLC_TAG, "Clearing MULTI_CS bit after reset");
         spiWr16_slow(SPI_REG_SPI_CONFIG, cfg & ~QCASPI_MULTI_CS_BIT);
@@ -652,27 +722,42 @@ static void handleRxError(const char* reason) {
         g_err_cb.cb(Qca7000ErrorStatus::Reset, g_err_cb.arg);
 }
 #ifdef LIBSLAC_TESTING
-void fetchRx() {
+esp_err_t fetchRx() {
 #else
-static void fetchRx() {
+static esp_err_t fetchRx() {
 #endif
     while (true) {
-        uint16_t avail = spiRd16_slow(SPI_REG_RDBUF_BYTE_AVA);
+        uint16_t avail = 0;
+        if (spiRd16_slow(SPI_REG_RDBUF_BYTE_AVA, &avail) != ESP_OK)
+            return ESP_FAIL;
         if (avail < RX_HDR + FTR_LEN || avail > V2GTP_BUFFER_SIZE)
             break;
 
         uint16_t requested = avail;
-        spiWr16_slow(SPI_REG_BFR_SIZE, requested);
+        if (spiWr16_slow(SPI_REG_BFR_SIZE, requested) != ESP_OK)
+            return ESP_FAIL;
 
         static uint8_t buf[V2GTP_BUFFER_SIZE];
         spiBegin();
         int hz = slac::spi_fast_hz();
         gpio_set_level(static_cast<gpio_num_t>(g_cs), 0);
-        uint16_t first = spiTransfer16(cmd16(true, false, 0), hz);
+        uint16_t first = 0;
+        if (spiTransfer16(cmd16(true, false, 0), hz, &first) != ESP_OK) {
+            gpio_set_level(static_cast<gpio_num_t>(g_cs), 1);
+            spiEnd();
+            return ESP_FAIL;
+        }
         buf[0] = first & 0xFF;
         buf[1] = first >> 8;
-        for (uint16_t i = 0; i < requested - 2; ++i)
-            buf[i + 2] = spiTransfer(0, hz);
+        for (uint16_t i = 0; i < requested - 2; ++i) {
+            uint8_t b = 0;
+            if (spiTransfer(0, hz, &b) != ESP_OK) {
+                gpio_set_level(static_cast<gpio_num_t>(g_cs), 1);
+                spiEnd();
+                return ESP_FAIL;
+            }
+            buf[i + 2] = b;
+        }
         gpio_set_level(static_cast<gpio_num_t>(g_cs), 1);
         spiEnd();
 
@@ -715,18 +800,20 @@ static void fetchRx() {
             remaining -= frame_total;
         }
     }
+    return ESP_OK;
 }
 
 bool spiQCA7000SendEthFrame(const uint8_t* f, size_t l) {
-    bool ok = txFrame(f, l);
-    if (ok && l <= V2GTP_BUFFER_SIZE) {
+    esp_err_t err = txFrame(f, l);
+    if (err == ESP_OK && l <= V2GTP_BUFFER_SIZE) {
         memcpy(myethtransmitbuffer, f, l);
         myethtransmitlen = l;
     }
-    return ok;
+    return err == ESP_OK;
 }
 size_t spiQCA7000checkForReceivedData(uint8_t* d, size_t m) {
-    fetchRx();
+    if (fetchRx() != ESP_OK)
+        return 0;
     const uint8_t* s;
     size_t l;
     if (!ringPop(&s, &l))
@@ -791,7 +878,7 @@ static bool send_cm_set_key_req_local(const uint8_t nmk[slac::defs::NMK_LEN],
     msg.req.new_eks = slac::defs::CM_SET_KEY_REQ_PEKS_NMK_KNOWN_TO_STA;
     memcpy(msg.req.new_key, nmk, slac::defs::NMK_LEN);
 
-    return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+    return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg)) == ESP_OK;
 }
 
 static bool send_start_atten_char(const SlacContext& ctx);
@@ -828,7 +915,7 @@ static bool send_parm_req(const SlacContext& ctx) {
     msg.req.security_type = slac::defs::COMMON_SECURITY_TYPE;
     memcpy(msg.req.run_id, ctx.run_id, sizeof(ctx.run_id));
 
-    return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+    return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg)) == ESP_OK;
 }
 
 static bool send_parm_cnf(const SlacContext& ctx, const uint8_t* dst,
@@ -858,7 +945,7 @@ static bool send_parm_cnf(const SlacContext& ctx, const uint8_t* dst,
     msg.cnf.security_type = req.security_type;
     memcpy(msg.cnf.run_id, ctx.run_id, sizeof(ctx.run_id));
 
-    return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+    return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg)) == ESP_OK;
 }
 
 static bool send_start_atten_char(const SlacContext& ctx) {
@@ -884,7 +971,7 @@ static bool send_start_atten_char(const SlacContext& ctx) {
     msg.ind.resp_type = slac::defs::CM_SLAC_PARM_CNF_RESP_TYPE;
     memcpy(msg.ind.forwarding_sta, qca7000GetMac(), ETH_ALEN);
     memcpy(msg.ind.run_id, ctx.run_id, sizeof(ctx.run_id));
-    return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+    return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg)) == ESP_OK;
 }
 
 static bool send_mnbc_sound(const SlacContext& ctx, uint8_t remaining) {
@@ -910,7 +997,7 @@ static bool send_mnbc_sound(const SlacContext& ctx, uint8_t remaining) {
     memcpy(msg.ind.run_id, ctx.run_id, sizeof(ctx.run_id));
     for (uint8_t& b : msg.ind.random)
         b = static_cast<uint8_t>(esp_random() & 0xFF);
-    return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+    return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg)) == ESP_OK;
 }
 
 static bool send_atten_char_rsp(const SlacContext& ctx, const uint8_t* dst,
@@ -937,7 +1024,7 @@ static bool send_atten_char_rsp(const SlacContext& ctx, const uint8_t* dst,
     memcpy(msg.rsp.source_id, ind->source_id, sizeof(ind->source_id));
     memcpy(msg.rsp.resp_id, ind->resp_id, sizeof(ind->resp_id));
     msg.rsp.result = slac::defs::CM_ATTEN_CHAR_RSP_RESULT;
-    return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+    return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg)) == ESP_OK;
 }
 
 static bool send_atten_char_ind(const SlacContext& ctx) {
@@ -969,7 +1056,7 @@ static bool send_atten_char_ind(const SlacContext& ctx) {
         msg.ind.attenuation_profile.aag[i] =
             ctx.atten_sum[i] / slac::defs::C_EV_MATCH_MNBC;
     }
-    return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+    return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg)) == ESP_OK;
 }
 
 static bool send_set_key_cnf(const SlacContext& ctx, const uint8_t* dst, const slac::messages::cm_set_key_req* req) {
@@ -995,7 +1082,7 @@ static bool send_set_key_cnf(const SlacContext& ctx, const uint8_t* dst, const s
     msg.cnf.prn = req->prn;
     msg.cnf.pmn = req->pmn;
     msg.cnf.cco_capability = req->cco_capability;
-    return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+    return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg)) == ESP_OK;
 }
 
 static bool send_validate_cnf(const uint8_t* dst, const slac::messages::cm_validate_req* req) {
@@ -1030,7 +1117,7 @@ static bool send_validate_cnf(const uint8_t* dst, const slac::messages::cm_valid
         }
     }
 
-    return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+    return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg)) == ESP_OK;
 }
 
 static bool send_match_cnf(const SlacContext& ctx) {
@@ -1071,7 +1158,7 @@ static bool send_match_cnf(const SlacContext& ctx) {
     memcpy(msg.cnf.nid, g_evse_nid, sizeof(msg.cnf.nid));
     memcpy(msg.cnf.nmk, g_evse_nmk, sizeof(msg.cnf.nmk));
 
-    bool ok = txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+    bool ok = txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg)) == ESP_OK;
     if (ok)
         qca7000SetNmk(g_evse_nmk);
 
@@ -1404,7 +1491,8 @@ bool qca7000startSlac() {
 // Poll for SLAC confirmation frames and update state accordingly.
 SlacState qca7000getSlacResult() {
     const SlacState prev_result = g_slac_ctx.result;
-    fetchRx();
+    if (fetchRx() != ESP_OK)
+        return g_slac_ctx.result;
     const uint32_t now = slac_millis();
     if (g_slac_ctx.result == SlacState::WaitParmCnf &&
         now - g_slac_ctx.timer > slac::defs::TT_EVSE_SLAC_INIT_MS)
@@ -1548,10 +1636,11 @@ SlacState qca7000getSlacResult() {
 static inline uint32_t get_us() { return slac_micros(); }
 
 static void process_cause(uint16_t cause) {
-    uint16_t snapshot_cause = spiRd16_slow(SPI_REG_INTR_CAUSE);
-    uint16_t intr_en = spiRd16_slow(SPI_REG_INTR_ENABLE);
-    uint16_t wrbuf = spiRd16_slow(SPI_REG_WRBUF_SPC_AVA);
-    uint16_t rdbuf = spiRd16_slow(SPI_REG_RDBUF_BYTE_AVA);
+    uint16_t snapshot_cause = 0, intr_en = 0, wrbuf = 0, rdbuf = 0;
+    spiRd16_slow(SPI_REG_INTR_CAUSE, &snapshot_cause);
+    spiRd16_slow(SPI_REG_INTR_ENABLE, &intr_en);
+    spiRd16_slow(SPI_REG_WRBUF_SPC_AVA, &wrbuf);
+    spiRd16_slow(SPI_REG_RDBUF_BYTE_AVA, &rdbuf);
     ESP_LOGW(PLC_TAG,
              "IRQ cause=0x%04X snap=0x%04X en=0x%04X wr=0x%04X rd=0x%04X",
              cause, snapshot_cause, intr_en, wrbuf, rdbuf);
@@ -1606,11 +1695,13 @@ static void process_cause(uint16_t cause) {
 
     if (cause & SPI_INT_PKT_AVLBL) {
         size_t loops = 0;
-        while (spiRd16_slow(SPI_REG_RDBUF_BYTE_AVA) > 0) {
-            fetchRx();
+        uint16_t avail = 0;
+        while (spiRd16_slow(SPI_REG_RDBUF_BYTE_AVA, &avail) == ESP_OK && avail > 0) {
+            if (fetchRx() != ESP_OK)
+                break;
             if (++loops >= slac::spi_burst_len())
                 break;
-            if (spiRd16_slow(SPI_REG_RDBUF_BYTE_AVA) == 0)
+            if (spiRd16_slow(SPI_REG_RDBUF_BYTE_AVA, &avail) != ESP_OK || avail == 0)
                 break;
         }
     }
@@ -1626,8 +1717,8 @@ void qca7000ProcessSlice(uint32_t max_us) {
 
     spiWr16_slow(SPI_REG_INTR_ENABLE, 0);
     while (true) {
-        uint16_t cause = spiRd16_slow(SPI_REG_INTR_CAUSE);
-        if (!cause)
+        uint16_t cause = 0;
+        if (spiRd16_slow(SPI_REG_INTR_CAUSE, &cause) != ESP_OK || !cause)
             break;
 
         process_cause(cause);

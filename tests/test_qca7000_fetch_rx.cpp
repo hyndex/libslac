@@ -6,7 +6,7 @@
 extern "C" void mock_ring_reset();
 extern "C" void mock_spi_feed_raw(const uint8_t*, size_t);
 extern bool soft_reset_called;
-void fetchRx();
+esp_err_t fetchRx();
 
 TEST(Qca7000FetchRx, ValidFrameParsing) {
     mock_ring_reset();

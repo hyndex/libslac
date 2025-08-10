@@ -20,7 +20,11 @@
 #define qca7000ReadInternalReg qca7000ReadInternalReg_stub
 
 void qca7000ProcessSlice_stub(uint32_t) {}
-uint16_t qca7000ReadInternalReg_stub(uint16_t) { return 0; }
+using esp_err_t = int;
+esp_err_t qca7000ReadInternalReg_stub(uint16_t, uint16_t* out) {
+    if (out) *out = 0;
+    return ESP_OK;
+}
 
 uint32_t cpGetVoltageMv_stub() { return 0; }
 uint16_t cpGetLastPwmDuty_stub() { return ((1u << CP_PWM_RES_BITS) - 1u) / 2u; }
@@ -29,6 +33,10 @@ uint16_t voutGetVoltageRaw_stub() { return 2048; }
 char cpGetStateLetter_stub() { return 'B'; }
 const char* evseStageName_stub(int) { return "TEST"; }
 int evseGetStage_stub() { return 0; }
+
+#ifndef ESP_OK
+#define ESP_OK 0
+#endif
 
 #include "../examples/platformio_complete/src/main.cpp"
 #undef g_slac_state
