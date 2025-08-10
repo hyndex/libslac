@@ -21,6 +21,11 @@
 
 void qca7000ProcessSlice_stub(uint32_t) {}
 using esp_err_t = int;
+
+#ifndef ESP_OK
+#define ESP_OK 0
+#endif
+
 esp_err_t qca7000ReadInternalReg_stub(uint16_t, uint16_t* out) {
     if (out) *out = 0;
     return ESP_OK;
@@ -33,10 +38,6 @@ uint16_t voutGetVoltageRaw_stub() { return 2048; }
 char cpGetStateLetter_stub() { return 'B'; }
 const char* evseStageName_stub(int) { return "TEST"; }
 int evseGetStage_stub() { return 0; }
-
-#ifndef ESP_OK
-#define ESP_OK 0
-#endif
 
 #include "../examples/platformio_complete/src/main.cpp"
 #undef g_slac_state
