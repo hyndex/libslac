@@ -29,6 +29,14 @@ static inline void gpio_set_level(gpio_num_t, int) {}
 static inline void gpio_set_direction(gpio_num_t, int) {}
 #define GPIO_MODE_OUTPUT 0
 #endif
+#ifndef IRAM_ATTR
+#define IRAM_ATTR
+#endif
+#ifdef ESP_PLATFORM
+#ifndef PLC_INT_EDGE
+#define PLC_INT_EDGE GPIO_INTR_NEGEDGE
+#endif
+#endif
 #include <atomic>
 #include <slac/fsm.hpp>
 #include <slac/iso15118_consts.hpp>
@@ -200,6 +208,13 @@ static int g_cs = -1;
 static int g_rst = PLC_SPI_RST_PIN;
 static int g_int = PLC_INT_PIN;
 static int g_pwr = PLC_PWR_EN_PIN;
+#endif
+static bool g_auto_irq = true;
+
+#ifdef ESP_PLATFORM
+static void IRAM_ATTR qca7000_isr(void*) {
+    qca7000ProcessSlice(500);
+}
 #endif
 
 #ifdef ESP_PLATFORM
@@ -1634,9 +1649,10 @@ void qca7000Process() {
 
 bool qca7000setup(spi_device_handle_t bus,
                   int csPin,
-                 int rstPin,
-                 int intPin,
-                 int pwrPin) {
+                  int rstPin,
+                  int intPin,
+                  int pwrPin,
+                  bool auto_irq) {
     ESP_LOGI(PLC_TAG,
              "QCA7000 setup: bus=%p CS=%d RST=%d INT=%d PWR=%d",
              bus,
@@ -1652,6 +1668,19 @@ bool qca7000setup(spi_device_handle_t bus,
     g_rst = rstPin;
     g_int = intPin;
     g_pwr = pwrPin;
+    g_auto_irq = auto_irq;
+#ifdef ESP_PLATFORM
+    if (g_auto_irq && g_int >= 0) {
+        gpio_config_t int_cfg{};
+        int_cfg.pin_bit_mask = 1ULL << g_int;
+        int_cfg.mode = GPIO_MODE_INPUT;
+        int_cfg.pull_up_en = GPIO_PULLUP_ENABLE;
+        int_cfg.intr_type = PLC_INT_EDGE;
+        gpio_config(&int_cfg);
+        gpio_install_isr_service(0);
+        gpio_isr_handler_add(static_cast<gpio_num_t>(g_int), qca7000_isr, nullptr);
+    }
+#endif
 #ifdef ESP_PLATFORM
     if (!g_spi_mutex)
         g_spi_mutex = xSemaphoreCreateMutex();
@@ -1685,6 +1714,10 @@ void qca7000teardown() {
     if (g_spi) {
         // bus handle provided externally; nothing to teardown here
     }
+#ifdef ESP_PLATFORM
+    if (g_auto_irq && g_int >= 0)
+        gpio_isr_handler_remove(static_cast<gpio_num_t>(g_int));
+#endif
     head.store(0, std::memory_order_relaxed);
     tail.store(0, std::memory_order_relaxed);
     g_spi = nullptr;

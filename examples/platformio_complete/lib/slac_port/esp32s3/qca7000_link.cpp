@@ -51,7 +51,7 @@ bool Qca7000Link::open() {
         return false;
     }
 
-    if (!qca7000setup(bus, cs, rst, intr, pwr)) {
+    if (!qca7000setup(bus, cs, rst, intr, pwr, cfg.auto_irq)) {
         initialization_error = true;
         return false;
     }

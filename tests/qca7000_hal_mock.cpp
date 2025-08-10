@@ -92,7 +92,8 @@ bool qca7000setup(spi_device_handle_t spi,
                   int cs,
                   int rst,
                   int intr,
-                  int pwr) {
+                  int pwr,
+                  bool /*auto_irq*/) {
     spi_used = spi;
     spi_cs = cs;
     spi_rst = rst;

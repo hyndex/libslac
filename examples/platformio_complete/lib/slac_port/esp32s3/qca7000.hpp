@@ -81,13 +81,24 @@ struct qca7000_config {
     const uint8_t* mac_addr{nullptr};
     /// Maximum time in microseconds spent servicing modem events when polling
     uint32_t process_slice_us{500};
+    /// Configure and service the modem interrupt automatically
+    bool auto_irq{true};
 };
 
+/**
+ * @brief Initialise the QCA7000 interface.
+ *
+ * By default the interrupt pin is configured as an input with pull-up and an
+ * ISR is registered to invoke qca7000ProcessSlice whenever the configured edge
+ * is detected.  Set @p auto_irq to ``false`` if the host wishes to manage the
+ * interrupt line manually.
+ */
 bool qca7000setup(spi_device_handle_t spi,
                   int cs_pin,
                   int rst_pin = PLC_SPI_RST_PIN,
                   int int_pin = PLC_INT_PIN,
-                  int pwr_en_pin = PLC_PWR_EN_PIN);
+                  int pwr_en_pin = PLC_PWR_EN_PIN,
+                  bool auto_irq = true);
 void qca7000teardown();
 bool qca7000ResetAndCheck();
 bool qca7000SoftReset();
