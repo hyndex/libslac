@@ -1052,9 +1052,9 @@ static bool send_atten_char_ind(const SlacContext& ctx) {
     memcpy(msg.ind.resp_id, ctx.evse_id, sizeof(ctx.evse_id));
     msg.ind.num_sounds = slac::defs::C_EV_MATCH_MNBC;
     msg.ind.attenuation_profile.num_groups = ctx.num_groups;
+    uint8_t divisor = ctx.atten_count ? ctx.atten_count : 1;
     for (uint8_t i = 0; i < ctx.num_groups && i < slac::defs::AAG_LIST_LEN; ++i) {
-        msg.ind.attenuation_profile.aag[i] =
-            ctx.atten_sum[i] / slac::defs::C_EV_MATCH_MNBC;
+        msg.ind.attenuation_profile.aag[i] = ctx.atten_sum[i] / divisor;
     }
     return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg)) == ESP_OK;
 }
