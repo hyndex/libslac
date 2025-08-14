@@ -1053,7 +1053,7 @@ static bool send_atten_char_ind(const SlacContext& ctx) {
     msg.ind.num_sounds = slac::defs::C_EV_MATCH_MNBC;
     msg.ind.attenuation_profile.num_groups = ctx.num_groups;
     uint8_t divisor = ctx.atten_count ? ctx.atten_count : 1;
-    for (uint8_t i = 0; i < ctx.num_groups && i < slac::defs::AAG_LIST_LEN; ++i) {
+    for (uint8_t i = 0; i < ctx.num_groups; ++i) {
         msg.ind.attenuation_profile.aag[i] = ctx.atten_sum[i] / divisor;
     }
     return txFrame(reinterpret_cast<uint8_t*>(&msg), sizeof(msg)) == ESP_OK;
@@ -1168,7 +1168,7 @@ static bool send_match_cnf(const SlacContext& ctx) {
     memcpy(info.nmk, g_evse_nmk, sizeof(info.nmk));
 
     uint8_t min = 0xFF, max = 0, sum = 0;
-    for (uint8_t i = 0; i < ctx.num_groups && i < slac::defs::AAG_LIST_LEN; ++i) {
+    for (uint8_t i = 0; i < ctx.num_groups; ++i) {
         uint8_t v = ctx.atten_sum[i] / slac::defs::C_EV_MATCH_MNBC;
         if (v < min)
             min = v;
@@ -1243,12 +1243,20 @@ void qca7000HandleAttenProfileInd(slac::messages::HomeplugMessage& msg) {
     if (memcmp(src, g_slac_ctx.pev_mac, ETH_ALEN) != 0 ||
         memcmp(prof.pev_mac, g_slac_ctx.pev_mac, ETH_ALEN) != 0)
         return;
+    uint8_t num_groups = prof.num_groups;
+    if (num_groups != slac::defs::AAG_LIST_LEN) {
+        ESP_LOGW(PLC_TAG,
+                 "ATTEN_PROFILE num_groups %u != %u, clamping",
+                 static_cast<unsigned>(num_groups),
+                 static_cast<unsigned>(slac::defs::AAG_LIST_LEN));
+        num_groups = slac::defs::AAG_LIST_LEN;
+    }
     if (g_slac_ctx.atten_count == 0) {
         memset(g_slac_ctx.atten_sum, 0, sizeof(g_slac_ctx.atten_sum));
-        g_slac_ctx.num_groups = prof.num_groups;
+        g_slac_ctx.num_groups = num_groups;
         g_slac_ctx.timer = slac_millis();
     }
-    for (uint8_t i = 0; i < prof.num_groups && i < slac::defs::AAG_LIST_LEN; ++i) {
+    for (uint8_t i = 0; i < num_groups; ++i) {
         g_slac_ctx.atten_sum[i] += prof.aag[i];
     }
     ++g_slac_ctx.atten_count;
@@ -1527,12 +1535,20 @@ SlacState qca7000getSlacResult() {
             const auto* prof = reinterpret_cast<const slac::messages::cm_atten_profile_ind*>(p + 3);
             if (memcmp(prof->pev_mac, g_slac_ctx.pev_mac, ETH_ALEN) != 0)
                 continue;
+            uint8_t num_groups = prof->num_groups;
+            if (num_groups != slac::defs::AAG_LIST_LEN) {
+                ESP_LOGW(PLC_TAG,
+                         "ATTEN_PROFILE num_groups %u != %u, clamping",
+                         static_cast<unsigned>(num_groups),
+                         static_cast<unsigned>(slac::defs::AAG_LIST_LEN));
+                num_groups = slac::defs::AAG_LIST_LEN;
+            }
             if (g_slac_ctx.atten_count == 0) {
                 memset(g_slac_ctx.atten_sum, 0, sizeof(g_slac_ctx.atten_sum));
-                g_slac_ctx.num_groups = prof->num_groups;
+                g_slac_ctx.num_groups = num_groups;
                 g_slac_ctx.timer = slac_millis();
             }
-            for (uint8_t i = 0; i < prof->num_groups && i < slac::defs::AAG_LIST_LEN; ++i) {
+            for (uint8_t i = 0; i < num_groups; ++i) {
                 g_slac_ctx.atten_sum[i] += prof->aag[i];
             }
             ++g_slac_ctx.atten_count;
