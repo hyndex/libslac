@@ -1,5 +1,4 @@
 #include <gtest/gtest.h>
-#define ARDUINO
 #include "arduino_stubs.hpp"
 #include "qca7000.hpp"
 #include <slac/iso15118_consts.hpp>
