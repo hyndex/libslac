@@ -1,1 +1,0 @@
-add_codec_test(app_handshake)

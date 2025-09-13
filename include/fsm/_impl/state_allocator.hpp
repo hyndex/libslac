@@ -128,7 +128,7 @@ public:
     StateAllocator& operator=(StateAllocator&& other) = delete;
 
     template <typename StateType, typename... Args> bool create_compound(Args&&... args) {
-        static_assert(sizeof(StateType) <= buffer.MAX_COMPOUND_STATE_SIZE,
+        static_assert(sizeof(StateType) <= SwapBufferType::MAX_COMPOUND_STATE_SIZE,
                       "Buffer too small for the supplied compound state type");
         if (!preflight_compound()) {
             return false;
@@ -144,7 +144,7 @@ public:
     }
 
     template <typename StateType, typename... Args> bool create_simple(Args&&... args) {
-        static_assert(sizeof(StateType) <= buffer.MAX_SIMPLE_STATE_SIZE,
+        static_assert(sizeof(StateType) <= SwapBufferType::MAX_SIMPLE_STATE_SIZE,
                       "Buffer too small for the supplied simple state type");
         if (!preflight_simple()) {
             return false;
